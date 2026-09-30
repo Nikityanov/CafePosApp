@@ -36,6 +36,11 @@
         </CollectionView>
         <VerticalStackLayout Grid.Row="3" Spacing="8">
             <Picker Title="Добавить блюдо" ItemsSource="{Binding AvailableProducts}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedProduct}" IsEnabled="{Binding CanEdit}" />
+            <!-- The total used to sit BELOW the action buttons, right-aligned and clipped by the
+                 tab bar — the most important number on an order-editing screen was the last thing
+                 on it and the easiest to miss. It now heads the action block, above the
+                 "Добавить блюдо" field, where the cart already puts it. -->
+            <Label Text="{Binding Total, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" FontSize="20" HorizontalTextAlignment="End" />
             <Button Text="Добавить в заказ" Command="{Binding AddProductCommand}" IsEnabled="{Binding CanEdit}" />
             <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                 <Button Text="Сохранить" Command="{Binding SaveCommand}" IsEnabled="{Binding CanEdit}" />
@@ -46,7 +51,6 @@
                      x:DataType is what made the mismatch visible at build time. -->
                 <Button Grid.Column="1" Text="Назад" Style="{StaticResource SecondaryButton}" Command="{Binding BackCommand}" />
             </Grid>
-            <Label Text="{Binding Total, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" HorizontalTextAlignment="End" />
         </VerticalStackLayout>
     </Grid>
 </ContentPage>

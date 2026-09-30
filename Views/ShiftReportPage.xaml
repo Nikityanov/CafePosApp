@@ -29,7 +29,14 @@
                             <VerticalStackLayout Spacing="4">
                                 <Grid ColumnDefinitions="*,Auto">
                                     <Label Text="{Binding OrderTitle}" FontAttributes="Bold" />
-                                    <Label Grid.Column="1" Text="{Binding Model.CreatedAt, StringFormat='{0:dd.MM.yyyy HH:mm}'}" Style="{StaticResource SecondaryLabel}" />
+                                    <!-- CreatedAtText, not StringFormat on Model.CreatedAt. The
+                                         raw DateTimeOffset is UTC (migration 3), and StringFormat
+                                         renders it without a zone conversion — so the same order
+                                         read 18:46 on the orders board and 16:46 in this history
+                                         on a UTC+2 device. The binding was valid, so no build
+                                         caught it; OrderRowViewModel.CreatedAtText already does
+                                         the ToLocalTime() the orders page relies on. -->
+                                    <Label Grid.Column="1" Text="{Binding CreatedAtText}" Style="{StaticResource SecondaryLabel}" />
                                 </Grid>
                                 <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Padding="8,0,0,0" Spacing="3">
                                     <BindableLayout.ItemTemplate>
