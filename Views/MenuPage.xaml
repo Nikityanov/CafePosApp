@@ -1,0 +1,129 @@
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" x:Class="CafePosApp.Views.MenuPage" Title="Меню">
+    <ContentPage.Resources>
+        <!-- One chip template for the whole strip, including the synthetic "Все" chip. It now takes
+             its size and shape from the shared FilterChip style — the hand-rolled 36dp chip was under
+             the 44dp touch minimum — while keeping the per-category pastel fill and the selected
+             tint the menu page has always used for its visual coding. -->
+        <DataTemplate x:Key="CategoryChipTemplate">
+            <Border Style="{StaticResource FilterChip}"
+                    HeightRequest="44"
+                    BackgroundColor="{Binding ChipBackground}">
+                <Label Text="{Binding Name}"
+                       HorizontalOptions="Center"
+                       LineBreakMode="TailTruncation"
+                       TextColor="{Binding ChipTextColor}"
+                       FontSize="13"
+                       FontAttributes="Bold"
+                       VerticalTextAlignment="Center" />
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectCategoryCommand}" CommandParameter="{Binding .}" />
+                </Border.GestureRecognizers>
+            </Border>
+        </DataTemplate>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16" RowSpacing="6">
+        <Border Style="{StaticResource CardBorder}" Padding="10,6" Margin="0">
+            <Entry Placeholder="Поиск блюда" Text="{Binding SearchText}" BackgroundColor="Transparent" Margin="0" MinimumHeightRequest="44" />
+        </Border>
+
+        <!-- Single scrolling list of chips. It used to be a lone "Все" Button next to a
+             CollectionView wrapped in a horizontal ScrollView, so the two scrollers competed
+             for the same gesture. -->
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Categories}" SelectionMode="None" ItemTemplate="{StaticResource CategoryChipTemplate}" HeightRequest="48">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Horizontal" ItemSpacing="6" />
+            </CollectionView.ItemsLayout>
+        </CollectionView>
+
+        <CollectionView Grid.Row="2" ItemsSource="{Binding FilteredProducts}" SelectionMode="None" Margin="0,0,0,2">
+            <CollectionView.ItemsLayout>
+                <!-- The span is set from code (see MenuPage.PublishAvailableWidth), not bound.
+                     Two reasons, both measured: ItemsLayout is a BindableObject outside the visual
+                     tree, so a {Binding} on it does not reliably pick up the page's BindingContext;
+                     and .NET MAUI 10 has no other way to state a column width — ItemWidth was
+                     removed from ItemsLayout, and a WidthRequest or MaxWidthRequest on the card is
+                     ignored for sizing because the platform's ItemsWrapGrid owns the container
+                     width. Dropping to a single full-width column below the threshold is the one
+                     value the grid still honours, and it cannot clip. -->
+                <GridItemsLayout x:Name="ProductGridLayout" Orientation="Vertical" Span="2" HorizontalItemSpacing="4" VerticalItemSpacing="4" />
+            </CollectionView.ItemsLayout>
+            <CollectionView.EmptyView>
+                <Label Text="Ничего не найдено." Style="{StaticResource EmptyLabel}" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <!-- The card takes no WidthRequest, deliberately. MAUI 10 sizes the cell itself:
+                         a literal WidthRequest="150" here still measured 190px columns, and a
+                         MaxWidthRequest only shrank the content. The width contract is the grid's
+                         Span, set from MenuPage.PublishAvailableWidth off
+                         MenuViewModel.ProductColumnSpan — see the comment on the GridItemsLayout
+                         above. Both columns come from the same layout, so they are always equal. -->
+                    <Border Style="{StaticResource CardBorder}" Padding="6" StrokeShape="RoundRectangle 10">
+                        <Border.Triggers>
+                            <DataTrigger TargetType="Border" Binding="{Binding IsAvailable}" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </DataTrigger>
+                        </Border.Triggers>
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.AddProductCommand}" CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
+                            <Label Text="{Binding Name}" Style="{StaticResource RowTitle}" MaxLines="2" />
+                            <Label Grid.Row="1" Text="{Binding ., Converter={StaticResource ProductPriceText}}" FontSize="14" FontAttributes="Bold" />
+                            <Label Grid.Row="2" Text="Нет в наличии" Style="{StaticResource TagText}"
+                                   IsVisible="{Binding IsAvailable, Converter={StaticResource InvertedBoolConverter}}" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Border Grid.Row="3" Style="{StaticResource CardBorder}" Padding="6" Margin="0,0,0,0">
+            <VerticalStackLayout Spacing="2">
+                <Label Text="Корзина" FontSize="15" FontAttributes="Bold" />
+
+                <!-- The cart is the one list that must stay scrollable. A fixed HeightRequest="180"
+                     inside an Auto row squeezed the products list to a few cards on a short window.
+                     MaximumHeightRequest bounds it proportionally: the cart takes what it needs
+                     up to a cap, and the products list gets the rest. -->
+                <CollectionView ItemsSource="{Binding Cart}" MaximumHeightRequest="180" SelectionMode="None">
+                    <CollectionView.EmptyView>
+                        <Label Text="Пусто." Style="{StaticResource EmptyLabel}" />
+                    </CollectionView.EmptyView>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Padding="0,2">
+                                <VerticalStackLayout Spacing="0" VerticalOptions="Center">
+                                    <Label Text="{Binding ProductName}" FontAttributes="Bold" FontSize="12" LineBreakMode="TailTruncation" />
+                                    <Label Text="{Binding SelectedVariantName, StringFormat='[{0}]'}" Style="{StaticResource SecondaryLabel}" FontSize="11" LineBreakMode="TailTruncation" IsVisible="{Binding SelectedVariantName, Converter={StaticResource IsPresent}}" />
+                                    <Label Text="{Binding SelectedModifierName, StringFormat='({0})'}" Style="{StaticResource SecondaryLabel}" FontSize="11" LineBreakMode="TailTruncation" IsVisible="{Binding SelectedModifierName, Converter={StaticResource IsPresent}}" />
+                                </VerticalStackLayout>
+                                <!-- The per-unit price was dropped from the row: it sat next to the
+                                     bold line total and ate the width the stepper needed.
+                                     The steppers were 40x40, under the 44dp minimum every other
+                                     control in the app honours; they are 48 now. -->
+                                <Grid Grid.Column="1" ColumnDefinitions="48,24,48" ColumnSpacing="0" VerticalOptions="Center">
+                                    <Button Text="−" Padding="0" WidthRequest="48" HeightRequest="48" MinimumWidthRequest="48" MinimumHeightRequest="48" FontSize="18" BorderWidth="0" SemanticProperties.Description="Убрать одну штуку" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveItemCommand}" CommandParameter="{Binding .}" />
+                                    <Label Grid.Column="1" Text="{Binding Quantity}" FontSize="13" WidthRequest="24" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
+                                    <Button Grid.Column="2" Text="+" Padding="0" WidthRequest="48" HeightRequest="48" MinimumWidthRequest="48" MinimumHeightRequest="48" FontSize="18" BorderWidth="0" SemanticProperties.Description="Добавить ещё одну" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.AddItemCommand}" CommandParameter="{Binding .}" />
+                                </Grid>
+                                <Label Grid.Column="2" Text="{Binding LineTotal, StringFormat='{0:F2} ₽'}" FontAttributes="Bold" FontSize="12" VerticalOptions="Center" HorizontalTextAlignment="End" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+                <BoxView HeightRequest="1" Color="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
+
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Padding="0,0,0,0">
+                    <Label Text="Итого" FontSize="14" FontAttributes="Bold" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding Total, StringFormat='{0:F2} ₽'}" FontSize="16" FontAttributes="Bold" VerticalOptions="Center" />
+                </Grid>
+
+                <Button Text="Создать заказ" HeightRequest="48" MinimumHeightRequest="48" FontAttributes="Bold" Padding="0" IsEnabled="{Binding CanCreateOrder}" Command="{Binding CreateOrderCommand}" />
+                <Label Text="{Binding Message}" IsVisible="{Binding HasMessage}" Style="{StaticResource SecondaryLabel}" Margin="0" />
+            </VerticalStackLayout>
+        </Border>
+    </Grid>
+</ContentPage>

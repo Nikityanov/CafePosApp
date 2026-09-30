@@ -1,0 +1,453 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:CafePosApp.Controls"
+             xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls"
+             x:Class="CafePosApp.Views.CatalogManagementPage"
+             x:Name="CatalogPage"
+             Title="Каталог">
+
+    <ContentPage.Resources>
+        <!-- One chip template for the whole entity switcher, replacing four hand-placed buttons
+             that each needed their own keyed style to show the active one. -->
+        <DataTemplate x:Key="SectionChipTemplate">
+            <Button Text="{Binding Label}" Style="{StaticResource SectionTab}"
+                    Margin="3,3"
+                    SemanticProperties.Description="{Binding Label, StringFormat='Открыть раздел: {0}'}"
+                    Command="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.SetSectionCommand}"
+                    CommandParameter="{Binding Key}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsSelected}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                        <Setter Property="TextColor" Value="White" />
+                        <Setter Property="BorderWidth" Value="0" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+        </DataTemplate>
+
+        <!-- The category filter strip. The selection is carried by a filled pill as well as by the
+             filter itself taking effect, so the active state is never colour-only: the chosen chip
+             is both filled and the only one that narrows the list. -->
+        <DataTemplate x:Key="CategoryChipTemplate">
+            <Border Style="{StaticResource FilterChip}" Margin="3,3">
+                <Border.Triggers>
+                    <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                        <Setter Property="Stroke" Value="Transparent" />
+                    </DataTrigger>
+                </Border.Triggers>
+                <Label Text="{Binding Name}" Style="{StaticResource FilterChipText}">
+                    <Label.Triggers>
+                        <DataTrigger TargetType="Label" Binding="{Binding IsSelected}" Value="True">
+                            <Setter Property="TextColor" Value="White" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer
+                        Command="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.SelectCategoryFilterCommand}"
+                        CommandParameter="{Binding .}" />
+                </Border.GestureRecognizers>
+            </Border>
+        </DataTemplate>
+    </ContentPage.Resources>
+
+    <!-- ═══ ROOT ═══ -->
+    <!-- Three rows: header, notice, content. Each row is a direct child of this Grid with
+         HorizontalOptions="Center" and MaximumWidthRequest="1400"; the code-behind sets an
+         explicit WidthRequest on all three to min(windowWidth, 1400). An explicit WidthRequest
+         bypasses desired-size negotiation — the width is deterministic, not a by-product of
+         Auto/*/Fill guessing. The previous approach (a *,Auto,* wrapper with Fill on the
+         content) overflowed because Fill takes all offered space while Auto sizes to the
+         child's desired size, so the column grew unbounded and pushed the FAB and "Обновить"
+         off-screen. The first chip aligns with the left edge of the first card; "Обновить"
+         aligns with the right edge of the last column / the FAB.
+         The FAB is a true overlay — a child of the content Grid, VerticalOptions=End /
+         HorizontalOptions=End. It floats over the list; the list scrolls underneath it. The FAB
+         may overlap the last row — the operator nudges it out from under by scrolling. -->
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- ═══ HEADER: entity switcher + refresh ═══ -->
+            <!-- The "Обновить" button used to sit in a reserved Auto column of the content row
+                 (ColumnDefinitions="*,Auto"), which squeezed every list for its full height — the
+                 dead vertical strip on the right. It now lives in the header, next to the section
+                 chips, where it takes no space away from the lists.
+                 Four equal columns gave "Модификаторы" ~81dp on a 360dp phone, less than the word needs
+                 at 13pt bold, and SectionTab pinned HeightRequest=36 so the overflow was clipped rather
+                 than wrapped. The buttons now size to their text and the strip scrolls: on a 320dp
+                 phone it scrolls sideways, on a tablet it fits. No width is hardcoded anywhere, which
+                 is the whole point — there was no breakpoint in this file before.
+                 MAUI's FlexLayout has no spacing property at all (not Spacing, not ColumnSpacing /
+                 RowSpacing — those are Grid's), so the 6dp gutter between chips is a Margin on each
+                 chip instead. Naming a spacing property here is not a build error: Debug builds parse
+                 this XAML at runtime and only ApplyPropertiesVisitor.SetPropertyValue rejects it, at
+                 inflation time.
+                 Wrap is NoWrap, not Wrap: a horizontal ScrollView measures its content with an
+                 infinite width, so a wrapping FlexLayout can never find a line to break on and its
+                 measure pass comes back with a bogus height — the strip reserved ~230dp of blank space
+                 below the chips. The old comment claimed the chips "take two rows" on a narrow phone,
+                 which a horizontal ScrollView cannot do anyway. The category strip below was already
+                 NoWrap for the same reason. -->
+        <Grid x:Name="HeaderRow" Grid.Row="0" HorizontalOptions="Center" MaximumWidthRequest="1400" ColumnDefinitions="*,Auto" Padding="12,8,12,4" ColumnSpacing="8">
+                <ScrollView Grid.Column="0" Orientation="Horizontal"
+                            HorizontalScrollBarVisibility="Never" VerticalScrollBarVisibility="Never">
+                    <FlexLayout BindableLayout.ItemsSource="{Binding Sections}"
+                                BindableLayout.ItemTemplate="{StaticResource SectionChipTemplate}"
+                                Direction="Row" Wrap="NoWrap" AlignItems="Start" />
+                </ScrollView>
+                <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}"
+                        VerticalOptions="Center"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}"
+                        Command="{Binding LoadCommand}"
+                        SemanticProperties.Description="Обновить каталог" />
+            </Grid>
+
+            <!-- ═══ NOTICE ═══ -->
+            <!-- One label carried both "Скопировано: …" and every error, hard-wired to Danger, so
+                 successes rendered in red. Colour now comes from NoticeSeverity and is paired with a
+                 leading icon (✓ / !) plus the wording, so the two are never told apart by hue alone.
+                 The icon is a Label, not a shapes:Path: Path.Data is a Geometry, and a Binding that
+                 hands the XAML loader a string (what the icon converter produces) fails with
+                 InvalidCastException. A literal Data="…" attribute would be run through the geometry
+                 TypeConverter, but a Binding would not be — and the severity changes at runtime, so it
+                 has to be a Binding. Label.Text takes the converter's string directly. -->
+        <Grid x:Name="NoticeRow" Grid.Row="1" HorizontalOptions="Center" MaximumWidthRequest="1400" IsVisible="{Binding HasValidationMessage}" ColumnDefinitions="Auto,*" ColumnSpacing="6"
+                  Padding="12,4" Margin="0,2,0,2">
+                <Label VerticalOptions="Start" FontSize="14" FontAttributes="Bold" Margin="0,0,0,0"
+                       TextColor="{Binding NoticeSeverity, Converter={StaticResource NoticeSeverityToColor}}"
+                       Text="{Binding NoticeSeverity, Converter={StaticResource NoticeSeverityToIcon}}" />
+                <Label Grid.Column="1" Text="{Binding ValidationMessage}" FontSize="12" LineBreakMode="WordWrap"
+                       TextColor="{Binding NoticeSeverity, Converter={StaticResource NoticeSeverityToColor}}" />
+            </Grid>
+
+            <!-- ═══ CONTENT ═══ -->
+            <!-- The four sections sit directly in a Grid, not a ScrollView: a ScrollView would measure
+                 every CollectionView to its full content height and defeat recycling. Each list owns the
+                 remaining space and virtualises normally.
+                 This Grid is a direct child of the root Grid with HorizontalOptions="Fill". Its
+                 WidthRequest is set from code to min(windowWidth, 1400), so it fills the capped
+                 width deterministically. The FAB is a child of THIS grid, so its HorizontalOptions=End
+                 aligns it with the content's right edge, not the window's. The FAB floats over the
+                 list — the list scrolls underneath it. The FAB may overlap the last row; the
+                 operator nudges it out from under by scrolling. -->
+        <Grid x:Name="ContentGrid" Grid.Row="2" HorizontalOptions="Fill">
+                <Grid Padding="12,4">
+
+                    <!-- Refresh.
+                         The old markup wrapped this content in a RefreshView whose direct child was a plain
+                         Grid, which is not a scrollable: on Android the pull gesture never fires, and on both
+                         platforms IsRefreshing was bound OneWay to IsBusy, so the control could write true
+                         but nothing wrote the false that stopped the spinner (dotnet/maui#12469). A
+                         RefreshView here is therefore decorative — it cannot be made to work over a grid of
+                         four independently-scrolling CollectionViews, one per section, without nesting a
+                         scroll view per list and losing the recycling the layout was built around.
+                         So the refresh is a real, always-visible button instead of a gesture that silently did
+                         nothing. It is disabled while a load runs, so it cannot be double-fired. -->
+
+                    <!-- ── PRODUCTS ── -->
+                    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" IsVisible="{Binding IsProductsSectionVisible}">
+                        <!-- Search + count in one row: the count label used to be a separate row below the
+                             toggle row, adding ~20dp of chrome. It now trails the SearchBar. -->
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <SearchBar Placeholder="Поиск..." Text="{Binding ProductSearchText}"
+                                       CancelButtonColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}" />
+                            <Label Grid.Column="1" Text="{Binding ProductsCountText}" Style="{StaticResource CountLabel}"
+                                   VerticalOptions="Center" />
+                        </Grid>
+
+                        <!-- The category filter. It replaces a fixed 120dp Picker: on Android that opens a
+                             blocking modal, swallows the system Back key (dotnet/maui#30430), and cannot show
+                             the active filter. A chip strip shows every category at once and wraps. -->
+                        <ScrollView Grid.Row="1" Orientation="Horizontal" Margin="0,2,0,0"
+                                    HorizontalScrollBarVisibility="Never" VerticalScrollBarVisibility="Never">
+                            <FlexLayout BindableLayout.ItemsSource="{Binding CategoryFilters}"
+                                        BindableLayout.ItemTemplate="{StaticResource CategoryChipTemplate}"
+                                        Direction="Row" Wrap="NoWrap" AlignItems="Center" />
+                        </ScrollView>
+
+                        <!-- The whole row toggles the switch. The Switch was scaled to 0.8, which put its
+                             touch target under the 48dp minimum, and the adjacent Label was not clickable —
+                             so the label read as a label and the switch was barely tappable. MAUI has no
+                             IsHitTestVisible: InputTransparent is the equivalent, and it is what lets the
+                             row's own tap reach the GestureRecognizer below. -->
+                        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8"
+                              MinimumHeightRequest="48" Margin="0,2,0,0">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer
+                                    Command="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ToggleShowDeletedCommand}" />
+                            </Grid.GestureRecognizers>
+                            <Switch Grid.Column="0" IsToggled="{Binding ShowDeleted}" VerticalOptions="Center"
+                                    InputTransparent="True"
+                                    SemanticProperties.Description="Показывать удалённые" />
+                            <Label Grid.Column="1" Text="Показывать удалённые" VerticalOptions="Center" Style="{StaticResource Caption}" />
+                            <Button Grid.Column="2" Text="{Binding SelectionModeText}" Style="{StaticResource ToolbarButton}"
+                                    SemanticProperties.Description="Выбрать товары для массовой корректировки цен"
+                                    Command="{Binding ToggleSelectionModeCommand}" />
+                            <!-- CSV used to be two permanently visible buttons plus a bulk-% entry and an
+                                 apply button, all sitting under the list. That put a destructive, always-armed
+                                 percentage field one mis-tap away from every product's price. The round-trips
+                                 are rare, so they collapse into one overflow.
+                                 It cannot be a <MenuFlyout>: MAUI's Button has no Flyout property (only
+                                 FlyoutPage does), and a property element naming a property the type does
+                                 not have is rejected by the runtime XAML parser — a Debug-build process
+                                 abort, exactly as it was here. The sheet is the mechanism the row overflow
+                                 on this same page already uses. -->
+                            <Button Grid.Column="3" Text="CSV" Style="{StaticResource ToolbarButton}"
+                                    SemanticProperties.Description="Экспорт и импорт каталога в формате CSV"
+                                    Command="{Binding CsvActionsCommand}" />
+                        </Grid>
+
+                        <!-- The bulk bar only exists while selecting, so the dangerous price change is a
+                             deliberate two-step rather than a permanently visible input under the list. It
+                             names its target, because with nothing ticked it still hits the whole list. -->
+                        <Border Grid.Row="3" Style="{StaticResource CardBorderCompact}"
+                                IsVisible="{Binding IsSelectionMode}" Margin="0,4,0,0">
+                            <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
+                                <Label Text="{Binding BulkPriceTargetText}" Style="{StaticResource Caption}"
+                                       LineBreakMode="WordWrap" />
+                                <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                                    <Button Text="Выбрать все" Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding SelectAllVisibleCommand}" />
+                                    <Entry Grid.Column="1" Style="{StaticResource FormField}"
+                                           Placeholder="% корректировки (напр. +10 или -5)"
+                                           Text="{Binding BulkPricePercentText}" Keyboard="Numeric" />
+                                    <Button Grid.Column="2" Text="Применить" Style="{StaticResource WarningToolbarButton}"
+                                            SemanticProperties.Description="Применить корректировку цен"
+                                            Command="{Binding BulkPriceAdjustCommand}" />
+                                </Grid>
+                            </Grid>
+                        </Border>
+
+                        <!-- SelectionMode is bound, not fixed. In edit mode a tap selects the row and the
+                             page reads that selection as "open the edit form"; in selection mode the same
+                             tap ticks the row. A permanent Multiple would have eaten the tap-to-edit. -->
+                        <CollectionView x:Name="ProductsList" Grid.Row="4" ItemsSource="{Binding FilteredProducts}"
+                                        SelectionMode="{Binding IsSelectionMode, Converter={StaticResource BoolToSelectionMode}}">
+                            <CollectionView.ItemsLayout>
+                                <!-- The span is set from code (see CatalogManagementPage.PublishAvailableWidth),
+                                     not bound. Two reasons, both measured: ItemsLayout is a BindableObject
+                                     outside the visual tree, so a {Binding} on it does not reliably pick up
+                                     the page's BindingContext; and .NET MAUI 10 has no other way to state a
+                                     column width — ItemWidth was removed from ItemsLayout, and a
+                                     WidthRequest or MaxWidthRequest on the card is ignored for sizing
+                                     because the platform's ItemsWrapGrid owns the container width. The
+                                     span is the only value the grid still honours. -->
+                                <GridItemsLayout x:Name="ProductGridLayout" Orientation="Vertical"
+                                                 Span="1" HorizontalItemSpacing="4" VerticalItemSpacing="4" />
+                            </CollectionView.ItemsLayout>
+                            <CollectionView.EmptyView>
+                                <Label Text="Товары не найдены." Style="{StaticResource EmptyLabel}" />
+                            </CollectionView.EmptyView>
+                            <!-- The FAB floats over the list. The list scrolls underneath it; the FAB may
+                                 overlap the last row, and the operator nudges it out from under by scrolling. -->
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <controls:CatalogRow
+                                        LongPressCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ProductActionsCommand}"
+                                        OverflowCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ProductActionsCommand}"
+                                        CommandParameter="{Binding .}"
+                                        OverflowDescription="{Binding Name, StringFormat='Действия с товаром {0}'">
+                                        <controls:CatalogRow.RowContent>
+                                            <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                    <Label Text="{Binding Name}" Style="{StaticResource RowTitle}" />
+                                                    <!-- The price the operator scans most. It used to be
+                                                         13pt — the smallest text on the row and the farthest
+                                                         from the eye on a wide window. The RowPrice style
+                                                         gives it 16pt bold with End alignment, and
+                                                         MinimumWidthRequest keeps the column wide enough
+                                                         that prices align down the list. -->
+                                                    <Label Grid.Column="1"
+                                                           Text="{Binding ., Converter={StaticResource ProductPriceText}, ConverterParameter=F0}"
+                                                           Style="{StaticResource RowPrice}"
+                                                           MinimumWidthRequest="60"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+                                                </Grid>
+                                                <!-- Availability is shown here as a state, not as an
+                                                     action — the action itself lives in the overflow menu.
+                                                     The pills wrap: a non-wrapping stack clipped long
+                                                     stock and cost strings off the right edge. The
+                                                     4dp gutter is a Margin on each pill, since
+                                                     FlexLayout has no spacing property. -->
+                                                <FlexLayout Grid.Row="1" Direction="Row" Wrap="Wrap"
+                                                            VerticalOptions="Center">
+                                                    <Border Style="{StaticResource TagWarning}" Margin="2,2"
+                                                            IsVisible="{Binding IsAvailable, Converter={StaticResource InvertedBoolConverter}}">
+                                                        <Label Text="Нет в наличии" Style="{StaticResource TagTextWarning}" />
+                                                    </Border>
+                                                    <!-- A null category is a first-class state (the form ships an
+                                                         explicit "— Без раздела —" row), so the pill is hidden
+                                                         rather than rendered as an empty 6dp-padded box. -->
+                                                    <Border Style="{StaticResource Tag}" Margin="2,2"
+                                                            IsVisible="{Binding Category, Converter={StaticResource IsPresent}}">
+                                                        <Label Text="{Binding Category.Name}" Style="{StaticResource TagText}" />
+                                                    </Border>
+                                                    <Border Style="{StaticResource TagInfo}" Margin="2,2"
+                                                            IsVisible="{Binding ModifierGroup, Converter={StaticResource IsPresent}}">
+                                                        <Label Text="{Binding ModifierGroup.Name}" Style="{StaticResource TagTextInfo}" />
+                                                    </Border>
+                                                </FlexLayout>
+                                            </Grid>
+                                        </controls:CatalogRow.RowContent>
+                                    </controls:CatalogRow>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </Grid>
+
+                    <!-- ── CATEGORIES ── -->
+                    <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsCategoriesSectionVisible}">
+                        <Label Grid.Row="0" Text="{Binding CategoriesCountText}" Style="{StaticResource CountLabel}" />
+                        <CollectionView Grid.Row="1" ItemsSource="{Binding Categories}" SelectionMode="None">
+                            <CollectionView.EmptyView>
+                                <Label Text="Разделов пока нет." Style="{StaticResource EmptyLabel}" />
+                            </CollectionView.EmptyView>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <controls:CatalogRow
+                                        LongPressCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.CategoryActionsCommand}"
+                                        OverflowCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.CategoryActionsCommand}"
+                                        CommandParameter="{Binding .}"
+                                        OverflowDescription="{Binding Name, StringFormat='Действия с разделом {0}'">
+                                        <controls:CatalogRow.RowContent>
+                                            <Label Text="{Binding Name}" Style="{StaticResource RowTitle}" />
+                                        </controls:CatalogRow.RowContent>
+                                    </controls:CatalogRow>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </Grid>
+
+                    <!-- ── MODIFIERS ── -->
+                    <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsModifiersSectionVisible}">
+                        <Label Grid.Row="0" Text="{Binding ModifierGroupsCountText}" Style="{StaticResource CountLabel}" />
+                        <CollectionView Grid.Row="1" ItemsSource="{Binding ModifierOptionGroups}" SelectionMode="None"
+                                        IsGrouped="True">
+                            <CollectionView.GroupHeaderTemplate>
+                                <DataTemplate>
+                                    <controls:CatalogRow IsHeader="True"
+                                        LongPressCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ModifierGroupActionsCommand}"
+                                        OverflowCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ModifierGroupActionsCommand}"
+                                        CommandParameter="{Binding .}"
+                                        OverflowDescription="{Binding Name, StringFormat='Действия с группой {0}'">
+                                        <controls:CatalogRow.RowContent>
+                                            <Label Text="{Binding Name}" TextColor="White" FontAttributes="Bold" FontSize="13" />
+                                        </controls:CatalogRow.RowContent>
+                                    </controls:CatalogRow>
+                                </DataTemplate>
+                            </CollectionView.GroupHeaderTemplate>
+                            <CollectionView.EmptyView>
+                                <Label Text="Модификаторов пока нет." Style="{StaticResource EmptyLabel}" />
+                            </CollectionView.EmptyView>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <controls:CatalogRow
+                                        LongPressCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ModifierOptionActionsCommand}"
+                                        OverflowCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ModifierOptionActionsCommand}"
+                                        CommandParameter="{Binding .}"
+                                        OverflowDescription="{Binding Name, StringFormat='Действия с модификатором {0}'">
+                                        <controls:CatalogRow.RowContent>
+                                            <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
+                                                <Label Text="{Binding Name}" Style="{StaticResource RowTitle}" />
+                                                <FlexLayout Grid.Row="1" Direction="Row" Wrap="Wrap"
+                                                            VerticalOptions="Center">
+                                                    <Border Style="{StaticResource TagWarning}" Margin="2,2"
+                                                            IsVisible="{Binding IsAvailable, Converter={StaticResource InvertedBoolConverter}}">
+                                                        <Label Text="Нет в наличии" Style="{StaticResource TagTextWarning}" />
+                                                    </Border>
+                                                    <!-- "Группа: " with nothing after it rendered on every row,
+                                                         because GetModifierGroupsAsync never loaded the inverse
+                                                         ModifierOption.ModifierGroup navigation. The query is fixed
+                                                         and this guard makes the label impossible to render empty. -->
+                                                    <Border Style="{StaticResource TagInfo}" Margin="2,2"
+                                                            IsVisible="{Binding ModifierGroup, Converter={StaticResource IsPresent}}">
+                                                        <Label Text="{Binding ModifierGroup.Name, StringFormat='Группа: {0}'}"
+                                                               Style="{StaticResource TagTextInfo}" />
+                                                    </Border>
+                                                </FlexLayout>
+                                            </Grid>
+                                        </controls:CatalogRow.RowContent>
+                                    </controls:CatalogRow>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </Grid>
+
+                    <!-- ── INGREDIENTS ── -->
+                    <Grid RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsIngredientsSectionVisible}">
+                        <Border Grid.Row="0" Style="{StaticResource Tag}" Padding="8,6" StrokeShape="RoundRectangle 6"
+                                BackgroundColor="{AppThemeBinding Light={StaticResource WarningLight}, Dark={StaticResource Gray700}}"
+                                IsVisible="{Binding HasLowStock}">
+                            <!-- The AppThemeBinding used to declare Warning for both branches, i.e. a theme
+                                 binding that changed nothing. -->
+                            <Label FontSize="12" FontAttributes="Bold" LineBreakMode="WordWrap"
+                                   TextColor="{StaticResource Warning}"
+                                   Text="{Binding LowStockText}" />
+                        </Border>
+
+                        <Label Grid.Row="1" Text="{Binding IngredientsCountText}" Style="{StaticResource CountLabel}" />
+
+                        <CollectionView Grid.Row="2" ItemsSource="{Binding Ingredients}" SelectionMode="None">
+                            <CollectionView.EmptyView>
+                                <Label Text="Ингредиентов пока нет." Style="{StaticResource EmptyLabel}" />
+                            </CollectionView.EmptyView>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <controls:CatalogRow
+                                        LongPressCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.IngredientActionsCommand}"
+                                        OverflowCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.IngredientActionsCommand}"
+                                        CommandParameter="{Binding .}"
+                                        OverflowDescription="{Binding Name, StringFormat='Действия с ингредиентом {0}'">
+                                        <controls:CatalogRow.RowContent>
+                                            <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
+                                                <Label Text="{Binding Name}" Style="{StaticResource RowTitle}" />
+                                                <!-- Four pills in a fixed row: stock, cost and minimum clipped
+                                                     off-screen on a narrow phone. They wrap now. -->
+                                                <FlexLayout Grid.Row="1" Direction="Row" Wrap="Wrap"
+                                                            VerticalOptions="Center">
+                                                    <Border Style="{StaticResource TagWarning}" Margin="2,2"
+                                                            IsVisible="{Binding IsAvailable, Converter={StaticResource InvertedBoolConverter}}">
+                                                        <Label Text="Нет в наличии" Style="{StaticResource TagTextWarning}" />
+                                                    </Border>
+                                                    <Border Style="{StaticResource Tag}" Margin="2,2">
+                                                        <Label Text="{Binding StockText}" Style="{StaticResource TagText}" />
+                                                    </Border>
+                                                    <Border Style="{StaticResource Tag}" Margin="2,2">
+                                                        <Label Text="{Binding CostPerUnitText}" Style="{StaticResource TagText}" />
+                                                    </Border>
+                                                    <Border Style="{StaticResource TagInfo}" Margin="2,2">
+                                                        <Label Text="{Binding MinStockText}" Style="{StaticResource TagTextInfo}" />
+                                                    </Border>
+                                                </FlexLayout>
+                                            </Grid>
+                                        </controls:CatalogRow.RowContent>
+                                    </controls:CatalogRow>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </Grid>
+
+                </Grid>
+
+                <!-- ═══ FAB ═══ -->
+                <!-- An extended FAB: the "add" mark plus a label naming what it will add, because the
+                     four sections mean four different things and a bare "+" says none of them. The
+                     label is also the screen-reader name, so it is a real phrase rather than a shape.
+                     It is a true overlay — a child of the content Grid, VerticalOptions=End /
+                     HorizontalOptions=End. It floats over the list; the list scrolls underneath it.
+                     The FAB may overlap the last row; the operator nudges it out from under by scrolling.
+                     VerticalOptions=End / HorizontalOptions=End on the ContentView itself (not just
+                     the inner Border) make the container occupy only the bottom-end corner where the
+                     pill is, so it cannot swallow touches on the list area — a ContentView defaults
+                     to LayoutOptions.Fill and would otherwise cover the whole cell. -->
+                <controls:FloatingActionButton x:Name="AddFab" VerticalOptions="End" HorizontalOptions="End"
+                                                Label="{Binding AddButtonText}"
+                                                Description="{Binding AddButtonText}"
+                                                Command="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ShowAddFormCommand}" />
+            </Grid>
+    </Grid>
+</ContentPage>

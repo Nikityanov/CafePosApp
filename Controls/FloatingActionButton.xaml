@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    The add button — an extended FAB: the Material "add" mark plus a label.
+
+    WHY IT IS NOT A SINGLE <Button>
+    A MAUI Button is text-and-image only. It has no content property (that belongs to
+    TemplatedView, which Button is not) and therefore no ControlTemplate either, so neither a
+    vector icon nor an icon-beside-a-label arrangement can be supplied from a Style. The
+    markup therefore has to be siblings, which means the control's root can no longer be the
+    Button — hence ContentView with a transparent Button laid over the pill. The same
+    constraint is why the row's overflow mark is a Path under its button in CatalogRow.xaml;
+    keep the two in step.
+
+    WHY THERE IS A BUTTON AT ALL UNDER THE MARK
+    The button is the control's whole input surface and the reason it is a control rather
+    than a drawing. It supplies Command, CanExecute-driven disabling, keyboard activation,
+    the automation role and the visual states — all platform behaviour. An earlier version
+    was a Border carrying a TapGestureRecognizer for the command plus a
+    PointerGestureRecognizer alongside it for the press state, and that made the button
+    dead: TapGestureRecognizer *derives from* PointerGestureRecognizer, so the plain
+    recognizer claimed the pointer sequence first, the tap never completed, and the command
+    never ran. There is exactly one recognizer-free input element here — the Button — and it
+    covers the pill, so nothing can intercept it.
+
+    THE PRESS STATE
+    The button is transparent at rest and paints only a translucent state layer when
+    pressed, over the Primary fill of the Border beneath it. Material's feedback is a
+    scrim, not a colour change; the previous fill swap to Tertiary plus a 0.94 shrink read
+    as the button changing identity rather than being touched.
+
+    THE MARK
+    Data is a literal attribute, which is what makes it work at all: XAML runs a string
+    through the geometry TypeConverter, so Path="M …" parses. Bind it instead and the
+    loader is handed a string where a Geometry is expected and throws InvalidCastException.
+    The glyph is Material's "add", on its native 24x24 viewBox, at Aspect=Uniform in a 24dp
+    box — so it is drawn 1:1 with no scaling blur. It replaced the text character "+", which
+    inherited its weight, optical size and baseline from the body font and therefore sat
+    differently in the circle on every platform.
+-->
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls"
+             x:Class="CafePosApp.Controls.FloatingActionButton"
+             x:Name="Root">
+
+    <Border Style="{StaticResource ExtendedFAB}">
+        <!-- ColumnSpacing is the 8dp gap between mark and label; the 16dp side insets are
+             Margins on the two children rather than Padding on this Grid, because the
+             button below spans both columns and needs to reach the pill's rounded ends —
+             padding here would shrink its touch area and square off the pressed layer.
+             HeightRequest repeats the container height so the button's target is the full
+             pill even before the Border has been measured. -->
+        <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8" HeightRequest="56">
+            <shapes:Path Grid.Column="0" Margin="16,0,0,0"
+                        Style="{StaticResource ExtendedFABIcon}"
+                        InputTransparent="True"
+                        Data="M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+
+            <!-- A forward reference inside the control's own namescope — the safe
+                 direction, the same one CatalogRow uses. -->
+            <Label Grid.Column="1" Margin="0,0,16,0"
+                   Style="{StaticResource ExtendedFABLabel}"
+                   Text="{Binding Label, Source={x:Reference Root}}" />
+
+            <!-- Last child, so the pressed state layer lands on top of the mark and the
+                 label rather than under them. -->
+            <Button x:Name="TouchTarget" Grid.Column="0" Grid.ColumnSpan="2"
+                    Style="{StaticResource FabTouchTarget}" />
+        </Grid>
+    </Border>
+</ContentView>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" x:Class="CafePosApp.Views.SettingsPage" Title="Настройки">
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="12">
+            <Label Text="Настройки приложения" Style="{StaticResource PageTitle}" />
+            <Border Style="{StaticResource CardBorder}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Внешний вид и поведение" Style="{StaticResource SectionTitle}" />
+                    <Entry Style="{StaticResource FormField}" Placeholder="Название кафе" Text="{Binding CafeName}" ClearButtonVisibility="WhileEditing" />
+                    <Entry Style="{StaticResource FormField}" Placeholder="Интервал обновления заказов, сек. (5–300)" Text="{Binding AutoRefreshSecondsText}" Keyboard="Numeric" />
+                    <Entry Style="{StaticResource FormField}" Placeholder="Префикс номера заказа" Text="{Binding OrderPrefix}" />
+                    <Picker Style="{StaticResource FormFieldPicker}" Title="Тема оформления" ItemsSource="{Binding Themes}" SelectedItem="{Binding ThemeText}" />
+                    <Label Text="Настройки сохраняются только на этом устройстве." Style="{StaticResource SecondaryLabel}" />
+                    <Button Text="Сохранить настройки" Command="{Binding SaveCommand}" />
+                    <Label Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Success}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource CardBorder}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Данные и резервные копии" Style="{StaticResource SectionTitle}" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button Text="Создать копию" Command="{Binding CreateBackupCommand}" />
+                        <Button Grid.Column="1" Text="Экспорт данных" Command="{Binding ExportDataCommand}" />
+                    </Grid>
+                    <Button Text="Восстановить из копии…" Command="{Binding RestoreBackupCommand}" />
+                    <!-- A CollectionView inside a ScrollView created two competing scrollers: on
+                         Android the inner one won the drag gesture and froze the page. BindableLayout
+                         keeps a single scroller (the ScrollView) and renders the same rows. -->
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Backups}" Spacing="2">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="*,Auto" Padding="0,2">
+                                    <Label Text="{Binding FileName}" FontSize="12" LineBreakMode="TailTruncation" />
+                                    <Label Grid.Column="1" Text="{Binding SizeText}" Style="{StaticResource Caption}" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Button Text="Отправить журнал" Style="{StaticResource SecondaryButton}" Command="{Binding ShareLogCommand}" />
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

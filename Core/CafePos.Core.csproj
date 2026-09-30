@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<!--
+			RootNamespace must stay CafePos.Core, not CafePosApp. This project is a separate assembly
+			that the app references, so a shared root namespace would let a genuine Core -> UI
+			reference compile silently (both assemblies would expose CafePosApp.*) and nothing would
+			enforce the platform-independent boundary that the separate assembly exists to create.
+			Distinct roots turn that accidental cross-layer reference into a compile error.
+		-->
+		<RootNamespace>CafePos.Core</RootNamespace>
+		<AssemblyName>CafePos.Core</AssemblyName>
+		<!-- The core is platform independent, so it is built and tested on plain net10.0 -->
+		<EnableNETAnalyzers>true</EnableNETAnalyzers>
+		<AnalysisLevel>latest</AnalysisLevel>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="CafePos.Tests" />
+	</ItemGroup>
+
+</Project>

@@ -1,0 +1,46 @@
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" x:Class="CafePosApp.Views.ShiftAnalyticsPage" Title="Аналитика смены">
+    <!-- Same fix as the shift report: the product breakdown was inside a ScrollView, so the
+         CollectionView realised every row at once. -->
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*" Padding="16" RowSpacing="10">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <Picker Title="Смена" ItemsSource="{Binding Shifts}" ItemDisplayBinding="{Binding DisplayName}" SelectedItem="{Binding SelectedShift}" VerticalOptions="Center" />
+            <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить аналитику" />
+        </Grid>
+        <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
+            <Button Grid.Row="2" Text="Обновить аналитику" Command="{Binding AnalyzeCommand}" />
+            <Grid Grid.Row="3" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+                <Border Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Выручка" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding Revenue, StringFormat='{0:F2} ₽'}" FontSize="18" FontAttributes="Bold" /></VerticalStackLayout></Border>
+                <Border Grid.Column="1" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Заказов" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding OrdersCount}" FontSize="18" FontAttributes="Bold" /></VerticalStackLayout></Border>
+                <Border Grid.Row="1" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Средний чек" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding AverageCheck, StringFormat='{0:F2} ₽'}" FontSize="18" FontAttributes="Bold" /></VerticalStackLayout></Border>
+                <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Продано позиций" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding ItemsCount}" FontSize="18" FontAttributes="Bold" /></VerticalStackLayout></Border>
+                <Border Grid.Row="2" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Среднее приготовление" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding AveragePreparationTime}" FontSize="16" FontAttributes="Bold" /></VerticalStackLayout></Border>
+                <Border Grid.Row="2" Grid.Column="1" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Среднее выполнение" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding AverageCompletionTime}" FontSize="16" FontAttributes="Bold" /></VerticalStackLayout></Border>
+                <Border Grid.Row="3" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Всего заказов" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding AllOrdersCount}" FontSize="18" FontAttributes="Bold" /></VerticalStackLayout></Border>
+                <Border Grid.Row="3" Grid.Column="1" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Отменено" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding CancelledOrdersCount}" FontSize="18" FontAttributes="Bold" /></VerticalStackLayout></Border>
+            </Grid>
+            <Border Grid.Row="4" Style="{StaticResource CardBorder}">
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Пиковый час" FontAttributes="Bold" />
+                    <Label Text="{Binding PeakHour}" Style="{StaticResource SecondaryLabel}" />
+                </VerticalStackLayout>
+            </Border>
+            <Label Grid.Row="5" Text="Продажи по блюдам и модификаторам" Style="{StaticResource SectionTitle}" />
+            <CollectionView Grid.Row="6" ItemsSource="{Binding ProductRows}" SelectionMode="None">
+                <CollectionView.EmptyView><Label Text="За выбранную смену нет закрытых заказов." Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource CardBorder}">
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                                <Label Text="{Binding ProductName}" FontAttributes="Bold" />
+                                <Label Grid.Row="1" Text="{Binding ModifierName}" Style="{StaticResource SecondaryLabel}" />
+                                <VerticalStackLayout Grid.Column="1" Grid.RowSpan="2" HorizontalOptions="End">
+                                    <Label Text="{Binding Quantity, StringFormat='× {0}'}" HorizontalTextAlignment="End" />
+                                    <Label Text="{Binding Revenue, StringFormat='{0:F2} ₽'}" FontAttributes="Bold" HorizontalTextAlignment="End" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+    </Grid>
+</ContentPage>

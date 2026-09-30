@@ -1,0 +1,21 @@
+﻿<?xml version = "1.0" encoding = "UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:CafePosApp"
+             xmlns:converters="clr-namespace:CafePosApp.Converters"
+             x:Class="CafePosApp.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
+                <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <converters:InvertedBoolConverter x:Key="InvertedBoolConverter" />
+            <converters:IsPresentConverter x:Key="IsPresent" />
+            <converters:ProductPriceTextConverter x:Key="ProductPriceText" />
+            <converters:NoticeSeverityToColorConverter x:Key="NoticeSeverityToColor" />
+            <converters:NoticeSeverityToIconConverter x:Key="NoticeSeverityToIcon" />
+            <converters:BoolToSelectionModeConverter x:Key="BoolToSelectionMode" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

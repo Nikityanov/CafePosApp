@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" x:Class="CafePosApp.Views.ShiftReportPage" Title="Смена">
+    <!-- The order history used to sit inside a ScrollView, which made the CollectionView measure
+         every completed order up front and killed recycling. The static summary rows stay Auto,
+         the list takes the remaining space. -->
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" Padding="16" RowSpacing="10">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <Label Text="Смена / Отчёт" Style="{StaticResource PageTitle}" VerticalOptions="Center" />
+            <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить отчёт" />
+        </Grid>
+        <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
+            <Border Grid.Row="2" Style="{StaticResource CardBorder}">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="{Binding Revenue, StringFormat='Выручка: {0:F2} ₽'}" FontAttributes="Bold" />
+                    <Label Text="{Binding ClosedOrdersCount, StringFormat='Чеков: {0}'}" />
+                    <Label Text="{Binding CancelledOrdersCount, StringFormat='Отменено: {0}'}" />
+                    <Label Text="{Binding AverageCheck, StringFormat='Средний чек: {0:F2} ₽'}" />
+                </VerticalStackLayout>
+            </Border>
+            <Button Grid.Row="3" Text="Анализировать смену" Command="{Binding OpenAnalyticsCommand}" />
+            <Label Grid.Row="4" Text="История выполненных заказов" Style="{StaticResource SectionTitle}" />
+            <CollectionView Grid.Row="5" ItemsSource="{Binding CompletedOrders}" SelectionMode="None">
+                <CollectionView.EmptyView>
+                    <Label Text="Выполненных заказов пока нет." Style="{StaticResource EmptyLabel}" />
+                </CollectionView.EmptyView>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
+                            <VerticalStackLayout Spacing="4">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <Label Text="{Binding OrderTitle}" FontAttributes="Bold" />
+                                    <Label Grid.Column="1" Text="{Binding Model.CreatedAt, StringFormat='{0:dd.MM.yyyy HH:mm}'}" Style="{StaticResource SecondaryLabel}" />
+                                </Grid>
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Padding="8,0,0,0" Spacing="3">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate>
+                                            <Label Text="{Binding ., StringFormat='• {0}'}" LineBreakMode="WordWrap" />
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                                <Label Text="{Binding TotalPrice, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+            <Button Grid.Row="6" Text="Закрыть смену и открыть новую" Style="{StaticResource DangerButton}" Command="{Binding CloseShiftCommand}" />
+    </Grid>
+</ContentPage>

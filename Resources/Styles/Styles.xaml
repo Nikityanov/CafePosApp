@@ -1,0 +1,703 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<ResourceDictionary 
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls">
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  DESIGN TOKENS — TYPOGRAPHY                                   -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="Label" x:Key="PageTitle">
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="SectionTitle">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="Margin" Value="0,8,0,2" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="Caption">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="SecondaryLabel">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="EmptyLabel">
+        <Setter Property="Padding" Value="8,16" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  COMPACT CARD STYLES                                           -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="Border" x:Key="CardBorder">
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Margin" Value="0,0,0,2" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}" />
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 10" />
+        <Setter Property="StrokeThickness" Value="1" />
+    </Style>
+
+    <Style TargetType="Border" x:Key="CardBorderCompact">
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="Margin" Value="0,0,0,2" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}" />
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 8" />
+        <Setter Property="StrokeThickness" Value="1" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  EXTENDED FAB                                                  -->
+    <!--  Was an icon-only circle whose entire content was the text     -->
+    <!--  character "+", set in the body font at 24pt bold. A text        -->
+    <!--  character is not an icon: its weight, optical size and        -->
+    <!--  baseline all come from the typeface, so the mark drifted      -->
+    <!--  inside the circle differently on every platform and read as a  -->
+    <!--  label that had lost its place rather than a deliberate glyph.  -->
+    <!--  It is a 24dp vector path now (see Controls/FloatingActionButton),-->
+    <!--  and the button carries a label, because "+" cannot say WHICH   -->
+    <!--  thing it adds — that changes with the section the operator has  -->
+    <!--  open (товар / раздел / модификатор / ингредиент). Material 3   -->
+    <!--  asks for an extended FAB precisely when "an icon alone is      -->
+    <!--  ambiguous".                                                    -->
+    <!--                                                                  -->
+    <!--  Metrics are M3: 56dp container, 16dp corner radius (M3 is     -->
+    <!--  boxier than the old 28dp pill), 16dp side padding, 24dp icon,  -->
+    <!--  80dp minimum width.                                            -->
+    <!--                                                                  -->
+    <!--  The fill follows the app's existing primary pairing — Primary  -->
+    <!--  with white on top in light, PrimaryDark with black in dark —   -->
+    <!--  because PrimaryDark is a pale lavender: white on it is 2.1:1  -->
+    <!--  and fails outright, which is the same reason the implicit      -->
+    <!--  Button style pairs it with black.                              -->
+    <!--                                                                  -->
+    <!--  Margin is 12dp on the sides, not M3's 16dp: the page's content column   -->
+    <!--  is padded 12dp, and a 16dp inset left the pill hanging 4dp proud of  -->
+    <!--  every card edge above it. Aligning to the app's own gutter is worth    -->
+    <!--  more here than matching the window margin. The bottom is 16dp — see    -->
+    <!--  the setter, the shadow needs somewhere to go.                          -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="Border" x:Key="ExtendedFAB">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+        <Setter Property="Stroke" Value="Transparent" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 16" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HeightRequest" Value="56" />
+        <Setter Property="MinimumWidthRequest" Value="80" />
+        <Setter Property="HorizontalOptions" Value="End" />
+        <Setter Property="VerticalOptions" Value="End" />
+        <Setter Property="Margin" Value="0,4,12,16" />
+        <!-- 16dp of bottom margin, not the 12dp on the right, because a Shadow is drawn
+             outside the Border and the platform clips it to the parent's bounds: 4dp of
+             downward offset plus blur needs the room, or the pill sits on a sliced-off
+             shadow. Only the vertical direction needs it, which is why the sides can keep
+             the page's 12dp gutter. -->
+        <Setter Property="Shadow">
+            <Setter.Value>
+                <Shadow Radius="10" Offset="0,4" Opacity="0.28" Brush="{StaticResource BlackBrush}" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="shapes:Path" x:Key="ExtendedFABIcon">
+        <Setter Property="Aspect" Value="Uniform" />
+        <Setter Property="WidthRequest" Value="24" />
+        <Setter Property="HeightRequest" Value="24" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="Stroke" Value="Transparent" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+    </Style>
+
+    <!-- NoWrap keeps the pill one line: the label is at most two words by
+         design, and a wrapped label inside a fixed-height Border would
+         simply be clipped. -->
+    <Style TargetType="Label" x:Key="ExtendedFABLabel">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="LineBreakMode" Value="NoWrap" />
+        <Setter Property="VerticalTextAlignment" Value="Center" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+    </Style>
+
+    <!-- The transparent button that covers the pill. It carries the
+         command, the enabled state, keyboard activation and the automation
+         role; it carries no fill of its own, so all you see when pressing is
+         a translucent state layer over the Primary fill underneath — the
+         same idea the Material FAB uses, and a far quieter signal than the
+         fill swap plus 0.94 shrink this button used to do (a dark violet
+         flash that read as the button changing colour rather than being
+         pressed).
+         CornerRadius matches the container so the pressed layer follows the
+         pill instead of squaring off its corners. MinimumWidth/MinimumHeight
+         are zeroed so the platform cannot grow the target past the content —
+         MAUI already zeroes Android's insets and min sizes in
+         MauiMaterialButton, so this view is a full-bleed touch target. -->
+    <Style TargetType="Button" x:Key="FabTouchTarget">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="BorderColor" Value="Transparent" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="CornerRadius" Value="16" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="MinimumWidthRequest" Value="0" />
+        <Setter Property="MinimumHeightRequest" Value="0" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="PointerOver">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor"
+                                    Value="{AppThemeBinding Light={StaticResource StateLayerLightHover}, Dark={StaticResource StateLayerDarkHover}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Pressed">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor"
+                                    Value="{AppThemeBinding Light={StaticResource StateLayerLightPressed}, Dark={StaticResource StateLayerDarkPressed}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <!-- A scrim, not a recolour: this button only paints over the
+                         container, so it cannot restyle the fill beneath it. Darkening
+                         is the one disabled treatment that reads as disabled over any
+                         colour. -->
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="#99000000" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  SECTION SWITCHER                                              -->
+    <!--  A single segmented control. The four equal columns this        -->
+    <!--  replaced gave "Модификаторы" ~81dp on a 360dp phone — less     -->
+    <!--  than the word needs — so the label was clipped inside a        -->
+    <!--  fixed 36dp height. The buttons now size to their text and      -->
+    <!--  wrap through a FlexLayout, so they hold at 320dp and simply   -->
+    <!--  spread out on a tablet.                                        -->
+    <!--  Height is 44dp (was 36dp), below the touch minimum.            -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="Button" x:Key="SectionTab">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="CornerRadius" Value="20" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="HeightRequest" Value="44" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+        <Setter Property="BorderWidth" Value="1" />
+        <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}" />
+    </Style>
+
+    <!-- The active state is NOT a second style. It is a DataTrigger inside the single chip
+         template on CatalogManagementPage, bound to the chip's own IsSelected. A separate
+         "SectionTabActive" style was tried and deleted: Style.Triggers belongs to the style, not
+         to a control instance, so a page-level trigger would have needed the four keyed styles
+         back, paired 1:1 with four buttons again. -->
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  FILTER CHIPS                                                   -->
+    <!--  The category filter used to be a fixed 120dp Picker, which on   -->
+    <!--  Android opens a blocking modal, swallows the system Back key   -->
+    <!--  and cannot show the active filter as part of the list header.  -->
+    <!--  A chip strip shows every category at once, wraps on a narrow    -->
+    <!--  screen, and pairs the filter with the same "Выбрать / Готово"  -->
+    <!--  affordance the menu page already uses for its categories.        -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="Border" x:Key="FilterChip">
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="HeightRequest" Value="44" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 22" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="FilterChipText">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}" />
+        <Setter Property="VerticalTextAlignment" Value="Center" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  ACTION SHEET                                                 -->
+    <!--  Full-width rows of the row overflow menu. They are applied from -->
+    <!--  code (see Views/CatalogActionSheetPopup), which is why the     -->
+    <!--  lookup is by key — see Controls/ResourceStyles.                 -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="Button" x:Key="SheetAction">
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BorderWidth" Value="1" />
+        <Setter Property="Padding" Value="16,10" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}" />
+    </Style>
+
+    <!-- Destructive sheet entries stay filled (like the rest) but in the danger colour, and are
+         separated from the safe entries by a divider added in code — an outline would read as a
+         second, competing button style. -->
+    <Style TargetType="Button" x:Key="SheetActionDanger" BasedOn="{StaticResource SheetAction}">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BorderColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource Danger}}" />
+    </Style>
+
+    <!-- The row's overflow trigger: a 48dp icon-only button showing the Material "more_vert" mark.
+         The mark is a vector Path declared once here as the button's ControlTemplate rather than
+         inline at each of the five call sites, and its Fill is a {TemplateBinding TextColor} so it
+         always matches the button (the themed grey normally, white on the Primary group header —
+         set by RowOverflowButtonOnPrimary / the CatalogRow header trigger). This is the fix for the
+         old approach that coloured itself via {Binding Source={RelativeSource AncestorType=Button},
+         Path=TextColor}: a ContentView could not see its host button's TextColor through the
+         ContentView → Button.Content → CollectionView DataTemplate boundary, so the dots rendered
+         with no colour at all. A ControlTemplate holds a direct reference to its templated parent,
+         so TemplateBinding works. Padding is 0 and the background transparent so the button reads
+         as a bare mark; the Pressed state is the only feedback, a subtle filled circle. -->
+    <Style TargetType="Button" x:Key="RowOverflowButton">
+        <Setter Property="WidthRequest" Value="48" />
+        <Setter Property="HeightRequest" Value="48" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="BorderColor" Value="Transparent" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="MinimumWidthRequest" Value="48" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="Transparent" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Pressed">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+        <!-- The mark is NOT set here. A MAUI Button has no ControlTemplate property (that belongs
+             to TemplatedView), so a style cannot supply the glyph. It lives once in
+             Controls/CatalogRow.xaml — the only consumer of this style — and follows the header
+             state through a DataTrigger on the Path itself. -->
+    </Style>
+
+    <!-- The same trigger on a filled (Primary) row background: white dots. The mark's Fill follows
+         the button's TextColor through the template, so setting the colour is all that is needed. -->
+    <Style TargetType="Button" x:Key="RowOverflowButtonOnPrimary" BasedOn="{StaticResource RowOverflowButton}">
+        <Setter Property="TextColor" Value="White" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  LIST ROWS                                                    -->
+    <!--  The list templates repeated FontSize/Margin/VerticalOptions on  -->
+    <!--  every single row; these keep a row consistent across pages.    -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="Label" x:Key="RowTitle">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="LineBreakMode" Value="TailTruncation" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <!-- The price the operator scans most. It used to be 13pt — the smallest text on the row and
+         the farthest from the eye on a wide window, because the name sat at the left edge and the
+         price at the right. 16pt bold with End alignment and a stable minimum width keeps the
+         figures large enough to read at arm's length and aligned down the list. The variant range
+         ("4 – 6 ₽") inherits the same size so it stays readable. -->
+    <Style TargetType="Label" x:Key="RowPrice">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="HorizontalTextAlignment" Value="End" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="LineBreakMode" Value="TailTruncation" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="CountLabel">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+        <Setter Property="Margin" Value="4,0" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  TAGS / PILLS                                                  -->
+    <!--  A pill in a list row. Both variants were inlined six times in  -->
+    <!--  the catalogue page with a fixed (theme-blind) background.       -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="Border" x:Key="Tag">
+        <Setter Property="Padding" Value="6,2" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Stroke" Value="Transparent" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 4" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+    </Style>
+
+    <Style TargetType="Border" x:Key="TagInfo" BasedOn="{StaticResource Tag}">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InfoLight}, Dark={StaticResource Gray700}}" />
+    </Style>
+
+    <!-- 10pt was below a readable floor for a POS operator reading stock counts and unit costs at
+         arm's length; 11pt is the smallest this app renders deliberately. -->
+    <Style TargetType="Label" x:Key="TagText">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="TagTextInfo" BasedOn="{StaticResource TagText}">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Info}, Dark={StaticResource Gray200}}" />
+    </Style>
+
+    <!-- Availability is state, not an action, so it is shown as a tag rather than as a button
+         once the action itself moved into the row's overflow menu. Declared after Tag/TagText
+         because a StaticResource in BasedOn is resolved in document order. -->
+    <Style TargetType="Border" x:Key="TagWarning" BasedOn="{StaticResource Tag}">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource WarningLight}, Dark={StaticResource Gray700}}" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="TagTextWarning" BasedOn="{StaticResource TagText}">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Warning}, Dark={StaticResource Warning}}" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  BUTTON VARIANTS                                              -->
+    <!--  Secondary/danger/tinted buttons were re-declared inline in    -->
+    <!--  every form, including a hardcoded Gray500 "Cancel".            -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- A keyed style does NOT inherit the implicit TargetType="Button" style, so every
+         variant below restates the shared button metrics. -->
+    <Style TargetType="Button" x:Key="SecondaryButton">
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+        <Setter Property="MinimumWidthRequest" Value="44" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray700}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray100}}" />
+    </Style>
+
+    <Style TargetType="Button" x:Key="DangerButton" BasedOn="{StaticResource SecondaryButton}">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource Gray700}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource Danger}}" />
+    </Style>
+
+    <!-- 40dp was below the touch minimum every other control in the app honours; these are the
+         small header action buttons, so 44dp is the floor and 48dp is what they now get. -->
+    <Style TargetType="Button" x:Key="ToolbarButton">
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="CornerRadius" Value="20" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="HeightRequest" Value="48" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InfoLight}, Dark={StaticResource Gray700}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Info}, Dark={StaticResource Gray100}}" />
+    </Style>
+
+    <Style TargetType="Button" x:Key="WarningToolbarButton" BasedOn="{StaticResource ToolbarButton}">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource WarningLight}, Dark={StaticResource Gray700}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Warning}, Dark={StaticResource Gray100}}" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  ROW ACTIONS                                                   -->
+    <!--  Labelled text buttons for list rows. They replaced a set of   -->
+    <!--  cryptic glyph buttons (✎ × ↺ ⊕ ✓ ✗) that only made sense with -->
+    <!--  a hover caption — and the caption could not be positioned in   -->
+    <!--  MAUI without breaking the row layout. A real label needs no    -->
+    <!--  tooltip, and the 44px height is a proper touch target.         -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="Button" x:Key="RowAction">
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="BorderWidth" Value="1" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+        <Setter Property="MinimumWidthRequest" Value="44" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray100}}" />
+    </Style>
+
+    <Style TargetType="Button" x:Key="RowActionDanger" BasedOn="{StaticResource RowAction}">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource Danger}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource Danger}}" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  FORM FIELD                                                    -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- Form fields previously had no surface of their own (the implicit Entry style sets
+         BackgroundColor=Transparent), so a column of entries read as undifferentiated text.
+         These give every field a visible, theme-aware surface. -->
+    <!-- Note: Entry/Editor/Picker have no Padding in MAUI, so the field fill is the only
+         affordance available without wrapping every control in a Border. The platform text
+         control supplies its own internal inset. -->
+    <Style TargetType="Entry" x:Key="FormField">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
+    </Style>
+
+    <Style TargetType="Editor" x:Key="FormFieldEditor">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
+    </Style>
+
+    <Style TargetType="Picker" x:Key="FormFieldPicker">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="TitleColor" Value="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}" />
+    </Style>
+
+    <!-- The bottom sheet itself is a toolkit Popup styled inline in Views/CatalogActionSheetPopup.xaml.
+         The old "BottomSheet" Border style had no consumers at all and was removed. Only the handle
+         remains here, and it does have one (the action sheet's grab bar). -->
+
+    <Style TargetType="BoxView" x:Key="BottomSheetHandle">
+        <Setter Property="WidthRequest" Value="40" />
+        <Setter Property="HeightRequest" Value="4" />
+        <Setter Property="CornerRadius" Value="2" />
+        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  DEFAULT CONTROL STYLES                                        -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="ActivityIndicator">
+        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+    </Style>
+
+    <Style TargetType="IndicatorView">
+        <Setter Property="IndicatorColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
+        <Setter Property="SelectedIndicatorColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+    </Style>
+
+    <Style TargetType="Border">
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+        <Setter Property="StrokeShape" Value="Rectangle"/>
+        <Setter Property="StrokeThickness" Value="1"/>
+    </Style>
+
+    <Style TargetType="BoxView">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray300}}" />
+    </Style>
+
+    <Style TargetType="Button">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="BorderWidth" Value="0"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="PointerOver" />
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ContentPage">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource BackgroundLight}, Dark={StaticResource BackgroundDark}}" />
+    </Style>
+
+    <Style TargetType="CheckBox">
+        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+    </Style>
+
+    <Style TargetType="DatePicker">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+    </Style>
+
+    <Style TargetType="Editor">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+    </Style>
+
+    <Style TargetType="Entry">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+    </Style>
+
+    <Style TargetType="ImageButton">
+        <Setter Property="Opacity" Value="1" />
+        <Setter Property="BorderColor" Value="Transparent"/>
+        <Setter Property="BorderWidth" Value="0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
+    </Style>
+
+    <Style TargetType="Label">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <Style TargetType="Picker">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="TitleColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+    </Style>
+
+    <Style TargetType="ProgressBar">
+        <Setter Property="ProgressColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+    </Style>
+
+    <Style TargetType="RadioButton">
+        <Setter Property="BackgroundColor" Value="Transparent"/>
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+    </Style>
+
+    <Style TargetType="RefreshView">
+        <Setter Property="RefreshColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+    </Style>
+
+    <Style TargetType="SearchBar">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource Gray500}" />
+        <Setter Property="CancelButtonColor" Value="{StaticResource Gray500}" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+    </Style>
+
+    <Style TargetType="Shadow">
+        <Setter Property="Radius" Value="8" />
+        <Setter Property="Opacity" Value="0.15" />
+        <Setter Property="Brush" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource Black}}" />
+        <Setter Property="Offset" Value="0,2" />
+    </Style>
+
+    <Style TargetType="Slider">
+        <Setter Property="MinimumTrackColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="MaximumTrackColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+        <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+    </Style>
+
+    <Style TargetType="SwipeItem">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+    </Style>
+
+    <Style TargetType="Switch">
+        <Setter Property="OnColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="ThumbColor" Value="{StaticResource White}" />
+    </Style>
+
+    <Style TargetType="TimePicker">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="Transparent"/>
+        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+    </Style>
+
+    <Style TargetType="Page" ApplyToDerivedTypes="True">
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource BackgroundLight}, Dark={StaticResource BackgroundDark}}" />
+    </Style>
+
+    <Style TargetType="Shell" ApplyToDerivedTypes="True">
+        <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}" />
+        <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
+        <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
+        <Setter Property="Shell.DisabledColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray700}}" />
+        <Setter Property="Shell.UnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
+        <Setter Property="Shell.NavBarHasShadow" Value="False" />
+        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}" />
+        <!-- Magenta was left over from the template: it matched no other accent in the app. -->
+        <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+        <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+        <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray500}}" />
+    </Style>
+
+    <Style TargetType="NavigationPage">
+        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}" />
+        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="IconColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+    </Style>
+
+    <Style TargetType="TabbedPage">
+        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}" />
+        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="UnselectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray600}}" />
+        <Setter Property="SelectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}" />
+    </Style>
+
+</ResourceDictionary>

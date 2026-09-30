@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" x:Class="CafePosApp.Views.OrdersPage" Title="Заказы">
+    <ContentPage.Resources>
+        <DataTemplate x:Key="OrderCardTemplate">
+            <Border Style="{StaticResource CardBorder}" Stroke="{Binding StatusColor}" StrokeThickness="2" Margin="0,0,0,8">
+                <VerticalStackLayout Spacing="7">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="1">
+                            <Label Text="{Binding OrderTitle}" FontSize="18" FontAttributes="Bold" />
+                            <Label Text="{Binding CreatedAtText}" Style="{StaticResource SecondaryLabel}" />
+                        </VerticalStackLayout>
+                        <Label Grid.Column="1" Text="{Binding StatusText}" TextColor="{Binding StatusColor}" FontAttributes="Bold" VerticalOptions="Center" />
+                    </Grid>
+                    <Label Text="{Binding StatusHint}" TextColor="{Binding StatusColor}" FontAttributes="Bold" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Padding="8,0,0,2" Spacing="3">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate>
+                                <Label Text="{Binding ., StringFormat='• {0}'}" LineBreakMode="WordWrap" />
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Label Text="{Binding TotalPrice, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                        <Button Text="Подробнее" Padding="8,6" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.OpenDetailsCommand}" CommandParameter="{Binding .}" />
+                        <Button Grid.Column="1" Text="{Binding NextActionText}" Padding="8,6" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.AdvanceStatusCommand}" CommandParameter="{Binding .}" IsEnabled="{Binding CanAdvance}" />
+                    </Grid>
+                    <Button Text="Отменить заказ" Padding="8,5" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CancelOrderCommand}" CommandParameter="{Binding .}" IsVisible="{Binding CanCancel}" />
+                </VerticalStackLayout>
+            </Border>
+        </DataTemplate>
+    </ContentPage.Resources>
+    <Grid RowDefinitions="Auto,Auto,*" Padding="12" RowSpacing="8">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+            <Label Text="Активные заказы" Style="{StaticResource PageTitle}" VerticalOptions="Center" />
+            <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить заказы" />
+            <Button Grid.Column="2" Text="{Binding ViewModeText}" Command="{Binding ToggleViewCommand}" Padding="12,6" />
+        </Grid>
+        <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
+        <Grid Grid.Row="2">
+                <Grid IsVisible="{Binding IsKanban}" RowDefinitions="*" ColumnDefinitions="*,*" ColumnSpacing="8">
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Готовятся" FontAttributes="Bold" TextColor="{StaticResource Warning}" />
+                        <CollectionView ItemsSource="{Binding PreparingOrders}" SelectionMode="None" ItemTemplate="{StaticResource OrderCardTemplate}">
+                            <CollectionView.EmptyView><Label Text="Нет заказов" Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
+                        </CollectionView>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Spacing="6">
+                        <Label Text="Ждут выдачи" FontAttributes="Bold" TextColor="{StaticResource Success}" />
+                        <CollectionView ItemsSource="{Binding ReadyOrders}" SelectionMode="None" ItemTemplate="{StaticResource OrderCardTemplate}">
+                            <CollectionView.EmptyView><Label Text="Нет заказов" Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
+                        </CollectionView>
+                    </VerticalStackLayout>
+                </Grid>
+                <CollectionView ItemsSource="{Binding ActiveOrders}" SelectionMode="None" IsVisible="{Binding IsList}" ItemTemplate="{StaticResource OrderCardTemplate}">
+                    <CollectionView.EmptyView><Label Text="Активных заказов нет." Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
+                </CollectionView>
+        </Grid>
+    </Grid>
+</ContentPage>

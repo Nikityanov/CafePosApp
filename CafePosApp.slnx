@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/Core/">
+    <Project Path="Core/CafePos.Core.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/CafePos.Tests.csproj" />
+  </Folder>
+  <Project Path="CafePosApp.csproj" />
+</Solution>

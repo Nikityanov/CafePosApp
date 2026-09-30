@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls"
+             x:Class="CafePosApp.Views.CatalogFormsPage"
+             x:Name="FormsPage"
+             Title="{Binding Title}">
+
+    <ContentPage.ToolbarItems>
+        <!-- A real header, so Cancel is reachable from the top on every form instead of only from
+             the bottom of a scrolling page. The form is pushed as a modal, which on Android means the
+             system back gesture is the other obvious exit — the page code-behind confirms that one. -->
+        <ToolbarItem Text="Отмена" Priority="1" Order="Primary"
+                     Command="{Binding CancelCommand}" />
+    </ContentPage.ToolbarItems>
+
+    <!-- The footer is NOT a DataTemplate any more. In .NET MAUI 10 no cross-platform control has
+         a ContentTemplate: ContentView, ContentPresenter and ContentPage all expose Content but
+         not ContentTemplate (only ShellContent, and the WinUI platform types under
+         Microsoft.Maui.Controls.Platform, do). So <ContentPresenter ContentTemplate="..."/> —
+         which this file used four times, once per form — was markup MAUI cannot parse, and it
+         aborted the process at inflation, i.e. the moment the catalogue FAB pushed this page.
+         A DataTemplateSelector is not an option either: its only consumer is an ItemsView, and
+         standing up a one-item CollectionView inside this page's ScrollView would put a second
+         scroller in the same gesture (the exact problem the variant list below avoids).
+         The footer is therefore built once in code — BuildFormFooter in the code-behind, the same
+         pattern the catalogue action sheet already uses via Controls/ResourceStyles.TryApply —
+         and the four empty VerticalStackLayouts below are only the slots it is added to. The
+         FormFooterTemplate resource it replaces was reachable from nowhere else and is gone. -->
+
+    <!-- The ScrollView owns the remaining height (the star row below), which is what lets a long
+         form scroll a focused field clear of the soft keyboard. -->
+    <Grid RowDefinitions="Auto,*">
+        <Label Grid.Row="0" Text="{Binding Title}" Style="{StaticResource PageTitle}" Margin="16,12,16,0" />
+
+        <!-- No KeyboardDismissMode: that is an iOS UIScrollView member and no MAUI control has it.
+             The Page-level KeyboardAvoidingBehavior that used to complement it was removed from
+             MAUI in .NET 9, so neither name exists in 10.0.101 and naming either was a runtime
+             abort rather than a build error. DismissKeyboard in the code-behind reproduces the
+             intent through Unfocus(), which does exist. -->
+        <ScrollView x:Name="FormScroll" Grid.Row="1">
+            <VerticalStackLayout Padding="16,8" Spacing="12">
+
+                <!-- ═══ PRODUCT FORM ═══ -->
+                <VerticalStackLayout IsVisible="{Binding IsProductForm}" Spacing="10">
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Основное" Style="{StaticResource SectionTitle}" />
+                            <Entry Style="{StaticResource FormField}" Placeholder="Название блюда" Text="{Binding Product.ProductName}" ClearButtonVisibility="WhileEditing" />
+                            <Entry Style="{StaticResource FormField}" Placeholder="Цена, ₽" Text="{Binding Product.ProductPriceText}" Keyboard="Numeric"
+                                   IsEnabled="{Binding Product.IsPriceEnabled}" />
+                            <Label Text="Общая цена не нужна: у каждого варианта своя. Заполните список вариантов ниже."
+                                   IsVisible="{Binding Product.HasVariants}" Style="{StaticResource Caption}" />
+                            <Picker Style="{StaticResource FormFieldPicker}" Title="Раздел" ItemsSource="{Binding Product.CategoryOptions}"
+                                    ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding Product.SelectedCategoryOption}" />
+                            <Picker Style="{StaticResource FormFieldPicker}" Title="Группа модификаторов" ItemsSource="{Binding Product.ModifierGroupOptions}"
+                                    ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding Product.SelectedModifierGroupOption}" />
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                <CheckBox IsChecked="{Binding Product.HasVariants}" VerticalOptions="Center" />
+                                <Label Grid.Column="1" Text="Есть варианты (размеры / объёмы)" VerticalOptions="Center" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Variants -->
+                    <Border Style="{StaticResource CardBorder}" IsVisible="{Binding Product.HasVariants}">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Варианты" Style="{StaticResource SectionTitle}" />
+                            <!-- BindableLayout, not a CollectionView. A CollectionView inside this
+                                 page's ScrollView is a second scroller fighting the outer one over the
+                                 drag gesture, and the old MaximumHeightRequest="180" was a workaround
+                                 for that rather than a sizing contract — it capped the list on a tablet
+                                 for no reason. The variant list is short and renders its own empty
+                                 state. -->
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Product.Variants}" Spacing="2">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="0,2">
+                                            <Label Text="{Binding Name}" VerticalOptions="Center" />
+                                            <Label Grid.Column="1" Text="{Binding Price, StringFormat='{0:F0} ₽'}"
+                                                   VerticalOptions="Center" Style="{StaticResource Caption}" />
+                                            <Button Grid.Column="2" Text="Убрать" Style="{StaticResource RowActionDanger}"
+                                                    SemanticProperties.Description="Убрать вариант"
+                                                    Command="{Binding Source={x:Reference FormsPage}, Path=BindingContext.Product.RemoveVariantCommand}"
+                                                    CommandParameter="{Binding .}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                            <Label Text="Вариантов пока нет." Style="{StaticResource EmptyLabel}"
+                                   IsVisible="{Binding Product.HasVariantsList}" />
+                            <Grid ColumnDefinitions="*,100,Auto" ColumnSpacing="6">
+                                <Entry Style="{StaticResource FormField}" Placeholder="Название (М/С/Б)" Text="{Binding Product.NewVariantName}" />
+                                <Entry Style="{StaticResource FormField}" Grid.Column="1" Placeholder="Цена" Text="{Binding Product.NewVariantPriceText}" Keyboard="Numeric" />
+                                <Button Grid.Column="2" Text="+" WidthRequest="48" HeightRequest="48" MinimumWidthRequest="48" MinimumHeightRequest="48" FontSize="18"
+                                        SemanticProperties.Description="Добавить вариант"
+                                        Command="{Binding Product.AddVariantCommand}" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Details -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Детали" Style="{StaticResource SectionTitle}" />
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                <!-- The mark is a SIBLING of the button, not its content: a MAUI
+                                     Button is text-and-image only. It has no content property at
+                                     all in 10.0.101 (no Content, and no ControlTemplate either —
+                                     that belongs to TemplatedView), so <Button.Content> was the
+                                     first thing the product form hit and aborted the app. Same
+                                     arrangement as the row overflow dots in
+                                     Controls/CatalogRow.xaml: the Grid carries the 44dp touch
+                                     target, the button fills it and takes the tap, and the Path
+                                     is input-transparent so it cannot swallow it. A vector mark
+                                     rather than an emoji, because the implicit Button style sets
+                                     FontFamily=OpenSansRegular, which has no emoji glyphs — the
+                                     character fell through to a platform-dependent fallback font. -->
+                                <Grid WidthRequest="44" HeightRequest="44" VerticalOptions="Center">
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            HorizontalOptions="Fill" VerticalOptions="Fill" Padding="0"
+                                            SemanticProperties.Description="Выбрать фото товара"
+                                            Command="{Binding Product.PickPhotoCommand}" />
+                                    <!-- The mark goes ON TOP of the button, not under it. In a Grid the
+                                         later sibling paints later, and SecondaryButton has an opaque
+                                         Gray300 fill — declared first, the button covered the mark and
+                                         the control rendered as a blank grey square. InputTransparent
+                                         is what keeps the mark from swallowing the button's tap. -->
+                                    <shapes:Path Aspect="Uniform" WidthRequest="20" HeightRequest="20"
+                                                 HorizontalOptions="Center" VerticalOptions="Center"
+                                                 InputTransparent="True"
+                                                 Stroke="{StaticResource Gray700}" StrokeThickness="2" Fill="Transparent"
+                                                 Data="M9,3 L7.17,5 L4,5 C2.9,5 2,5.9 2,7 L2,19 C2,20.1 2.9,21 4,21 L20,21 C21.1,21 22,20.1 22,19 L22,7 C22,5.9 21.1,5 20,5 L16.83,5 L15,3 L9,3 Z M12,17 C9.24,17 7,14.76 7,12 C7,9.24 9.24,7 12,7 C14.76,7 17,9.24 17,12 C17,14.76 14.76,17 12,17 Z M12,9 C10.34,9 9,10.34 9,12 C9,13.66 10.34,15 12,15 C13.66,15 15,13.66 15,12 C15,10.34 13.66,9 12,9 Z" />
+                                </Grid>
+                                <Label Grid.Column="1" VerticalOptions="Center" LineBreakMode="TailTruncation"
+                                       Style="{StaticResource Caption}" Text="{Binding Product.PhotoPath, StringFormat='Фото: {0}', TargetNullValue='Фото не выбрано', FallbackValue='Фото не выбрано'}" />
+                            </Grid>
+                            <Entry Style="{StaticResource FormField}" Placeholder="Аллергены (через запятую)" Text="{Binding Product.Allergens}" />
+                            <Entry Style="{StaticResource FormField}" Placeholder="Теги (через запятую)" Text="{Binding Product.Tags}" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <Picker Style="{StaticResource FormFieldPicker}" Title="Доступен с" ItemsSource="{Binding Product.Hours}" SelectedIndex="{Binding Product.FromHourIndex}" />
+                                <Picker Style="{StaticResource FormFieldPicker}" Grid.Column="1" Title="Доступен до" ItemsSource="{Binding Product.Hours}" SelectedIndex="{Binding Product.ToHourIndex}" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Recipe / cost / price history (saved products only) -->
+                    <Border Style="{StaticResource CardBorder}" IsVisible="{Binding Product.IsEditing}">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Рецепт и себестоимость" Style="{StaticResource SectionTitle}" />
+                            <Label Text="{Binding Product.CostPriceText}" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding Product.MarginText}" Style="{StaticResource Caption}" />
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Product.Recipes}" Spacing="2">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="0,2">
+                                            <Label Text="{Binding Ingredient.Name}" VerticalOptions="Center" />
+                                            <Label Grid.Column="1" VerticalOptions="Center" Style="{StaticResource Caption}"
+                                                   Text="{Binding QuantityText}" />
+                                            <Button Grid.Column="2" Text="Убрать" Style="{StaticResource RowActionDanger}"
+                                                    SemanticProperties.Description="Убрать ингредиент из рецепта"
+                                                    Command="{Binding Source={x:Reference FormsPage}, Path=BindingContext.Product.DeleteRecipeItemCommand}"
+                                                    CommandParameter="{Binding .}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                            <Label Text="Рецепт не задан." Style="{StaticResource EmptyLabel}"
+                                   IsVisible="{Binding Product.HasRecipes}" />
+                            <Grid ColumnDefinitions="*,100,Auto" ColumnSpacing="6">
+                                <Picker Style="{StaticResource FormFieldPicker}" Title="Ингредиент" ItemsSource="{Binding Product.Ingredients}"
+                                        ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding Product.SelectedRecipeIngredient}" />
+                                <Entry Style="{StaticResource FormField}" Grid.Column="1" Placeholder="Кол-во" Text="{Binding Product.RecipeQuantityText}" Keyboard="Numeric" />
+                                <Button Grid.Column="2" Text="+" WidthRequest="48" HeightRequest="48" MinimumWidthRequest="48" MinimumHeightRequest="48" FontSize="18"
+                                        SemanticProperties.Description="Добавить ингредиент в рецепт"
+                                        Command="{Binding Product.AddRecipeItemCommand}" />
+                            </Grid>
+
+                            <Label Text="История изменения цены" Style="{StaticResource Caption}" Margin="0,6,0,0" />
+                            <!-- The old list had no EmptyView, so a freshly saved product showed a
+                                 labelled 110dp blank box. -->
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Product.PriceHistory}" Spacing="2">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate>
+                                        <Label Style="{StaticResource Caption}" Text="{Binding ChangeText}" />
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                            <Label Text="Изменений цены ещё не было." Style="{StaticResource EmptyLabel}"
+                                   IsVisible="{Binding Product.HasPriceHistory}" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Footer slot. Filled in the code-behind by BuildFormFooter, bound to the
+                         product form's own Save/Cancel/ValidationMessage. -->
+                    <VerticalStackLayout x:Name="ProductFooterHost" />
+                </VerticalStackLayout>
+
+                <!-- ═══ CATEGORY FORM ═══ -->
+                <VerticalStackLayout IsVisible="{Binding IsCategoryForm}" Spacing="10">
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Entry Style="{StaticResource FormField}" Placeholder="Название раздела" Text="{Binding Category.Name}" ClearButtonVisibility="WhileEditing" />
+                        </VerticalStackLayout>
+                    </Border>
+                    <VerticalStackLayout x:Name="CategoryFooterHost" />
+                </VerticalStackLayout>
+
+                <!-- ═══ MODIFIER GROUP FORM ═══ -->
+                <VerticalStackLayout IsVisible="{Binding IsModifierForm}" Spacing="10">
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Entry Style="{StaticResource FormField}" Placeholder="Название группы (например, «Сиропы»)" Text="{Binding Modifier.Name}" ClearButtonVisibility="WhileEditing" />
+                            <Label Text="Варианты — каждый с новой строки:" Style="{StaticResource Caption}" />
+                            <!-- AutoSize="TextChanges" fought the sibling HeightRequest="140": the
+                                 editor grew with every keystroke and, inside the page ScrollView, grew
+                                 without bound. A fixed height with a scrollable editor is the sane
+                                 contract for a text box.
+                                 The placeholder no longer hardcodes a line break (&#x0a;), which is
+                                 not rendered on every platform. -->
+                            <Editor Style="{StaticResource FormFieldEditor}" Text="{Binding Modifier.OptionsText}" HeightRequest="160"
+                                    Placeholder="По одному варианту в строке, например:&#10;Карамель&#10;Ваниль" />
+                        </VerticalStackLayout>
+                    </Border>
+                    <VerticalStackLayout x:Name="ModifierFooterHost" />
+                </VerticalStackLayout>
+
+                <!-- ═══ INGREDIENT FORM ═══ -->
+                <VerticalStackLayout IsVisible="{Binding IsIngredientForm}" Spacing="10">
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Entry Style="{StaticResource FormField}" Placeholder="Название ингредиента" Text="{Binding Ingredient.Name}" ClearButtonVisibility="WhileEditing" />
+                            <Entry Style="{StaticResource FormField}" Placeholder="Единица измерения (г, мл, шт)" Text="{Binding Ingredient.Unit}" />
+                            <Entry Style="{StaticResource FormField}" Placeholder="Себестоимость за единицу, ₽" Text="{Binding Ingredient.CostText}" Keyboard="Numeric" />
+                            <Entry Style="{StaticResource FormField}" Placeholder="Остаток на складе" Text="{Binding Ingredient.StockText}" Keyboard="Numeric" />
+                            <Entry Style="{StaticResource FormField}" Placeholder="Минимальный запас (для предупреждений)" Text="{Binding Ingredient.MinStockText}" Keyboard="Numeric" />
+                            <Entry Style="{StaticResource FormField}" Placeholder="Поставщик (необязательно)" Text="{Binding Ingredient.Supplier}" />
+                        </VerticalStackLayout>
+                    </Border>
+                    <VerticalStackLayout x:Name="IngredientFooterHost" />
+                </VerticalStackLayout>
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>

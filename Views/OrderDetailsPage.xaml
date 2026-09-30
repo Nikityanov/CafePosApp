@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" x:Class="CafePosApp.Views.OrderDetailsPage" Title="Детали заказа">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16" RowSpacing="10">
+        <Grid ColumnDefinitions="*,Auto">
+            <VerticalStackLayout>
+                <Label Text="{Binding OrderTitle}" FontSize="22" FontAttributes="Bold" />
+                <Label Text="{Binding StatusText}" Style="{StaticResource SecondaryLabel}" />
+            </VerticalStackLayout>
+            <ActivityIndicator Grid.Column="1" IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+        </Grid>
+        <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
+        <CollectionView Grid.Row="2" ItemsSource="{Binding Items}" SelectionMode="None">
+            <CollectionView.EmptyView>
+                <Label Text="В заказе нет блюд." Style="{StaticResource EmptyLabel}" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="0,6">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="{Binding ProductName}" FontAttributes="Bold" />
+                            <Label Text="{Binding SelectedModifierName, StringFormat='Модификатор: {0}'}" Style="{StaticResource SecondaryLabel}" IsVisible="{Binding SelectedModifierName, Converter={StaticResource IsPresent}}" />
+                            <Label Text="{Binding SelectedVariantName, StringFormat='Вариант: {0}'}" Style="{StaticResource SecondaryLabel}" IsVisible="{Binding SelectedVariantName, Converter={StaticResource IsPresent}}" />
+                            <Label Text="{Binding LineTotal, StringFormat='{0:F2} ₽'}" Style="{StaticResource SecondaryLabel}" />
+                        </VerticalStackLayout>
+                        <!-- The steppers and the delete button were 36dp, below the 44dp touch
+                             minimum every other control in the app honours. -->
+                        <Grid Grid.Column="1" ColumnDefinitions="48,24,48" VerticalOptions="Center">
+                            <Button Text="−" Padding="0" FontSize="18" HeightRequest="48" WidthRequest="48" MinimumHeightRequest="48" MinimumWidthRequest="48" SemanticProperties.Description="Убрать одну штуку" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DecreaseItemCommand}" CommandParameter="{Binding .}" IsEnabled="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CanEdit}" />
+                            <Label Grid.Column="1" Text="{Binding Quantity}" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
+                            <Button Grid.Column="2" Text="+" Padding="0" FontSize="18" HeightRequest="48" WidthRequest="48" MinimumHeightRequest="48" MinimumWidthRequest="48" SemanticProperties.Description="Добавить ещё одну" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.IncreaseItemCommand}" CommandParameter="{Binding .}" IsEnabled="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CanEdit}" />
+                        </Grid>
+                        <Button Grid.Column="2" Text="Удалить" Style="{StaticResource DangerButton}" FontSize="12" Padding="8,4" MinimumHeightRequest="44" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveItemCommand}" CommandParameter="{Binding .}" IsEnabled="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CanEdit}" />
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+        <VerticalStackLayout Grid.Row="3" Spacing="8">
+            <Picker Title="Добавить блюдо" ItemsSource="{Binding AvailableProducts}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedProduct}" IsEnabled="{Binding CanEdit}" />
+            <Button Text="Добавить в заказ" Command="{Binding AddProductCommand}" IsEnabled="{Binding CanEdit}" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                <Button Text="Сохранить" Command="{Binding SaveCommand}" IsEnabled="{Binding CanEdit}" />
+                <Button Grid.Column="1" Text="Назад" Style="{StaticResource SecondaryButton}" Command="{Binding CancelCommand}" />
+            </Grid>
+            <Label Text="{Binding Total, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" HorizontalTextAlignment="End" />
+        </VerticalStackLayout>
+    </Grid>
+</ContentPage>

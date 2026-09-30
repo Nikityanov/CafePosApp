@@ -1,0 +1,111 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<ResourceDictionary 
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  PRIMARY BRAND                              -->
+    <!-- ═══════════════════════════════════════════ -->
+    <Color x:Key="Primary">#512BD4</Color>
+    <Color x:Key="PrimaryDark">#ac99ea</Color>
+    <Color x:Key="PrimaryDarkText">#242424</Color>
+    <Color x:Key="Secondary">#DFD8F7</Color>
+    <Color x:Key="SecondaryDarkText">#9880e5</Color>
+    <Color x:Key="Tertiary">#2B0B98</Color>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  SEMANTIC / STATUS COLORS                   -->
+    <!-- ═══════════════════════════════════════════ -->
+    <Color x:Key="Success">#2E7D32</Color>
+    <Color x:Key="SuccessLight">#E8F5E9</Color>
+    <Color x:Key="Warning">#ED6C02</Color>
+    <Color x:Key="WarningLight">#FFF3E0</Color>
+    <Color x:Key="Danger">#D32F2F</Color>
+    <Color x:Key="DangerLight">#FFEBEE</Color>
+    <Color x:Key="Info">#1976D2</Color>
+    <Color x:Key="InfoLight">#E3F2FD</Color>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  SURFACE / BACKGROUND                       -->
+    <!-- ═══════════════════════════════════════════ -->
+    <Color x:Key="Surface">#FFFFFF</Color>
+    <Color x:Key="SurfaceDark">#1E1E1E</Color>
+    <Color x:Key="SurfaceVariant">#F5F5F5</Color>
+    <Color x:Key="SurfaceVariantDark">#2D2D2D</Color>
+    <Color x:Key="BackgroundLight">#FAFAFA</Color>
+    <Color x:Key="BackgroundDark">#121212</Color>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  CATEGORY PALETTE (pastel, for visual coding)-->
+    <!-- ═══════════════════════════════════════════ -->
+    <Color x:Key="Category1">#E3F2FD</Color>  <!-- Blue -->
+    <Color x:Key="Category2">#E8F5E9</Color>  <!-- Green -->
+    <Color x:Key="Category3">#FFF3E0</Color>  <!-- Orange -->
+    <Color x:Key="Category4">#F3E5F5</Color>  <!-- Purple -->
+    <Color x:Key="Category5">#FFEBEE</Color>  <!-- Red -->
+    <Color x:Key="Category6">#E0F7FA</Color>  <!-- Cyan -->
+    <Color x:Key="Category7">#FFF8E1</Color>  <!-- Amber -->
+    <Color x:Key="Category8">#E8EAF6</Color>  <!-- Indigo -->
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  BASIC COLORS                               -->
+    <!-- ═══════════════════════════════════════════ -->
+    <Color x:Key="White">White</Color>
+    <Color x:Key="Black">Black</Color>
+    <Color x:Key="Magenta">#D600AA</Color>
+    <Color x:Key="MidnightBlue">#190649</Color>
+    <Color x:Key="OffBlack">#1f1f1f</Color>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  GRAY SCALE                                -->
+    <!-- ═══════════════════════════════════════════ -->
+    <Color x:Key="Gray50">#FAFAFA</Color>
+    <Color x:Key="Gray100">#F5F5F5</Color>
+    <Color x:Key="Gray200">#EEEEEE</Color>
+    <Color x:Key="Gray300">#E0E0E0</Color>
+    <Color x:Key="Gray400">#BDBDBD</Color>
+    <Color x:Key="Gray500">#9E9E9E</Color>
+    <Color x:Key="Gray600">#757575</Color>
+    <Color x:Key="Gray700">#616161</Color>
+    <Color x:Key="Gray800">#424242</Color>
+    <Color x:Key="Gray900">#212121</Color>
+    <Color x:Key="Gray950">#141414</Color>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  STATE LAYERS                              -->
+    <!--  A translucent scrim drawn over a filled    -->
+    <!--  control to signal press / hover. Material   -->
+    <!--  3 uses 8% hover and 12% pressed, in the     -->
+    <!--  "on" colour of whatever is underneath —     -->
+    <!--  so the pair flips with the theme, because   -->
+    <!--  the FAB's fill does (Primary in light,      -->
+    <!--  PrimaryDark in dark). One white scrim would -->
+    <!--  be invisible on the light dark-mode fill.   -->
+    <!-- ═══════════════════════════════════════════ -->
+    <Color x:Key="StateLayerLightHover">#14FFFFFF</Color>
+    <Color x:Key="StateLayerLightPressed">#1FFFFFFF</Color>
+    <Color x:Key="StateLayerDarkHover">#14000000</Color>
+    <Color x:Key="StateLayerDarkPressed">#1F000000</Color>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  BRUSHES                                   -->
+    <!-- ═══════════════════════════════════════════ -->
+    <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>
+    <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource Secondary}"/>
+    <SolidColorBrush x:Key="TertiaryBrush" Color="{StaticResource Tertiary}"/>
+    <SolidColorBrush x:Key="WhiteBrush" Color="{StaticResource White}"/>
+    <SolidColorBrush x:Key="BlackBrush" Color="{StaticResource Black}"/>
+    <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource Success}"/>
+    <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource Warning}"/>
+    <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource Danger}"/>
+    <SolidColorBrush x:Key="InfoBrush" Color="{StaticResource Info}"/>
+
+    <SolidColorBrush x:Key="Gray100Brush" Color="{StaticResource Gray100}"/>
+    <SolidColorBrush x:Key="Gray200Brush" Color="{StaticResource Gray200}"/>
+    <SolidColorBrush x:Key="Gray300Brush" Color="{StaticResource Gray300}"/>
+    <SolidColorBrush x:Key="Gray400Brush" Color="{StaticResource Gray400}"/>
+    <SolidColorBrush x:Key="Gray500Brush" Color="{StaticResource Gray500}"/>
+    <SolidColorBrush x:Key="Gray600Brush" Color="{StaticResource Gray600}"/>
+    <SolidColorBrush x:Key="Gray900Brush" Color="{StaticResource Gray900}"/>
+    <SolidColorBrush x:Key="Gray950Brush" Color="{StaticResource Gray950}"/>
+</ResourceDictionary>

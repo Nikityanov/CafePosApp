@@ -1,0 +1,183 @@
+using System.Collections.ObjectModel;
+using CafePos.Core.Models;
+using CafePos.Core.Services;
+using CafePosApp.Services;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
+
+namespace CafePosApp.ViewModels;
+
+/// <summary>
+/// Menu and cart. The cart is autosaved as a draft (crash safe) and can be parked;
+/// the order itself is created by <see cref="ICheckoutService"/> in one transaction.
+/// </summary>
+public partial class MenuViewModel : ObservableObject
+{
+    private static readonly TimeSpan AutoSaveDelay = TimeSpan.FromMilliseconds(400);
+
+    /// <summary>How long the search box waits after the last keystroke before filtering.</summary>
+    private static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(250);
+
+    private readonly ICatalogService catalog;
+    private readonly ICheckoutService checkout;
+    private readonly IDraftOrderService drafts;
+    private readonly IInventoryService inventory;
+    private readonly IModifierPicker modifierPicker;
+    private readonly IVariantPicker variantPicker;
+    private readonly IDraftPicker draftPicker;
+    private readonly IDialogService dialogs;
+    private readonly IHapticService haptics;
+    private readonly TimeProvider timeProvider;
+    private readonly ILogger<MenuViewModel> logger;
+
+    private readonly SemaphoreSlim loadGate = new(1, 1);
+    private CancellationTokenSource? autoSaveCancellation;
+    private CancellationTokenSource? filterCancellation;
+
+    public MenuViewModel(
+        ICatalogService catalog,
+        ICheckoutService checkout,
+        IDraftOrderService drafts,
+        IInventoryService inventory,
+        IModifierPicker modifierPicker,
+        IVariantPicker variantPicker,
+        IDraftPicker draftPicker,
+        IDialogService dialogs,
+        IHapticService haptics,
+        TimeProvider timeProvider,
+        ILogger<MenuViewModel> logger)
+    {
+        this.catalog = catalog;
+        this.checkout = checkout;
+        this.drafts = drafts;
+        this.inventory = inventory;
+        this.modifierPicker = modifierPicker;
+        this.variantPicker = variantPicker;
+        this.draftPicker = draftPicker;
+        this.dialogs = dialogs;
+        this.haptics = haptics;
+        this.timeProvider = timeProvider;
+        this.logger = logger;
+
+        Cart.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(CanCreateOrder));
+            ScheduleAutoSave();
+        };
+
+        LoadCommand = new AsyncRelayCommand(LoadAsync);
+        AddProductCommand = new AsyncRelayCommand<Product>(AddProductAsync);
+        SelectCategoryCommand = new RelayCommand<CategoryMenuItemViewModel?>(SelectCategory);
+        AddItemCommand = new RelayCommand<CartItemViewModel>(AddItem);
+        RemoveItemCommand = new RelayCommand<CartItemViewModel>(RemoveItem);
+        CreateOrderCommand = new AsyncRelayCommand(CreateOrderAsync);
+        ParkOrderCommand = new AsyncRelayCommand(ParkOrderAsync);
+        OpenParkedCommand = new AsyncRelayCommand(OpenParkedAsync);
+    }
+
+    public ObservableCollection<Product> Products { get; } = [];
+    public ObservableCollection<Product> FilteredProducts { get; } = [];
+    public ObservableCollection<CategoryMenuItemViewModel> Categories { get; } = [];
+    public ObservableCollection<CartItemViewModel> Cart { get; } = [];
+
+    // ── Product grid width contract ──────────────────────────────────────────────────────────────────
+    // The two-column grid clipped on narrow windows, and the fix had to be found empirically
+    // because .NET MAUI 10 offers no way to state a column width:
+    //   * ItemsLayout.ItemWidth / ItemHeight were REMOVED from ItemsLayout in 10.0.101 (only
+    //     Orientation, SnapPointsAlignment and SnapPointsType are left), so the grid cannot be told
+    //     how wide a cell is;
+    //   * WidthRequest AND MaxWidthRequest on the card are both ignored for sizing — the platform's
+    //     ItemsWrapGrid sets the container width itself. A literal WidthRequest="150" still
+    //     measured 190px columns; MaxWidthRequest="150" shrank the card's content without moving
+    //     the column at all.
+    // What the grid still honours is Span, so the contract is expressed as the span: two columns
+    // while each one is still wide enough to be useful, one below that. A single full-width column
+    // cannot be clipped, and a café tablet still gets the two-column board.
+    //
+    // This also removes the latch. ItemsWrapGrid keeps whatever column width it settled on, so a
+    // window narrowed after startup kept the wide window's columns and the pair overran the content
+    // box — measured: at a 340px window the first column stayed at 170px and the pair overran by
+    // 7px. Changing the span re-lays the grid out, so the width is derived from the current page
+    // width every time instead of from history.
+    //
+    // The four constants mirror Views/MenuPage.xaml and must be changed with it, and are in device
+    // independent pixels — Window.Width is DIPs, which on this machine's 125% display is 0.8x the
+    // physical window width (measured: a 460px window reports 368).
+    private const double PageHorizontalPadding = 32;      // Grid Padding="16", both sides
+    private const int ProductColumns = 2;                 // GridItemsLayout Span when there is room
+    private const double ProductColumnSpacing = 4;        // GridItemsLayout HorizontalItemSpacing
+    private const double MinimumProductCardWidth = 140;   // below this a two-up card is cramped
+
+    /// <summary>Span before the first layout pass has reported a width.</summary>
+    private const int DefaultProductColumnSpan = ProductColumns;
+
+    private double availableWidth;
+
+    /// <summary>
+    /// The window's width in device independent pixels, pushed in from <c>Views.MenuPage</c>
+    /// whenever it is resized. Feeds <see cref="ProductColumnSpan"/>; not bound from XAML.
+    /// </summary>
+    public double AvailableWidth
+    {
+        get => availableWidth;
+        set
+        {
+            // Resizing produces a stream of fractional widths; a one-pixel threshold keeps the
+            // property — and therefore the whole grid — from being re-laid out on every frame.
+            if (Math.Abs(availableWidth - value) < 1) return;
+            availableWidth = value;
+            // Raised for itself as well as for the derived span: it is a public property, and a
+            // binding to it would otherwise latch the first value it ever saw.
+            OnPropertyChanged(nameof(AvailableWidth));
+            OnPropertyChanged(nameof(ProductColumnSpan));
+        }
+    }
+
+    /// <summary>
+    /// Product cards per row: two while each column would still be at least
+    /// <see cref="MinimumProductCardWidth"/> wide, one below that. Applied by the page to the
+    /// named <c>GridItemsLayout</c>, which is the only width-related member the grid still has.
+    /// </summary>
+    public int ProductColumnSpan
+    {
+        get
+        {
+            if (double.IsNaN(availableWidth) || double.IsInfinity(availableWidth) || availableWidth <= 0)
+                return DefaultProductColumnSpan;
+
+            var content = availableWidth
+                          - PageHorizontalPadding
+                          - ProductColumnSpacing * (ProductColumns - 1);
+
+            return content / ProductColumns >= MinimumProductCardWidth ? ProductColumns : 1;
+        }
+    }
+
+    private decimal total;
+    public decimal Total { get => total; private set => SetProperty(ref total, value); }
+
+    private bool isBusy;
+    public bool IsBusy { get => isBusy; private set { if (SetProperty(ref isBusy, value)) OnPropertyChanged(nameof(CanCreateOrder)); } }
+
+    public bool CanCreateOrder => !IsBusy && Cart.Count > 0;
+
+    private string message = string.Empty;
+    public string Message { get => message; private set { if (SetProperty(ref message, value)) OnPropertyChanged(nameof(HasMessage)); } }
+    public bool HasMessage => !string.IsNullOrWhiteSpace(Message);
+
+    private string searchText = string.Empty;
+    public string SearchText { get => searchText; set { if (SetProperty(ref searchText, value)) ScheduleFilterRefresh(); } }
+
+    private Category? selectedCategory;
+    public Category? SelectedCategory { get => selectedCategory; private set => SetProperty(ref selectedCategory, value); }
+
+    public IAsyncRelayCommand LoadCommand { get; }
+    public IAsyncRelayCommand<Product> AddProductCommand { get; }
+    public IRelayCommand<CategoryMenuItemViewModel?> SelectCategoryCommand { get; }
+    public IRelayCommand<CartItemViewModel> AddItemCommand { get; }
+    public IRelayCommand<CartItemViewModel> RemoveItemCommand { get; }
+    public IAsyncRelayCommand CreateOrderCommand { get; }
+    public IAsyncRelayCommand ParkOrderCommand { get; }
+    public IAsyncRelayCommand OpenParkedCommand { get; }
+}
