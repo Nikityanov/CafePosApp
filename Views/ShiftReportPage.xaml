@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" x:Class="CafePosApp.Views.ShiftReportPage" Title="Смена">
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.ShiftReportPage" x:DataType="vm:ShiftReportViewModel" Title="Смена">
     <!-- The order history used to sit inside a ScrollView, which made the CollectionView measure
          every completed order up front and killed recycling. The static summary rows stay Auto,
          the list takes the remaining space. -->
@@ -24,7 +24,7 @@
                     <Label Text="Выполненных заказов пока нет." Style="{StaticResource EmptyLabel}" />
                 </CollectionView.EmptyView>
                 <CollectionView.ItemTemplate>
-                    <DataTemplate>
+                    <DataTemplate x:DataType="vm:OrderRowViewModel">
                         <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
                             <VerticalStackLayout Spacing="4">
                                 <Grid ColumnDefinitions="*,Auto">
@@ -33,7 +33,7 @@
                                 </Grid>
                                 <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Padding="8,0,0,0" Spacing="3">
                                     <BindableLayout.ItemTemplate>
-                                        <DataTemplate>
+                                        <DataTemplate x:DataType="x:String">
                                             <Label Text="{Binding ., StringFormat='• {0}'}" LineBreakMode="WordWrap" />
                                         </DataTemplate>
                                     </BindableLayout.ItemTemplate>

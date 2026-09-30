@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" x:Class="CafePosApp.Views.OrderDetailsPage" Title="Детали заказа">
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.OrderDetailsPage" x:DataType="vm:OrderDetailsViewModel" Title="Детали заказа">
     <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16" RowSpacing="10">
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout>
@@ -14,7 +14,7 @@
                 <Label Text="В заказе нет блюд." Style="{StaticResource EmptyLabel}" />
             </CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
-                <DataTemplate>
+                <DataTemplate x:DataType="vm:OrderEditItemViewModel">
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="0,6">
                         <VerticalStackLayout Spacing="2">
                             <Label Text="{Binding ProductName}" FontAttributes="Bold" />
@@ -39,7 +39,12 @@
             <Button Text="Добавить в заказ" Command="{Binding AddProductCommand}" IsEnabled="{Binding CanEdit}" />
             <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                 <Button Text="Сохранить" Command="{Binding SaveCommand}" IsEnabled="{Binding CanEdit}" />
-                <Button Grid.Column="1" Text="Назад" Style="{StaticResource SecondaryButton}" Command="{Binding CancelCommand}" />
+                <!-- Was Command="{Binding CancelCommand}", which OrderDetailsViewModel does not
+                     declare - it exposes BackCommand. The binding resolved to null, so this button
+                     rendered disabled and "Назад" did nothing: the operator could not leave this
+                     screen by the button at all, and BackCommand was bound nowhere, i.e. dead code.
+                     x:DataType is what made the mismatch visible at build time. -->
+                <Button Grid.Column="1" Text="Назад" Style="{StaticResource SecondaryButton}" Command="{Binding BackCommand}" />
             </Grid>
             <Label Text="{Binding Total, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" HorizontalTextAlignment="End" />
         </VerticalStackLayout>

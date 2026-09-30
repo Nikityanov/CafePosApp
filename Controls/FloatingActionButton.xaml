@@ -36,11 +36,21 @@
     box — so it is drawn 1:1 with no scaling blur. It replaced the text character "+", which
     inherited its weight, optical size and baseline from the body font and therefore sat
     differently in the circle on every platform.
+
+    x:DataType
+    The page binds Label / Description / Command onto the control, so the BindingContext is
+    whatever the host page is and changes from page to page. Every binding in this file is
+    nevertheless a Source binding whose source is the control itself, so the type that matters
+    for compilation is FloatingActionButton, and that is what is declared. It is a compile-time
+    contract only — nothing here binds against the BindingContext — and it lets XamlC type-check
+    Label instead of leaving it to reflection.
 -->
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:CafePosApp.Controls"
              xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls"
              x:Class="CafePosApp.Controls.FloatingActionButton"
+             x:DataType="controls:FloatingActionButton"
              x:Name="Root">
 
     <Border Style="{StaticResource ExtendedFAB}">

@@ -28,6 +28,18 @@
 		<WindowsPackageType>None</WindowsPackageType>
 		<EmbedAssembliesIntoApk Condition="'$(Configuration)' == 'Debug'">true</EmbedAssembliesIntoApk>
 
+		<!--
+		  XamlC can compile {Binding X, Source={x:Reference Y}} only when told to; without this it
+		  reports XC0025 for every one and leaves the binding to be resolved by reflection at runtime.
+		  Controls/CatalogRow.xaml and Controls/FloatingActionButton.xaml are entirely made of such
+		  bindings: the commands and content arrive as bindable properties and are read back through a
+		  forward reference inside the control's own namescope (the direction that is safe — the
+		  reverse, looking *up* to the host from inside a DataTemplate, is the failure the CatalogRow
+		  header comment documents). Those sources are x:Reference resolvable, so source compilation
+		  applies and is type-checked at build time like any other binding.
+		-->
+		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
+
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
