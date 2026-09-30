@@ -99,7 +99,7 @@ public partial class MenuViewModel
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to load the menu");
-            Message = UserMessages.Describe(exception, "Не удалось загрузить меню");
+            SetError(exception, "Не удалось загрузить меню");
         }
         finally
         {
@@ -190,7 +190,7 @@ public partial class MenuViewModel
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to add product {ProductId} to the cart", product.Id);
-            Message = UserMessages.Describe(exception, "Не удалось добавить блюдо");
+            SetError(exception, "Не удалось добавить блюдо");
         }
     }
 

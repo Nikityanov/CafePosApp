@@ -55,7 +55,10 @@ public class ShiftAnalyticsViewModel : ObservableObject
     public string AveragePreparationTime => TextFormat.Duration(averagePreparationMinutes);
     public string AverageCompletionTime => TextFormat.Duration(averageCompletionMinutes);
 
-    private string peakHour = "—";
+    // "нет данных", not a bare dash: the duration cards on the same screen (Среднее
+    // приготовление, Среднее выполнение) already say exactly that, and a lone "—" beside two
+    // worded empty states read as a missing value rather than a measured absence.
+    private string peakHour = "нет данных";
     public string PeakHour { get => peakHour; private set => SetProperty(ref peakHour, value); }
 
     private bool isBusy;

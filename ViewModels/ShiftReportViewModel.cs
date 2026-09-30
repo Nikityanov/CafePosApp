@@ -63,7 +63,8 @@ public partial class ShiftReportViewModel : ObservableObject
     private decimal averageCheck;
     public decimal AverageCheck { get => averageCheck; private set => SetProperty(ref averageCheck, value); }
 
-    private string peakHour = "—";
+    // Matches ShiftAnalyticsViewModel: a worded empty state, not a bare dash.
+    private string peakHour = "нет данных";
     public string PeakHour { get => peakHour; private set => SetProperty(ref peakHour, value); }
 
     private DateTimeOffset startTime;

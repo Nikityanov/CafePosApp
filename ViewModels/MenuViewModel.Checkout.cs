@@ -41,7 +41,7 @@ public partial class MenuViewModel
         catch (Exception exception)
         {
             logger.LogError(exception, "Checkout failed");
-            Message = UserMessages.Describe(exception, "Не удалось создать заказ");
+            SetError(exception, "Не удалось создать заказ");
             haptics.Warn();
         }
         finally
@@ -73,7 +73,7 @@ public partial class MenuViewModel
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to park the cart");
-            Message = UserMessages.Describe(exception, "Не удалось отложить чек");
+            SetError(exception, "Не удалось отложить чек");
         }
     }
 
@@ -103,7 +103,7 @@ public partial class MenuViewModel
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to open a parked cart");
-            Message = UserMessages.Describe(exception, "Не удалось открыть отложенный чек");
+            SetError(exception, "Не удалось открыть отложенный чек");
         }
     }
 
@@ -113,8 +113,11 @@ public partial class MenuViewModel
     /// </summary>
     private void ScheduleAutoSave()
     {
+        // Cancel but do NOT dispose. The superseded AutoSaveAsync still holds this token and
+        // may be inside drafts.SaveActiveCartAsync right now; disposing a CancellationTokenSource
+        // whose token is in use is a race of its own. The superseded run disposes its own source
+        // when it finishes.
         autoSaveCancellation?.Cancel();
-        autoSaveCancellation?.Dispose();
         var cancellation = new CancellationTokenSource();
         autoSaveCancellation = cancellation;
 
@@ -127,7 +130,21 @@ public partial class MenuViewModel
         try
         {
             await Task.Delay(AutoSaveDelay, cancellation.Token);
-            await drafts.SaveActiveCartAsync(lines, cancellation.Token);
+
+            // The gate is taken AFTER the debounce and released in finally, so an overlapping
+            // snapshot waits for the in-flight write instead of racing it. The superseded
+            // snapshot is already cancelled by then and its SaveChanges is skipped, so the
+            // waiter writes the newer lines and the last write still wins.
+            await autoSaveGate.WaitAsync(cancellation.Token);
+            try
+            {
+                cancellation.Token.ThrowIfCancellationRequested();
+                await drafts.SaveActiveCartAsync(lines, cancellation.Token);
+            }
+            finally
+            {
+                autoSaveGate.Release();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -136,6 +153,12 @@ public partial class MenuViewModel
         catch (Exception exception)
         {
             logger.LogWarning(exception, "Cart autosave failed");
+        }
+        finally
+        {
+            // Only the source this run owns, and only if it has not already been replaced.
+            if (ReferenceEquals(autoSaveCancellation, cancellation)) autoSaveCancellation = null;
+            cancellation.Dispose();
         }
     }
 }

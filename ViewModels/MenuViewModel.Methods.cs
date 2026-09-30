@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using CafePos.Core.Errors;
 using CafePos.Core.Models;
 using CafePos.Core.Services;
 using CafePosApp.Services;
@@ -32,6 +33,11 @@ public partial class MenuViewModel : ObservableObject
     private readonly ILogger<MenuViewModel> logger;
 
     private readonly SemaphoreSlim loadGate = new(1, 1);
+    // Serialises the cart autosave. Two autosaves must never write the active-cart row
+    // concurrently: they run on separate DbContexts, and the loser got
+    // DbUpdateConcurrencyException ("expected 1 row, affected 0"), which meant the draft was
+    // silently not persisted at all and a killed app lost the customer's cart.
+    private readonly SemaphoreSlim autoSaveGate = new(1, 1);
     private CancellationTokenSource? autoSaveCancellation;
     private CancellationTokenSource? filterCancellation;
 
@@ -163,8 +169,32 @@ public partial class MenuViewModel : ObservableObject
     public bool CanCreateOrder => !IsBusy && Cart.Count > 0;
 
     private string message = string.Empty;
-    public string Message { get => message; private set { if (SetProperty(ref message, value)) OnPropertyChanged(nameof(HasMessage)); } }
+    public string Message
+    {
+        get => message;
+        private set
+        {
+            // Any plain message clears the error flag, so a failure cannot stay on screen
+            // styled as a success after the next successful action. SetError assigns Message
+            // first and the flag second, so ordering makes the pair work either way round.
+            if (SetProperty(ref message, value)) OnPropertyChanged(nameof(HasMessage));
+            if (!string.IsNullOrWhiteSpace(value)) IsErrorMessage = false;
+        }
+    }
     public bool HasMessage => !string.IsNullOrWhiteSpace(Message);
+
+    private bool isErrorMessage;
+    /// <summary>
+    /// Whether <see cref="Message"/> reports a failure. One string carried both outcomes
+    /// and the label was styled SecondaryLabel either way, so the confirmation of a created
+    /// order and a failed add looked alike — and the confirmation sat last on the screen,
+    /// under the button, in the flow where it matters most. Set via <see cref="SetError"/>.
+    /// </summary>
+    public bool IsErrorMessage { get => isErrorMessage; private set => SetProperty(ref isErrorMessage, value); }
+
+    /// <summary>Sets a failure message and flags it as one.</summary>
+    private void SetError(Exception exception, string prefix) =>
+        (Message, IsErrorMessage) = (UserMessages.Describe(exception, prefix), true);
 
     private string searchText = string.Empty;
     public string SearchText { get => searchText; set { if (SetProperty(ref searchText, value)) ScheduleFilterRefresh(); } }

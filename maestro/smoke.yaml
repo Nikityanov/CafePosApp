@@ -1,0 +1,16 @@
+appId: com.android.settings
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Search Settings"
+- scrollUntilVisible:
+    element:
+      text: "About emulated device"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    text: "About emulated device"
+- assertVisible: "sdk_gphone64_x86_64"
+- back
+- assertVisible: "Search Settings"
+- takeScreenshot: maestro-ok

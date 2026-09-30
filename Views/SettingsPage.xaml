@@ -2,14 +2,33 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:backup="clr-namespace:CafePos.Core.Services;assembly=CafePos.Core" x:Class="CafePosApp.Views.SettingsPage" x:DataType="vm:SettingsViewModel" Title="Настройки">
     <ScrollView>
         <VerticalStackLayout Padding="16" Spacing="12">
-            <Label Text="Настройки приложения" Style="{StaticResource PageTitle}" />
+            <!-- No PageTitle label: the Shell nav bar already reads "Настройки", and the page
+                 repeated it as "Настройки приложения" directly underneath — the same word twice,
+                 in two different sizes, before any content. The section headings below carry
+                 the structure instead. -->
             <Border Style="{StaticResource CardBorder}">
                 <VerticalStackLayout Spacing="10">
                     <Label Text="Внешний вид и поведение" Style="{StaticResource SectionTitle}" />
-                    <Entry Style="{StaticResource FormField}" Placeholder="Название кафе" Text="{Binding CafeName}" ClearButtonVisibility="WhileEditing" />
-                    <Entry Style="{StaticResource FormField}" Placeholder="Интервал обновления заказов, сек. (5–300)" Text="{Binding AutoRefreshSecondsText}" Keyboard="Numeric" />
-                    <Entry Style="{StaticResource FormField}" Placeholder="Префикс номера заказа" Text="{Binding OrderPrefix}" />
-                    <Picker Style="{StaticResource FormFieldPicker}" Title="Тема оформления" ItemsSource="{Binding Themes}" SelectedItem="{Binding ThemeText}" />
+                    <!-- Persistent labels, not placeholders. All four of these fields arrive
+                         populated on the second visit, and an Entry drops its Placeholder as
+                         soon as Text is set, so the page read as four anonymous values with no
+                         indication of what any of them was. -->
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Название кафе" Style="{StaticResource FieldLabel}" />
+                        <Entry Style="{StaticResource FormField}" Placeholder="Например, Café Bar" Text="{Binding CafeName}" ClearButtonVisibility="WhileEditing" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Интервал обновления заказов, сек. (5–300)" Style="{StaticResource FieldLabel}" />
+                        <Entry Style="{StaticResource FormField}" Placeholder="15" Text="{Binding AutoRefreshSecondsText}" Keyboard="Numeric" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Префикс номера заказа" Style="{StaticResource FieldLabel}" />
+                        <Entry Style="{StaticResource FormField}" Placeholder="Заказ" Text="{Binding OrderPrefix}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Тема оформления" Style="{StaticResource FieldLabel}" />
+                        <Picker Style="{StaticResource FormFieldPicker}" Title="Тема оформления" ItemsSource="{Binding Themes}" SelectedItem="{Binding ThemeText}" />
+                    </VerticalStackLayout>
                     <Label Text="Настройки сохраняются только на этом устройстве." Style="{StaticResource SecondaryLabel}" />
                     <Button Text="Сохранить настройки" Command="{Binding SaveCommand}" />
                     <Label Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Success}" />
@@ -23,7 +42,12 @@
                         <Button Text="Создать копию" Command="{Binding CreateBackupCommand}" />
                         <Button Grid.Column="1" Text="Экспорт данных" Command="{Binding ExportDataCommand}" />
                     </Grid>
-                    <Button Text="Восстановить из копии…" Command="{Binding RestoreBackupCommand}" />
+                    <!-- Restoring overwrites the working database, so it carries DangerButton and
+                         a written warning rather than the same filled primary as "Создать копию"
+                         next to it. Two identical primary buttons either side of a
+                         data-destroying action is how an operator loses a day's takings. -->
+                    <Label Text="Восстановление заменит текущую базу данными из копии." Style="{StaticResource FieldLabel}" />
+                    <Button Text="Восстановить из копии…" Style="{StaticResource DangerButton}" Command="{Binding RestoreBackupCommand}" />
                     <!-- A CollectionView inside a ScrollView created two competing scrollers: on
                          Android the inner one won the drag gesture and froze the page. BindableLayout
                          keeps a single scroller (the ScrollView) and renders the same rows. -->
