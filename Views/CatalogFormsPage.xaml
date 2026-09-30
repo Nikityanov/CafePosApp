@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:CafePosApp.ViewModels"
+             xmlns:models="clr-namespace:CafePos.Core.Models;assembly=CafePos.Core"
              xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls"
              x:Class="CafePosApp.Views.CatalogFormsPage"
+             x:DataType="vm:CatalogFormViewModel"
              x:Name="FormsPage"
              Title="{Binding Title}">
 
@@ -74,7 +77,7 @@
                                  state. -->
                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Product.Variants}" Spacing="2">
                                 <BindableLayout.ItemTemplate>
-                                    <DataTemplate>
+                                    <DataTemplate x:DataType="models:ProductVariant">
                                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="0,2">
                                             <Label Text="{Binding Name}" VerticalOptions="Center" />
                                             <Label Grid.Column="1" Text="{Binding Price, StringFormat='{0:F0} ₽'}"
@@ -152,7 +155,7 @@
                             <Label Text="{Binding Product.MarginText}" Style="{StaticResource Caption}" />
                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Product.Recipes}" Spacing="2">
                                 <BindableLayout.ItemTemplate>
-                                    <DataTemplate>
+                                    <DataTemplate x:DataType="models:RecipeItem">
                                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="0,2">
                                             <Label Text="{Binding Ingredient.Name}" VerticalOptions="Center" />
                                             <Label Grid.Column="1" VerticalOptions="Center" Style="{StaticResource Caption}"
@@ -181,7 +184,7 @@
                                  labelled 110dp blank box. -->
                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Product.PriceHistory}" Spacing="2">
                                 <BindableLayout.ItemTemplate>
-                                    <DataTemplate>
+                                    <DataTemplate x:DataType="models:PriceHistoryEntry">
                                         <Label Style="{StaticResource Caption}" Text="{Binding ChangeText}" />
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>

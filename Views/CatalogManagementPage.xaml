@@ -1,16 +1,19 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:CafePosApp.ViewModels"
+             xmlns:models="clr-namespace:CafePos.Core.Models;assembly=CafePos.Core"
              xmlns:controls="clr-namespace:CafePosApp.Controls"
              xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls"
              x:Class="CafePosApp.Views.CatalogManagementPage"
+             x:DataType="vm:CatalogManagementViewModel"
              x:Name="CatalogPage"
              Title="Каталог">
 
     <ContentPage.Resources>
         <!-- One chip template for the whole entity switcher, replacing four hand-placed buttons
              that each needed their own keyed style to show the active one. -->
-        <DataTemplate x:Key="SectionChipTemplate">
+        <DataTemplate x:Key="SectionChipTemplate" x:DataType="vm:CatalogSection">
             <Button Text="{Binding Label}" Style="{StaticResource SectionTab}"
                     Margin="3,3"
                     SemanticProperties.Description="{Binding Label, StringFormat='Открыть раздел: {0}'}"
@@ -29,7 +32,7 @@
         <!-- The category filter strip. The selection is carried by a filled pill as well as by the
              filter itself taking effect, so the active state is never colour-only: the chosen chip
              is both filled and the only one that narrows the list. -->
-        <DataTemplate x:Key="CategoryChipTemplate">
+        <DataTemplate x:Key="CategoryChipTemplate" x:DataType="vm:CategoryFilterChip">
             <Border Style="{StaticResource FilterChip}" Margin="3,3">
                 <Border.Triggers>
                     <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
@@ -242,12 +245,12 @@
                             <!-- The FAB floats over the list. The list scrolls underneath it; the FAB may
                                  overlap the last row, and the operator nudges it out from under by scrolling. -->
                             <CollectionView.ItemTemplate>
-                                <DataTemplate>
+                                <DataTemplate x:DataType="models:Product">
                                     <controls:CatalogRow
                                         LongPressCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ProductActionsCommand}"
                                         OverflowCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ProductActionsCommand}"
                                         CommandParameter="{Binding .}"
-                                        OverflowDescription="{Binding Name, StringFormat='Действия с товаром {0}'">
+                                        OverflowDescription="{Binding Name, StringFormat='Действия с товаром {0}'}">
                                         <controls:CatalogRow.RowContent>
                                             <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
                                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
@@ -305,12 +308,12 @@
                             </CollectionView.EmptyView>
 
                             <CollectionView.ItemTemplate>
-                                <DataTemplate>
+                                <DataTemplate x:DataType="models:Category">
                                     <controls:CatalogRow
                                         LongPressCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.CategoryActionsCommand}"
                                         OverflowCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.CategoryActionsCommand}"
                                         CommandParameter="{Binding .}"
-                                        OverflowDescription="{Binding Name, StringFormat='Действия с разделом {0}'">
+                                        OverflowDescription="{Binding Name, StringFormat='Действия с разделом {0}'}">
                                         <controls:CatalogRow.RowContent>
                                             <Label Text="{Binding Name}" Style="{StaticResource RowTitle}" />
                                         </controls:CatalogRow.RowContent>
@@ -326,12 +329,12 @@
                         <CollectionView Grid.Row="1" ItemsSource="{Binding ModifierOptionGroups}" SelectionMode="None"
                                         IsGrouped="True">
                             <CollectionView.GroupHeaderTemplate>
-                                <DataTemplate>
+                                <DataTemplate x:DataType="vm:ModifierOptionGroup">
                                     <controls:CatalogRow IsHeader="True"
                                         LongPressCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ModifierGroupActionsCommand}"
                                         OverflowCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ModifierGroupActionsCommand}"
                                         CommandParameter="{Binding .}"
-                                        OverflowDescription="{Binding Name, StringFormat='Действия с группой {0}'">
+                                        OverflowDescription="{Binding Name, StringFormat='Действия с группой {0}'}">
                                         <controls:CatalogRow.RowContent>
                                             <Label Text="{Binding Name}" TextColor="White" FontAttributes="Bold" FontSize="13" />
                                         </controls:CatalogRow.RowContent>
@@ -343,12 +346,12 @@
                             </CollectionView.EmptyView>
 
                             <CollectionView.ItemTemplate>
-                                <DataTemplate>
+                                <DataTemplate x:DataType="models:ModifierOption">
                                     <controls:CatalogRow
                                         LongPressCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ModifierOptionActionsCommand}"
                                         OverflowCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ModifierOptionActionsCommand}"
                                         CommandParameter="{Binding .}"
-                                        OverflowDescription="{Binding Name, StringFormat='Действия с модификатором {0}'">
+                                        OverflowDescription="{Binding Name, StringFormat='Действия с модификатором {0}'}">
                                         <controls:CatalogRow.RowContent>
                                             <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
                                                 <Label Text="{Binding Name}" Style="{StaticResource RowTitle}" />
@@ -396,12 +399,12 @@
                             </CollectionView.EmptyView>
 
                             <CollectionView.ItemTemplate>
-                                <DataTemplate>
+                                <DataTemplate x:DataType="models:Ingredient">
                                     <controls:CatalogRow
                                         LongPressCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.IngredientActionsCommand}"
                                         OverflowCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.IngredientActionsCommand}"
                                         CommandParameter="{Binding .}"
-                                        OverflowDescription="{Binding Name, StringFormat='Действия с ингредиентом {0}'">
+                                        OverflowDescription="{Binding Name, StringFormat='Действия с ингредиентом {0}'}">
                                         <controls:CatalogRow.RowContent>
                                             <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
                                                 <Label Text="{Binding Name}" Style="{StaticResource RowTitle}" />

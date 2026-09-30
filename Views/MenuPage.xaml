@@ -1,10 +1,10 @@
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" x:Class="CafePosApp.Views.MenuPage" Title="Меню">
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:models="clr-namespace:CafePos.Core.Models;assembly=CafePos.Core" x:Class="CafePosApp.Views.MenuPage" x:DataType="vm:MenuViewModel" Title="Меню">
     <ContentPage.Resources>
         <!-- One chip template for the whole strip, including the synthetic "Все" chip. It now takes
              its size and shape from the shared FilterChip style — the hand-rolled 36dp chip was under
              the 44dp touch minimum — while keeping the per-category pastel fill and the selected
              tint the menu page has always used for its visual coding. -->
-        <DataTemplate x:Key="CategoryChipTemplate">
+        <DataTemplate x:Key="CategoryChipTemplate" x:DataType="vm:CategoryMenuItemViewModel">
             <Border Style="{StaticResource FilterChip}"
                     HeightRequest="44"
                     BackgroundColor="{Binding ChipBackground}">
@@ -52,7 +52,7 @@
                 <Label Text="Ничего не найдено." Style="{StaticResource EmptyLabel}" />
             </CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
-                <DataTemplate>
+                <DataTemplate x:DataType="models:Product">
                     <!-- The card takes no WidthRequest, deliberately. MAUI 10 sizes the cell itself:
                          a literal WidthRequest="150" here still measured 190px columns, and a
                          MaxWidthRequest only shrank the content. The width contract is the grid's
@@ -92,7 +92,7 @@
                         <Label Text="Пусто." Style="{StaticResource EmptyLabel}" />
                     </CollectionView.EmptyView>
                     <CollectionView.ItemTemplate>
-                        <DataTemplate>
+                        <DataTemplate x:DataType="vm:CartItemViewModel">
                             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Padding="0,2">
                                 <VerticalStackLayout Spacing="0" VerticalOptions="Center">
                                     <Label Text="{Binding ProductName}" FontAttributes="Bold" FontSize="12" LineBreakMode="TailTruncation" />

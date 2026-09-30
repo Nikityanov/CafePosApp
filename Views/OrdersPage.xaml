@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" x:Class="CafePosApp.Views.OrdersPage" Title="Заказы">
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.OrdersPage" x:DataType="vm:OrdersViewModel" Title="Заказы">
     <ContentPage.Resources>
-        <DataTemplate x:Key="OrderCardTemplate">
+        <DataTemplate x:Key="OrderCardTemplate" x:DataType="vm:OrderRowViewModel">
             <Border Style="{StaticResource CardBorder}" Stroke="{Binding StatusColor}" StrokeThickness="2" Margin="0,0,0,8">
                 <VerticalStackLayout Spacing="7">
                     <Grid ColumnDefinitions="*,Auto">
@@ -14,7 +14,7 @@
                     <Label Text="{Binding StatusHint}" TextColor="{Binding StatusColor}" FontAttributes="Bold" />
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Padding="8,0,0,2" Spacing="3">
                         <BindableLayout.ItemTemplate>
-                            <DataTemplate>
+                            <DataTemplate x:DataType="x:String">
                                 <Label Text="{Binding ., StringFormat='• {0}'}" LineBreakMode="WordWrap" />
                             </DataTemplate>
                         </BindableLayout.ItemTemplate>

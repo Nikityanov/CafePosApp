@@ -27,12 +27,24 @@
       * A shapes:Path with no Data draws nothing, so the mark carried its geometry nowhere. It is
         a literal attribute now: a string literal is run through the geometry TypeConverter, which
         is what makes Path="M …" work at all.
+
+    x:DataType
+    The DataTemplate this control is declared in decides the BindingContext — Product, Category,
+    ModifierOption, ModifierOptionGroup or Ingredient, five different types — so there is no honest
+    page-level DataType for the root. Every binding below is a Source binding whose source is the
+    row itself, so the type that matters for compilation is CatalogRow, and that is what is
+    declared. Nothing in this file binds against the BindingContext, so the declaration is a
+    compile-time contract only: it lets XamlC type-check LongPressCommand / OverflowCommand /
+    CommandParameter / RowContent / OverflowDescription / IsHeader instead of leaving all six to
+    reflection. Point it at any other type and the six bindings silently stop being checked.
 -->
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:CafePosApp.Controls"
              xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls"
              xmlns:toolkit="clr-namespace:CommunityToolkit.Maui.Behaviors;assembly=CommunityToolkit.Maui"
              x:Class="CafePosApp.Controls.CatalogRow"
+             x:DataType="controls:CatalogRow"
              x:Name="Row">
     <Border Style="{StaticResource CardBorderCompact}">
         <Border.Triggers>
