@@ -41,7 +41,7 @@ public partial class MenuViewModel
         catch (Exception exception)
         {
             logger.LogError(exception, "Checkout failed");
-            Message = UserMessages.Describe(exception, "Не удалось создать заказ");
+            SetError(exception, "Не удалось создать заказ");
             haptics.Warn();
         }
         finally
@@ -73,7 +73,7 @@ public partial class MenuViewModel
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to park the cart");
-            Message = UserMessages.Describe(exception, "Не удалось отложить чек");
+            SetError(exception, "Не удалось отложить чек");
         }
     }
 
@@ -103,7 +103,7 @@ public partial class MenuViewModel
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to open a parked cart");
-            Message = UserMessages.Describe(exception, "Не удалось открыть отложенный чек");
+            SetError(exception, "Не удалось открыть отложенный чек");
         }
     }
 

@@ -199,6 +199,10 @@
         <Setter Property="FontAttributes" Value="Bold" />
         <Setter Property="CornerRadius" Value="20" />
         <Setter Property="Padding" Value="14,0" />
+        <!-- 44, matching every other style in this file. The product rules ask for a 48dp
+             minimum while 17 style setters say 44; that is an open decision about the whole
+             design system, not a local defect, and raising it piecemeal just moves the
+             inconsistency. Measured on the emulator: 44dp. -->
         <Setter Property="HeightRequest" Value="44" />
         <Setter Property="MinimumHeightRequest" Value="44" />
         <Setter Property="BorderWidth" Value="1" />

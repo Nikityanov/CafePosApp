@@ -93,8 +93,18 @@
                  which a horizontal ScrollView cannot do anyway. The category strip below was already
                  NoWrap for the same reason. -->
         <Grid x:Name="HeaderRow" Grid.Row="0" HorizontalOptions="Center" MaximumWidthRequest="1400" ColumnDefinitions="*,Auto" Padding="12,8,12,4" ColumnSpacing="8">
+                <!-- The strip does scroll, but with the scrollbar hidden and a chip clipped
+                     mid-word at the right edge it read as a broken layout rather than as
+                     "there is more to the right" — measured on the emulator: "Модификатор"
+                     was cut after the "р" against the "Обновить" button. "Default" is the
+                     affordance: the bar appears exactly when there is something to scroll to.
+                     Microsoft.Maui.ScrollBarVisibility has exactly three members — Default,
+                     Always, Never — and ScrollView exposes no thickness property at all, so
+                     nothing else is set here. Both facts were read off the shipped assembly:
+                     "Visible" and "Auto" are not members, and ScrollBarThickness does not
+                     exist, and each of those three aborted the process at inflation. -->
                 <ScrollView Grid.Column="0" Orientation="Horizontal"
-                            HorizontalScrollBarVisibility="Never" VerticalScrollBarVisibility="Never">
+                            HorizontalScrollBarVisibility="Default" VerticalScrollBarVisibility="Never">
                     <FlexLayout BindableLayout.ItemsSource="{Binding Sections}"
                                 BindableLayout.ItemTemplate="{StaticResource SectionChipTemplate}"
                                 Direction="Row" Wrap="NoWrap" AlignItems="Start" />
@@ -262,7 +272,7 @@
                                                          MinimumWidthRequest keeps the column wide enough
                                                          that prices align down the list. -->
                                                     <Label Grid.Column="1"
-                                                           Text="{Binding ., Converter={StaticResource ProductPriceText}, ConverterParameter=F0}"
+                                                           Text="{Binding ., Converter={StaticResource ProductPriceText}}"
                                                            Style="{StaticResource RowPrice}"
                                                            MinimumWidthRequest="60"
                                                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />

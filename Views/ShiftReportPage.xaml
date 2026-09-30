@@ -5,7 +5,9 @@
          the list takes the remaining space. -->
     <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" Padding="16" RowSpacing="10">
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-            <Label Text="Смена / Отчёт" Style="{StaticResource PageTitle}" VerticalOptions="Center" />
+            <!-- No PageTitle label. The Shell nav bar already reads "Смена", and the page put
+                 "Смена / Отчёт" straight under it — the same word twice at two sizes before any
+                 content. "Отчёт" adds nothing the report's own section headings do not say. -->
             <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить отчёт" />
         </Grid>
         <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
@@ -38,10 +40,13 @@
                                          the ToLocalTime() the orders page relies on. -->
                                     <Label Grid.Column="1" Text="{Binding CreatedAtText}" Style="{StaticResource SecondaryLabel}" />
                                 </Grid>
-                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Padding="8,0,0,0" Spacing="3">
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Spacing="3">
                                     <BindableLayout.ItemTemplate>
-                                        <DataTemplate x:DataType="x:String">
-                                            <Label Text="{Binding ., StringFormat='• {0}'}" LineBreakMode="WordWrap" />
+                                        <DataTemplate x:DataType="vm:OrderItemLine">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Padding="0,0,2,0">
+                                                <Label Text="{Binding Name}" LineBreakMode="WordWrap" />
+                                                <Label Grid.Column="1" Text="{Binding Quantity, StringFormat='× {0}'}" FontAttributes="Bold" VerticalTextAlignment="Start" />
+                                            </Grid>
                                         </DataTemplate>
                                     </BindableLayout.ItemTemplate>
                                 </VerticalStackLayout>

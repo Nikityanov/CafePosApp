@@ -2,7 +2,10 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:backup="clr-namespace:CafePos.Core.Services;assembly=CafePos.Core" x:Class="CafePosApp.Views.SettingsPage" x:DataType="vm:SettingsViewModel" Title="Настройки">
     <ScrollView>
         <VerticalStackLayout Padding="16" Spacing="12">
-            <Label Text="Настройки приложения" Style="{StaticResource PageTitle}" />
+            <!-- No PageTitle label: the Shell nav bar already reads "Настройки", and the page
+                 repeated it as "Настройки приложения" directly underneath — the same word twice,
+                 in two different sizes, before any content. The section headings below carry
+                 the structure instead. -->
             <Border Style="{StaticResource CardBorder}">
                 <VerticalStackLayout Spacing="10">
                     <Label Text="Внешний вид и поведение" Style="{StaticResource SectionTitle}" />

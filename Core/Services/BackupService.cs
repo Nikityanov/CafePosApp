@@ -33,7 +33,17 @@ public sealed class BackupService(
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
 
         // VACUUM INTO produces a consistent snapshot while the app keeps running.
+        //
+        // EF1002 is suppressed deliberately, not ignored. ExecuteSqlInterpolatedAsync would
+        // bind the path as a parameter, and SQLite's VACUUM INTO requires a string *literal* —
+        // the parameterised form is a syntax error. The value is escaped instead: EscapeLiteral
+        // doubles single quotes, which is the complete escaping for a SQLite string literal, and
+        // the path is not user input — it is Path.Combine(BackupDirectory, <generated name>),
+        // where BackupDirectory comes from FileSystem.AppDataDirectory. The analyzer cannot see
+        // either fact, so it warns on every build and the warning had become background noise.
+#pragma warning disable EF1002 // interpolated path into ExecuteSqlRawAsync; see above
         await db.Database.ExecuteSqlRawAsync($"VACUUM INTO '{EscapeLiteral(filePath)}'", cancellationToken);
+#pragma warning restore EF1002
 
         var info = new BackupInfo(filePath, fileName, now, new FileInfo(filePath).Length);
         logger.LogInformation("Backup created ({Reason}): {FileName} ({Size})", reason, fileName, info.SizeText);

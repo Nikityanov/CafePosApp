@@ -129,8 +129,23 @@
                     <Label Grid.Column="1" Text="{Binding Total, StringFormat='{0:F2} ₽'}" FontSize="16" FontAttributes="Bold" VerticalOptions="Center" />
                 </Grid>
 
+                <!-- The message sits above the button it reports on, not below it. "Заказ #1
+                     создан на 640.00 ₽" is the most important feedback in the app and it was
+                     the last line on the screen, in SecondaryLabel grey, styled identically to
+                     a failure. Now it is bold, above the action, and the DataTriggers colour
+                     it by outcome — colour reinforcing the text, never replacing it. -->
+                <Label Text="{Binding Message}" IsVisible="{Binding HasMessage}" FontSize="14" FontAttributes="Bold" Margin="0,2,0,0">
+                    <Label.Triggers>
+                        <DataTrigger TargetType="Label" Binding="{Binding IsErrorMessage}" Value="True">
+                            <Setter Property="TextColor" Value="{StaticResource Danger}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding IsErrorMessage}" Value="False">
+                            <Setter Property="TextColor" Value="{StaticResource Success}" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
+
                 <Button Text="Создать заказ" HeightRequest="48" MinimumHeightRequest="48" FontAttributes="Bold" Padding="0" IsEnabled="{Binding CanCreateOrder}" Command="{Binding CreateOrderCommand}" />
-                <Label Text="{Binding Message}" IsVisible="{Binding HasMessage}" Style="{StaticResource SecondaryLabel}" Margin="0" />
             </VerticalStackLayout>
         </Border>
     </Grid>

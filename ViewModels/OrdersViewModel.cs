@@ -54,10 +54,22 @@ public partial class OrderRowViewModel : ObservableObject
     /// <summary>Timestamps are stored in UTC and rendered in the local time zone.</summary>
     public string CreatedAtText => Model.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
 
-    public IEnumerable<string> ItemLines => Model.Items.Select(item =>
+    public IEnumerable<OrderItemLine> ItemLines => Model.Items.Select(item => new OrderItemLine(
         $"{item.ProductName}{(string.IsNullOrWhiteSpace(item.SelectedVariantName) ? string.Empty : $" [{item.SelectedVariantName}]")}" +
-        $"{(string.IsNullOrWhiteSpace(item.SelectedModifierName) ? string.Empty : $" ({item.SelectedModifierName})")} × {item.Quantity}");
+        $"{(string.IsNullOrWhiteSpace(item.SelectedModifierName) ? string.Empty : $" ({item.SelectedModifierName})")}",
+        item.Quantity));
 }
+
+/// <summary>
+/// One order line, split so the name and the quantity can sit in their own columns.
+/// </summary>
+/// <remarks>
+/// These were a single preformatted string, so a long name pushed "× 1" onto a second line
+/// and it landed alone under the name — measured on the emulator at 158dp, where
+/// "Капучино (Овсяное) × 1" wrapped and orphaned its quantity. A trailing quantity is a
+/// column of its own, never a wrap casualty.
+/// </remarks>
+public sealed record OrderItemLine(string Name, int Quantity);
 
 public partial class OrdersViewModel : ObservableObject
 {

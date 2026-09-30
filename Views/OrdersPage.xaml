@@ -9,13 +9,27 @@
                             <Label Text="{Binding OrderTitle}" FontSize="18" FontAttributes="Bold" />
                             <Label Text="{Binding CreatedAtText}" Style="{StaticResource SecondaryLabel}" />
                         </VerticalStackLayout>
-                        <Label Grid.Column="1" Text="{Binding StatusText}" TextColor="{Binding StatusColor}" FontAttributes="Bold" VerticalOptions="Center" />
+                        <!-- One rendering of the status, not three. The card carried both
+                             StatusText and StatusHint as separate bold lines under a column
+                             header that already named the state, so one order said "Готовятся"
+                             (header), "Готовится" (chip) and "Заказ готовится" (line) at once.
+                             The chip alone is unambiguous in both layouts: the kanban column
+                             supplies the plural, the list view has no column. StatusHint is
+                             kept as the accessible description so screen readers still get
+                             the sentence form. -->
+                        <Label Grid.Column="1" Text="{Binding StatusText}" TextColor="{Binding StatusColor}" FontAttributes="Bold" VerticalOptions="Center"
+                               SemanticProperties.Description="{Binding StatusHint}" />
                     </Grid>
-                    <Label Text="{Binding StatusHint}" TextColor="{Binding StatusColor}" FontAttributes="Bold" />
-                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Padding="8,0,0,2" Spacing="3">
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Spacing="3">
                         <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="x:String">
-                                <Label Text="{Binding ., StringFormat='• {0}'}" LineBreakMode="WordWrap" />
+                            <DataTemplate x:DataType="vm:OrderItemLine">
+                                <!-- Name takes the width it needs and wraps; the quantity is a
+                                     right-aligned column, so "× 1" can never be orphaned onto a
+                                     line of its own under a long product name. -->
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Padding="0,0,2,0">
+                                    <Label Text="{Binding Name}" LineBreakMode="WordWrap" />
+                                    <Label Grid.Column="1" Text="{Binding Quantity, StringFormat='× {0}'}" FontAttributes="Bold" VerticalTextAlignment="Start" />
+                                </Grid>
                             </DataTemplate>
                         </BindableLayout.ItemTemplate>
                     </VerticalStackLayout>
@@ -38,7 +52,9 @@
     </ContentPage.Resources>
     <Grid RowDefinitions="Auto,Auto,*" Padding="12" RowSpacing="8">
         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-            <Label Text="Активные заказы" Style="{StaticResource PageTitle}" VerticalOptions="Center" />
+            <!-- No PageTitle label. The Shell nav bar already reads "Заказы", and this page
+                 repeated it as "Активные заказы" underneath. Both the kanban and the list show
+                 only active orders, so the extra word distinguished nothing. -->
             <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить заказы" />
             <Button Grid.Column="2" Text="{Binding ViewModeText}" Command="{Binding ToggleViewCommand}" Padding="12,6" />
         </Grid>
