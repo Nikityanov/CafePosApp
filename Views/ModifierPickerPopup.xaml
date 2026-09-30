@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <toolkit:Popup x:TypeArguments="x:String" xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit" x:Class="CafePosApp.Views.ModifierPickerPopup" x:DataType="x:String">
-    <ScrollView MaximumHeightRequest="520">
+    <!-- HeightRequest is assigned in code from the option count. The old
+         MaximumHeightRequest="520" on the ScrollView was reported as the popup's desired
+         height even when only two options existed, so the sheet reserved ~700px of blank
+         white below the buttons and pushed them to the top of the screen. -->
+    <ScrollView x:Name="Scroll">
         <VerticalStackLayout Padding="20" Spacing="12">
             <Label x:Name="TitleLabel" FontSize="22" FontAttributes="Bold" />
             <Label Text="Выберите вариант" Style="{StaticResource SecondaryLabel}" />
             <VerticalStackLayout x:Name="OptionsLayout" Spacing="8" />
+            <!-- There was no way to decline a modifier except tapping the scrim, which no
+                 affordance advertises. An explicit cancel is the only discoverable exit. -->
+            <Button Text="Отмена" Style="{StaticResource SecondaryButton}" Clicked="OnCancelClicked" />
         </VerticalStackLayout>
     </ScrollView>
 </toolkit:Popup>

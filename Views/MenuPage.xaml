@@ -86,10 +86,18 @@
                 <!-- The cart is the one list that must stay scrollable. A fixed HeightRequest="180"
                      inside an Auto row squeezed the products list to a few cards on a short window.
                      MaximumHeightRequest bounds it proportionally: the cart takes what it needs
-                     up to a cap, and the products list gets the rest. -->
-                <CollectionView ItemsSource="{Binding Cart}" MaximumHeightRequest="180" SelectionMode="None">
+                     up to a cap, and the products list gets the rest.
+
+                     MinimumHeightRequest is what makes the empty state exist at all. With only a
+                     maximum, an Auto row collapses the CollectionView to zero when the cart is
+                     empty, and the EmptyView had no room to render — measured on the emulator as
+                     a 23px gap between "Корзина" and "Итого" with no "Пусто." anywhere, so the
+                     empty cart looked identical to a cart that had failed to load. -->
+                <CollectionView ItemsSource="{Binding Cart}" MinimumHeightRequest="44" MaximumHeightRequest="180" SelectionMode="None">
                     <CollectionView.EmptyView>
-                        <Label Text="Пусто." Style="{StaticResource EmptyLabel}" />
+                        <VerticalStackLayout Padding="0,6">
+                            <Label Text="Корзина пуста — выберите блюдо выше." Style="{StaticResource EmptyLabel}" />
+                        </VerticalStackLayout>
                     </CollectionView.EmptyView>
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="vm:CartItemViewModel">

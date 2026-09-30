@@ -32,6 +32,11 @@ public partial class MenuViewModel : ObservableObject
     private readonly ILogger<MenuViewModel> logger;
 
     private readonly SemaphoreSlim loadGate = new(1, 1);
+    // Serialises the cart autosave. Two autosaves must never write the active-cart row
+    // concurrently: they run on separate DbContexts, and the loser got
+    // DbUpdateConcurrencyException ("expected 1 row, affected 0"), which meant the draft was
+    // silently not persisted at all and a killed app lost the customer's cart.
+    private readonly SemaphoreSlim autoSaveGate = new(1, 1);
     private CancellationTokenSource? autoSaveCancellation;
     private CancellationTokenSource? filterCancellation;
 

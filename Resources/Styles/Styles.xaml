@@ -490,6 +490,21 @@
         <Setter Property="TitleColor" Value="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}" />
     </Style>
 
+    <!--
+      A field label that stays visible once the field is filled.
+
+      Placeholder-as-label is what SettingsPage used, and it read as four anonymous values
+      ("CafePOS", "15", "Заказ", "Системная") with nothing to say what any of them was: an
+      MAUI Entry drops its Placeholder as soon as Text is set. The product form gets away with
+      placeholders only because it is always empty on open. Any field that can arrive populated
+      needs this instead of, or alongside, Placeholder.
+    -->
+    <Style TargetType="Label" x:Key="FieldLabel">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}" />
+        <Setter Property="Margin" Value="0,0,0,2" />
+    </Style>
+
     <!-- The bottom sheet itself is a toolkit Popup styled inline in Views/CatalogActionSheetPopup.xaml.
          The old "BottomSheet" Border style had no consumers at all and was removed. Only the handle
          remains here, and it does have one (the action sheet's grab bar). -->

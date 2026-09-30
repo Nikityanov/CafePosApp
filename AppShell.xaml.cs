@@ -13,10 +13,16 @@ namespace CafePosApp
 
             // Pages are created lazily (ContentTemplate). Previously all six pages were
             // constructed — XAML inflation included — before the first frame was rendered.
+            // Glyph choice is empirical, not decorative. 📋 🕐 📊 are emoji-presentation
+            // characters with no monochrome outline in the bundled font, so on the tab bar they
+            // collapsed into unreadable solid blocks (measured: Заказы -> filled square,
+            // Смена -> filled circle, Аналитика -> filled square). ☰ 📂 ⚙ are covered and
+            // render as real outlines, which is why the same two glyphs looked correct inside
+            // the overflow sheet. Anything added here must be checked on the tab bar itself.
             AddPage("Меню", "menu", "☰", () => services.GetRequiredService<MenuPage>());
-            AddPage("Заказы", "orders", "📋", () => services.GetRequiredService<OrdersPage>());
-            AddPage("Смена", "shift", "🕐", () => services.GetRequiredService<ShiftReportPage>());
-            AddPage("Аналитика", "shift-analytics", "📊", () => services.GetRequiredService<ShiftAnalyticsPage>());
+            AddPage("Заказы", "orders", "≡", () => services.GetRequiredService<OrdersPage>());
+            AddPage("Смена", "shift", "◷", () => services.GetRequiredService<ShiftReportPage>());
+            AddPage("Аналитика", "shift-analytics", "◫", () => services.GetRequiredService<ShiftAnalyticsPage>());
             AddPage("Каталог", "catalog", "📂", () => services.GetRequiredService<CatalogManagementPage>());
             AddPage("Настройки", "settings", "⚙", () => services.GetRequiredService<SettingsPage>());
 

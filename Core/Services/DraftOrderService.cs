@@ -54,8 +54,25 @@ public sealed class DraftOrderService(
         }
 
         draft.UpdatedAt = now;
+
+        // The old lines go away and a fresh set comes back. Both halves have to be stated
+        // explicitly, and the reason is EF Core's change detection rather than this code:
+        //
+        // DraftOrderItem.Id is client-assigned (Guid.NewGuid in ToItem), so EF cannot tell a
+        // brand-new item from an existing one by its key alone. When new items were only
+        // *assigned* to draft.Items, change detection tracked them as Modified against the
+        // Unchanged draft — never Added. The batch then ran
+        //     DELETE FROM "DraftOrderItems"   (the old lines)
+        //     UPDATE "DraftOrderItems" SET .. (the new lines, by the deleted keys)
+        // and the UPDATE matched 0 rows, so every cart autosave after the first ended in
+        // DbUpdateConcurrencyException and the draft was never written. The first save worked
+        // only because the draft itself was Added, which cascades Added to its dependents.
+        //
+        // AddRange states the intent outright, so the batch is DELETE-then-INSERT.
+        var replacement = lines.Select(line => ToItem(line, draft.Id)).ToList();
         db.DraftOrderItems.RemoveRange(draft.Items);
-        draft.Items = lines.Select(line => ToItem(line, draft.Id)).ToList();
+        draft.Items = replacement;
+        db.DraftOrderItems.AddRange(replacement);
         await db.SaveChangesAsync(cancellationToken);
     }
 

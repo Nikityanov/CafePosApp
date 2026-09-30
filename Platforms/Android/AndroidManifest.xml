@@ -3,4 +3,7 @@
 	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true"></application>
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
+	<!-- HapticFeedback.Default.Perform throws PermissionException without this, and the
+	     exception was surfacing to the operator as a failed "add to cart". -->
+	<uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

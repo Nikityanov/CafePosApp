@@ -86,6 +86,10 @@ StyleCopReport.xml
 TestResult.xml
 coverage*/
 
+# Maestro UI-automation artifacts (flows in maestro/ ARE committed)
+/maestro-ok.png
+/maestro-*.png
+
 # NCrunch
 _NCrunch_*
 .*crunch*.local.xml

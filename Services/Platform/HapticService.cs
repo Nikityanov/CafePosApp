@@ -22,5 +22,13 @@ public sealed class HapticService : IHapticService
         {
             // Haptics are optional: some desktops simply do not have them.
         }
+        catch (PermissionException)
+        {
+            // Equally optional. Thrown when the platform permission the feedback depends on
+            // is absent from the manifest — VIBRATE on Android, which is not declared by the
+            // MAUI template. It was NOT caught here, so it escaped into MenuViewModel's
+            // add-to-cart handler and the operator saw "Не удалось добавить блюдо" for an
+            // item that had in fact been added. Haptics must never be able to fail an order.
+        }
     }
 }
