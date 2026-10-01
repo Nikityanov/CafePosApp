@@ -8,14 +8,30 @@
              HorizontalOptions="Fill"
              Margin="0"
              BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-    <ScrollView x:Name="SheetScroll">
-        <VerticalStackLayout Padding="16,8" Spacing="0">
+    <!-- VerticalOptions="Start" is what makes this a sheet rather than a panel.
+
+         Measured on the emulator before this was set: the white sheet came out 823dp tall on a
+         914dp screen while its four buttons and title only add up to 292dp. The ScrollView is a
+         View, so it fills whatever height it is offered and its only stop is
+         MaximumHeightRequest — which SizeToWindow sets to 0.9 x window height. The sheet was
+         therefore as tall as that cap rather than as tall as its content, which left ~57% of the
+         sheet empty below "Удалить". Start makes it measure to its content instead; the cap stays
+         for the case of a long action list, and VerticalOptions="End" on the popup then puts the
+         result on the bottom edge.
+
+         The dim and the outside-tap dismissal are deliberately NOT here. They come from
+         PopupOptions.PageOverlayColor and CanBeDismissedByTappingOutsideOfPopup in
+         CatalogActionSheet, because the toolkit insets a popup's content by 15dp on each side:
+         an in-popup backdrop measured 381dp wide inside a 411dp popup, leaving the page
+         undimmed down both edges. -->
+    <ScrollView x:Name="SheetScroll" VerticalOptions="Start">
+        <VerticalStackLayout Padding="16,8,16,16" Spacing="0">
             <BoxView Style="{StaticResource BottomSheetHandle}" />
-            <!-- The sheet's heading: the item name is what the row was tapped for, so it reads as a
-                 real title, not an eyebrow — a muted 12pt eyebrow made the sheet feel unlabelled. -->
-            <Label x:Name="TitleLabel" FontSize="17" FontAttributes="Bold"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
-                   LineBreakMode="TailTruncation" Margin="0,10,0,12" />
+            <!-- The item name is what the row was tapped for, so it reads as a real title. It is
+                 muted rather than bold so the entries below stay the thing the eye lands on. -->
+            <Label x:Name="TitleLabel" FontSize="15"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"
+                   LineBreakMode="TailTruncation" Margin="0,12,0,12" />
             <VerticalStackLayout x:Name="OptionsLayout" Spacing="8" />
         </VerticalStackLayout>
     </ScrollView>

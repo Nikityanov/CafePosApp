@@ -37,19 +37,8 @@ public partial class OrdersViewModel
                 .ToList();
 
             ActiveOrders.SyncWith(rows, row => row.Model.Id);
-
-            // The first card of each section carries the section name. Done after SyncWith,
-            // which reuses OrderRowViewModel instances across refreshes, so the flags have to
-            // be recomputed every load — a row kept from the previous pass still holds the old
-            // value, and a section that became empty would keep its header.
-            string? previousGroup = null;
-            foreach (var row in rows)
-            {
-                row.ShowGroupHeader = row.StatusGroupName != previousGroup;
-                previousGroup = row.StatusGroupName;
-            }
-            foreach (var row in ActiveOrders.Where(row => !rows.Contains(row)))
-                row.ShowGroupHeader = false;
+            SyncSectionFilters();
+            ApplyFilter();
 
             Message = string.Empty;
         }
@@ -63,6 +52,106 @@ public partial class OrdersViewModel
             IsBusy = false;
             loadGate.Release();
         }
+    }
+
+    /// <summary>
+    /// Brings the filter chips in line with the loaded orders: the counts, and which one is active.
+    /// </summary>
+    /// <remarks>
+    /// The chips are built once and then updated, not recreated on every load. Recreating them
+    /// would drop the selection highlight on every auto-refresh tick, which is several times a
+    /// minute while the operator is trying to read a count.
+    /// </remarks>
+    private void SyncSectionFilters()
+    {
+        if (SectionFilters.Count == 0)
+        {
+            SectionFilters.Add(new OrderFilterChip(OrderSectionFilter.All, "Все"));
+            SectionFilters.Add(new OrderFilterChip(OrderSectionFilter.Preparing, "Готовятся"));
+            SectionFilters.Add(new OrderFilterChip(OrderSectionFilter.Ready, "Ждут выдачи"));
+            foreach (var chip in SectionFilters)
+            {
+                chip.IsSelected = chip.Filter == ActiveFilter;
+            }
+        }
+
+        var preparing = 0;
+        foreach (var row in ActiveOrders)
+        {
+            if (row.Model.Status != OrderStatus.Ready) preparing++;
+        }
+
+        foreach (var chip in SectionFilters)
+        {
+            chip.Count = chip.Filter switch
+            {
+                OrderSectionFilter.Preparing => preparing,
+                OrderSectionFilter.Ready => ActiveOrders.Count - preparing,
+                _ => ActiveOrders.Count
+            };
+        }
+    }
+
+    /// <summary>
+    /// Narrows <see cref="ActiveOrders"/> down to <see cref="VisibleOrders"/> per
+    /// <see cref="ActiveFilter"/>, and decides which cards carry their section heading.
+    /// </summary>
+    /// <remarks>
+    /// The heading is suppressed when a single section is selected, because the chip the operator
+    /// just tapped already says which section they are looking at; repeating it on the first card
+    /// would be the same words twice. It is also recomputed on every pass rather than once, since
+    /// SyncWith reuses row instances across refreshes and a reused row still holds the previous
+    /// pass's flag — that is what would otherwise leave a stale heading above the second card of a
+    /// section, or keep the heading of a section that has just emptied.
+    /// </remarks>
+    private void ApplyFilter()
+    {
+        var showHeadings = ActiveFilter == OrderSectionFilter.All;
+        var visible = new List<OrderRowViewModel>();
+        string? previousGroup = null;
+
+        foreach (var row in ActiveOrders)
+        {
+            if (!Matches(row))
+            {
+                row.ShowGroupHeader = false;
+                continue;
+            }
+
+            row.ShowGroupHeader = showHeadings && row.StatusGroupName != previousGroup;
+            previousGroup = row.StatusGroupName;
+            visible.Add(row);
+        }
+
+        VisibleOrders.SyncWith(visible, row => row.Model.Id);
+        OnPropertyChanged(nameof(EmptyListText));
+    }
+
+    private bool Matches(OrderRowViewModel row) => ActiveFilter switch
+    {
+        OrderSectionFilter.Preparing => row.Model.Status != OrderStatus.Ready,
+        OrderSectionFilter.Ready => row.Model.Status == OrderStatus.Ready,
+        _ => true
+    };
+
+    /// <summary>
+    /// Switches the board between both sections and one of them. Re-projects what is already
+    /// loaded rather than querying again: the rows for the other section are still in
+    /// <see cref="ActiveOrders"/>, so the switch is immediate and the next auto-refresh tick
+    /// agrees with it.
+    /// </summary>
+    private void SelectSectionFilter(OrderFilterChip? chip)
+    {
+        if (chip is null || chip.Filter == ActiveFilter) return;
+
+        ActiveFilter = chip.Filter;
+        foreach (var candidate in SectionFilters)
+        {
+            candidate.IsSelected = candidate.Filter == ActiveFilter;
+        }
+
+        ApplyFilter();
+        haptics.Click();
     }
 
     public void StartAutoRefresh()

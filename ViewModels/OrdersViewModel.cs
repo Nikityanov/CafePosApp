@@ -48,12 +48,24 @@ public partial class OrderRowViewModel : ObservableObject
     /// True on the first card of each section, which is where the section name is drawn.
     /// </summary>
     /// <remarks>
-    /// Set by LoadAsync once the rows are sorted preparing-first, not from the constructor —
-    /// a row cannot know whether an earlier row in the same group exists. The name itself is
-    /// text in a heading, so the two sections are told apart by their wording and never by
-    /// colour alone.
+    /// Set once the rows are sorted preparing-first, not from the constructor — a row cannot
+    /// know whether an earlier row in the same group exists. The name itself is text in a
+    /// heading, so the two sections are told apart by their wording and never by colour alone.
+    /// <para>
+    /// This raises change notification, which a plain auto-property does not. Switching the
+    /// section filter rewrites the flag on rows that are already in the list and leaves the
+    /// collection itself structurally unchanged, so CollectionView recycles the cells instead of
+    /// re-inflating the templates. Without the notification the heading stayed on screen after
+    /// its section had been filtered to a single chip that already names it.
+    /// </para>
     /// </remarks>
-    public bool ShowGroupHeader { get; internal set; }
+    public bool ShowGroupHeader
+    {
+        get => showGroupHeader;
+        internal set => SetProperty(ref showGroupHeader, value);
+    }
+
+    private bool showGroupHeader;
 
     public string StatusHint => Model.Status switch
     {
@@ -133,9 +145,37 @@ public partial class OrdersViewModel : ObservableObject
         AdvanceStatusCommand = new AsyncRelayCommand<OrderRowViewModel>(AdvanceStatusAsync);
         OpenDetailsCommand = new AsyncRelayCommand<OrderRowViewModel>(OpenDetailsAsync);
         CancelOrderCommand = new AsyncRelayCommand<OrderRowViewModel>(CancelOrderAsync);
+        SelectSectionFilterCommand = new RelayCommand<OrderFilterChip>(SelectSectionFilter);
     }
 
+    /// <summary>Every active order, sorted preparing first. The source of truth for the board.</summary>
     public ObservableCollection<OrderRowViewModel> ActiveOrders { get; } = [];
+
+    /// <summary>
+    /// The orders the list actually shows: <see cref="ActiveOrders"/> narrowed by
+    /// <see cref="ActiveFilter"/>. Kept separate from the source collection so changing the filter
+    /// is a local re-projection — the rows that are filtered out stay in
+    /// <see cref="ActiveOrders"/> instead of being dropped from it, and switching back is
+    /// instant with no query.
+    /// </summary>
+    public ObservableCollection<OrderRowViewModel> VisibleOrders { get; } = [];
+
+    public ObservableCollection<OrderFilterChip> SectionFilters { get; } = [];
+
+    private OrderSectionFilter activeFilter = OrderSectionFilter.All;
+    public OrderSectionFilter ActiveFilter
+    {
+        get => activeFilter;
+        private set => SetProperty(ref activeFilter, value);
+    }
+
+    /// <summary>
+    /// What the list says when it is empty. Two different situations, so two different sentences:
+    /// a board with nothing on it is not the same as a filter that happens to be hiding something.
+    /// </summary>
+    public string EmptyListText => ActiveOrders.Count == 0
+        ? "Активных заказов нет."
+        : "В этом разделе заказов нет.";
 
     private bool isBusy;
     public bool IsBusy { get => isBusy; private set => SetProperty(ref isBusy, value); }
@@ -148,4 +188,5 @@ public partial class OrdersViewModel : ObservableObject
     public IAsyncRelayCommand<OrderRowViewModel> AdvanceStatusCommand { get; }
     public IAsyncRelayCommand<OrderRowViewModel> OpenDetailsCommand { get; }
     public IAsyncRelayCommand<OrderRowViewModel> CancelOrderCommand { get; }
+    public IRelayCommand<OrderFilterChip> SelectSectionFilterCommand { get; }
 }

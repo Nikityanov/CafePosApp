@@ -56,8 +56,34 @@
             </Border>
             </VerticalStackLayout>
         </DataTemplate>
+        <!-- Section filter, same FilterChip shape and same selected-fill trigger as the
+             catalogue page's category strip, so the two read as one control in two places.
+             The count rides on the chip because deciding where to look is an arithmetic
+             question, and it is text rather than a badge so it survives a screen reader. -->
+        <DataTemplate x:Key="SectionFilterChipTemplate" x:DataType="vm:OrderFilterChip">
+            <Border Style="{StaticResource FilterChip}" Margin="0,0,8,0">
+                <Border.Triggers>
+                    <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                        <Setter Property="Stroke" Value="Transparent" />
+                    </DataTrigger>
+                </Border.Triggers>
+                <Label Text="{Binding Label}" Style="{StaticResource FilterChipText}">
+                    <Label.Triggers>
+                        <DataTrigger TargetType="Label" Binding="{Binding IsSelected}" Value="True">
+                            <Setter Property="TextColor" Value="White" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer
+                        Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectSectionFilterCommand}"
+                        CommandParameter="{Binding .}" />
+                </Border.GestureRecognizers>
+            </Border>
+        </DataTemplate>
     </ContentPage.Resources>
-    <Grid RowDefinitions="Auto,Auto,*" Padding="12" RowSpacing="8">
+    <Grid RowDefinitions="Auto,Auto,Auto,*" Padding="12" RowSpacing="8">
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <!-- No PageTitle label. The Shell nav bar already reads "Заказы", and this page
                  repeated it as "Активные заказы" underneath. The kanban is gone too, along
@@ -65,6 +91,14 @@
             <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить заказы" />
         </Grid>
         <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
+        <!-- "Все" is the default and stays the default: a board that hides half the orders on
+             open is worse than one that shows a heading. The chips narrow it on demand. -->
+        <ScrollView Grid.Row="2" Orientation="Horizontal" HorizontalScrollBarVisibility="Never"
+                    HeightRequest="44" Margin="-12,0,-12,0">
+            <HorizontalStackLayout BindableLayout.ItemsSource="{Binding SectionFilters}"
+                                    Spacing="0"
+                                    BindableLayout.ItemTemplate="{StaticResource SectionFilterChipTemplate}" />
+        </ScrollView>
         <!-- One list, not two columns.
 
              The kanban split 411dp into two ~190dp columns, and a card in that width clipped
@@ -75,10 +109,15 @@
              The header is a flag on the row rather than CollectionView grouping: XamlC
              cannot resolve PropertyGroupDescription, so IsGrouped was a Debug-only green
              build and a Release failure (XC0000). ShowGroupHeader needs no new type and is
-             verified by the same Release build as everything else. -->
-        <CollectionView Grid.Row="2" ItemsSource="{Binding ActiveOrders}" SelectionMode="None"
+             verified by the same Release build as everything else.
+
+             Bound to VisibleOrders, not ActiveOrders: the filter narrows what is on screen while
+             ActiveOrders stays the full set behind it. -->
+        <CollectionView x:Name="OrdersList" Grid.Row="3" ItemsSource="{Binding VisibleOrders}" SelectionMode="None"
                         ItemTemplate="{StaticResource OrderCardTemplate}">
-            <CollectionView.EmptyView><Label Text="Активных заказов нет." Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
+            <CollectionView.EmptyView>
+                <Label Text="{Binding EmptyListText}" Style="{StaticResource EmptyLabel}" />
+            </CollectionView.EmptyView>
         </CollectionView>
     </Grid>
 </ContentPage>
