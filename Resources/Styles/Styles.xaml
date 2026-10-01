@@ -396,6 +396,28 @@
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <!-- A keyed style does NOT inherit the implicit TargetType="Button" style, so every
          variant below restates the shared button metrics. -->
+    <!-- Cart quantity stepper.
+         The tap target stays 48dp — it is the minimum every control in the app honours and
+         shrinking it to close the visual gap would cost accuracy on a screen an operator
+         taps all day. What changed is the visual weight instead: the buttons were solid
+         Primary, so 96dp of saturated fill flanked a 13sp digit in a 24dp column and the
+         number read as a caption on its own controls. Tonal fill plus a 19sp bold quantity
+         moves the emphasis onto the number, which is the value being read. Measured before
+         the change: button 48x48dp each, quantity 24x48dp with a ~7dp glyph. -->
+    <Style TargetType="Button" x:Key="StepperButton">
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="WidthRequest" Value="48" />
+        <Setter Property="HeightRequest" Value="48" />
+        <Setter Property="MinimumWidthRequest" Value="48" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Gray700}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Tertiary}, Dark={StaticResource PrimaryDark}}" />
+    </Style>
+
     <Style TargetType="Button" x:Key="SecondaryButton">
         <Setter Property="FontFamily" Value="OpenSansRegular" />
         <Setter Property="FontSize" Value="14" />

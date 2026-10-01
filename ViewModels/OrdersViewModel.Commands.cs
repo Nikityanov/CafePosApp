@@ -24,11 +24,32 @@ public partial class OrdersViewModel
         try
         {
             var activeOrders = await orders.GetActiveOrdersAsync();
-            var rows = activeOrders.Select(order => new OrderRowViewModel(order, settings)).ToList();
+            // Preparing ahead of ready, then oldest first. Ascending on (Status == Ready)
+            // puts false — preparing — first and true — ready for pickup — last, which is the
+            // order the board is read in. Descending here was briefly wrong and put
+            // "Ждут выдачи" above "Готовятся", which is the opposite of what was asked for.
+            // LoadAsync runs again after every status change, so the list re-sorts itself
+            // when an order is advanced rather than waiting for a manual refresh.
+            var rows = activeOrders
+                .OrderBy(order => order.Status == OrderStatus.Ready)
+                .ThenBy(order => order.OrderNumber)
+                .Select(order => new OrderRowViewModel(order, settings))
+                .ToList();
 
             ActiveOrders.SyncWith(rows, row => row.Model.Id);
-            PreparingOrders.SyncWith(rows.Where(row => row.Model.Status != OrderStatus.Ready), row => row.Model.Id);
-            ReadyOrders.SyncWith(rows.Where(row => row.Model.Status == OrderStatus.Ready), row => row.Model.Id);
+
+            // The first card of each section carries the section name. Done after SyncWith,
+            // which reuses OrderRowViewModel instances across refreshes, so the flags have to
+            // be recomputed every load — a row kept from the previous pass still holds the old
+            // value, and a section that became empty would keep its header.
+            string? previousGroup = null;
+            foreach (var row in rows)
+            {
+                row.ShowGroupHeader = row.StatusGroupName != previousGroup;
+                previousGroup = row.StatusGroupName;
+            }
+            foreach (var row in ActiveOrders.Where(row => !rows.Contains(row)))
+                row.ShowGroupHeader = false;
 
             Message = string.Empty;
         }

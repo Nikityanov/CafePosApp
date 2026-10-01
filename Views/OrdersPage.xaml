@@ -2,6 +2,12 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.OrdersPage" x:DataType="vm:OrdersViewModel" Title="Заказы">
     <ContentPage.Resources>
         <DataTemplate x:Key="OrderCardTemplate" x:DataType="vm:OrderRowViewModel">
+            <!-- The template root is a stack, not the card, so the section heading can sit
+                 ABOVE the card it introduces instead of inside it. -->
+            <VerticalStackLayout>
+                <Label Text="{Binding StatusGroupName}" FontAttributes="Bold" FontSize="15" TextColor="{StaticResource Tertiary}"
+                       IsVisible="{Binding ShowGroupHeader}" Padding="2,10,2,6"
+                       SemanticProperties.Description="Раздел" />
             <Border Style="{StaticResource CardBorder}" Stroke="{Binding StatusColor}" StrokeThickness="2" Margin="0,0,0,8">
                 <VerticalStackLayout Spacing="7">
                     <Grid ColumnDefinitions="*,Auto">
@@ -48,35 +54,31 @@
                     <Button Text="Отменить заказ" Style="{StaticResource DangerButton}" MinimumHeightRequest="48" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CancelOrderCommand}" CommandParameter="{Binding .}" IsVisible="{Binding CanCancel}" />
                 </VerticalStackLayout>
             </Border>
+            </VerticalStackLayout>
         </DataTemplate>
     </ContentPage.Resources>
     <Grid RowDefinitions="Auto,Auto,*" Padding="12" RowSpacing="8">
-        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <!-- No PageTitle label. The Shell nav bar already reads "Заказы", and this page
-                 repeated it as "Активные заказы" underneath. Both the kanban and the list show
-                 only active orders, so the extra word distinguished nothing. -->
+                 repeated it as "Активные заказы" underneath. The kanban is gone too, along
+                 with the toggle that switched between the two layouts. -->
             <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить заказы" />
-            <Button Grid.Column="2" Text="{Binding ViewModeText}" Command="{Binding ToggleViewCommand}" Padding="12,6" />
         </Grid>
         <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
-        <Grid Grid.Row="2">
-                <Grid IsVisible="{Binding IsKanban}" RowDefinitions="*" ColumnDefinitions="*,*" ColumnSpacing="8">
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="Готовятся" FontAttributes="Bold" TextColor="{StaticResource Warning}" />
-                        <CollectionView ItemsSource="{Binding PreparingOrders}" SelectionMode="None" ItemTemplate="{StaticResource OrderCardTemplate}">
-                            <CollectionView.EmptyView><Label Text="Нет заказов" Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
-                        </CollectionView>
-                    </VerticalStackLayout>
-                    <VerticalStackLayout Grid.Column="1" Spacing="6">
-                        <Label Text="Ждут выдачи" FontAttributes="Bold" TextColor="{StaticResource Success}" />
-                        <CollectionView ItemsSource="{Binding ReadyOrders}" SelectionMode="None" ItemTemplate="{StaticResource OrderCardTemplate}">
-                            <CollectionView.EmptyView><Label Text="Нет заказов" Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
-                        </CollectionView>
-                    </VerticalStackLayout>
-                </Grid>
-                <CollectionView ItemsSource="{Binding ActiveOrders}" SelectionMode="None" IsVisible="{Binding IsList}" ItemTemplate="{StaticResource OrderCardTemplate}">
-                    <CollectionView.EmptyView><Label Text="Активных заказов нет." Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
-                </CollectionView>
-        </Grid>
+        <!-- One list, not two columns.
+
+             The kanban split 411dp into two ~190dp columns, and a card in that width clipped
+             "Подробнее" to "Подробн" while three buttons in a row had no room. Every card now
+             gets the full width, and the split the board had is kept by sorting preparing
+             ahead of ready and letting the first card of each group carry the section name.
+
+             The header is a flag on the row rather than CollectionView grouping: XamlC
+             cannot resolve PropertyGroupDescription, so IsGrouped was a Debug-only green
+             build and a Release failure (XC0000). ShowGroupHeader needs no new type and is
+             verified by the same Release build as everything else. -->
+        <CollectionView Grid.Row="2" ItemsSource="{Binding ActiveOrders}" SelectionMode="None"
+                        ItemTemplate="{StaticResource OrderCardTemplate}">
+            <CollectionView.EmptyView><Label Text="Активных заказов нет." Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
+        </CollectionView>
     </Grid>
 </ContentPage>

@@ -30,6 +30,31 @@ public partial class OrderRowViewModel : ObservableObject
         _ => "Закрыт"
     };
 
+    /// <summary>
+    /// Section this order belongs to in the single-list layout. The orders board is one
+    /// scrolling list, not two columns, because a kanban on a 411dp phone gave each card
+    /// ~190dp and clipped "Подробнее" to "Подробн". Grouping keeps the visual split the
+    /// board had while giving every card the full width.
+    /// </summary>
+    /// <remarks>
+    /// A string, not an enum, because <c>PropertyGroupDescription</c> binds the group header
+    /// template to this exact value — the header is the property, so it has to read as
+    /// Russian prose. Column order then follows the order the rows first appear in, which
+    /// is why LoadAsync sorts preparing ahead of ready.
+    /// </remarks>
+    public string StatusGroupName => Model.Status == OrderStatus.Ready ? "Ждут выдачи" : "Готовятся";
+
+    /// <summary>
+    /// True on the first card of each section, which is where the section name is drawn.
+    /// </summary>
+    /// <remarks>
+    /// Set by LoadAsync once the rows are sorted preparing-first, not from the constructor —
+    /// a row cannot know whether an earlier row in the same group exists. The name itself is
+    /// text in a heading, so the two sections are told apart by their wording and never by
+    /// colour alone.
+    /// </remarks>
+    public bool ShowGroupHeader { get; internal set; }
+
     public string StatusHint => Model.Status switch
     {
         OrderStatus.Ready => "Ждет выдачи",
@@ -108,22 +133,9 @@ public partial class OrdersViewModel : ObservableObject
         AdvanceStatusCommand = new AsyncRelayCommand<OrderRowViewModel>(AdvanceStatusAsync);
         OpenDetailsCommand = new AsyncRelayCommand<OrderRowViewModel>(OpenDetailsAsync);
         CancelOrderCommand = new AsyncRelayCommand<OrderRowViewModel>(CancelOrderAsync);
-        ToggleViewCommand = new RelayCommand(() => IsKanban = !IsKanban);
     }
 
     public ObservableCollection<OrderRowViewModel> ActiveOrders { get; } = [];
-    public ObservableCollection<OrderRowViewModel> PreparingOrders { get; } = [];
-    public ObservableCollection<OrderRowViewModel> ReadyOrders { get; } = [];
-
-    private bool isKanban = true;
-    public bool IsKanban
-    {
-        get => isKanban;
-        set { if (SetProperty(ref isKanban, value)) { OnPropertyChanged(nameof(IsList)); OnPropertyChanged(nameof(ViewModeText)); } }
-    }
-
-    public bool IsList => !IsKanban;
-    public string ViewModeText => IsKanban ? "Список" : "Kanban";
 
     private bool isBusy;
     public bool IsBusy { get => isBusy; private set => SetProperty(ref isBusy, value); }
@@ -136,5 +148,4 @@ public partial class OrdersViewModel : ObservableObject
     public IAsyncRelayCommand<OrderRowViewModel> AdvanceStatusCommand { get; }
     public IAsyncRelayCommand<OrderRowViewModel> OpenDetailsCommand { get; }
     public IAsyncRelayCommand<OrderRowViewModel> CancelOrderCommand { get; }
-    public IRelayCommand ToggleViewCommand { get; }
 }
