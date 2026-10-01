@@ -17,20 +17,75 @@
                     <Label Text="{Binding ClosedOrdersCount, StringFormat='Чеков: {0}'}" />
                     <Label Text="{Binding CancelledOrdersCount, StringFormat='Отменено: {0}'}" />
                     <Label Text="{Binding AverageCheck, StringFormat='Средний чек: {0:F2} ₽'}" />
+
+                    <!-- ═══════════════════════════════════════════════════════════════════════
+                         MONEY THROUGH THE TILL.
+
+                         These four Payments* figures on ShiftStats existed since the payments
+                         feature and were consumed ONLY by the CSV export — «Принято оплат» had
+                         never been on screen at all. That is fine until there are refunds: revenue
+                         falls, the export grows a «Возвращено» line, and without this the operator
+                         watches the money leave with nothing on the device to reconcile the drawer
+                         against. This block is the on-screen twin of the export's, and it must keep
+                         the export's GROSS wording: "Принято" always means what came in, never what
+                         is left.
+
+                         All inside the existing summary card, which the brief's "Auto" row absorbs
+                         without a grid change. A divider rather than a nested card: a Border
+                         inside a Border reads as two competing surfaces on one block, and the
+                         grouping only has to be legible, not boxed.
+                         ═══════════════════════════════════════════════════════════════════════ -->
+                    <BoxView HeightRequest="1" Margin="0,4,0,2" Color="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray700}}" />
+                    <Label Text="Деньги" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
+                    <Label Text="{Binding PaymentsCash, StringFormat='Принято наличными: {0:F2} ₽'}" />
+                    <Label Text="{Binding PaymentsCard, StringFormat='Принято картой: {0:F2} ₽'}" />
+                    <Label Text="{Binding RefundsCash, StringFormat='Возвращено наличными: {0:F2} ₽'}" />
+                    <Label Text="{Binding RefundsCard, StringFormat='Возвращено картой: {0:F2} ₽'}" />
+
+                    <!-- The drawer total. 20pt bold against the 14pt components above, because this
+                         is the number somebody physically counts and everything else on the card is
+                         a component of it. Not coloured: the emphasis is size and weight, and the
+                         label already says what the number is, so nothing here depends on colour to
+                         be read. -->
+                    <Label Text="{Binding CashInDrawer, StringFormat='Итого наличными в кассе: {0:F2} ₽'}"
+                           FontSize="20" FontAttributes="Bold" Margin="0,4,0,0"
+                           SemanticProperties.Description="Итого наличными в кассе: принято наличными минус возвращено наличными" />
                 </VerticalStackLayout>
             </Border>
             <Button Grid.Row="3" Text="Анализировать смену" Command="{Binding OpenAnalyticsCommand}" />
-            <Label Grid.Row="4" Text="История выполненных заказов" Style="{StaticResource SectionTitle}" />
-            <CollectionView Grid.Row="5" ItemsSource="{Binding CompletedOrders}" SelectionMode="None">
+            <Label Grid.Row="4" Text="История заказов смены" Style="{StaticResource SectionTitle}" />
+            <!-- ShiftHistory, not CompletedOrders: it is GetShiftOrderHistoryAsync's Completed AND
+                 Cancelled, so a voided sale shows up AS voided instead of disappearing from the
+                 only list a manager reads after the fact. -->
+            <CollectionView Grid.Row="5" ItemsSource="{Binding ShiftHistory}" SelectionMode="None">
                 <CollectionView.EmptyView>
-                    <Label Text="Выполненных заказов пока нет." Style="{StaticResource EmptyLabel}" />
+                    <Label Text="Закрытых заказов пока нет." Style="{StaticResource EmptyLabel}" />
                 </CollectionView.EmptyView>
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="vm:OrderRowViewModel">
                         <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
                             <VerticalStackLayout Spacing="4">
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <Label Text="{Binding OrderTitle}" FontAttributes="Bold" />
+                                    <VerticalStackLayout Spacing="1">
+                                        <Label Text="{Binding OrderTitle}" FontAttributes="Bold" />
+                                        <!-- The status is on the card because the list now contains
+                                             voided orders. Without it a cancelled sale and a
+                                             completed one were visually identical — same rows, same
+                                             total, same date — and the one the manager needs to
+                                             identify is the one that says nothing about itself.
+                                             CancellationReason rides along, because the domain
+                                             composes the money and the stock disposition into it. -->
+                                        <Label Text="{Binding StatusText}" Style="{StaticResource SecondaryLabel}"
+                                               TextColor="{Binding StatusColor}" FontAttributes="Bold"
+                                               SemanticProperties.Description="{Binding StatusHint}" />
+                                        <!-- The composed cancellation reason: how much came back and
+                                             what happened to the stock. "Отменен" alone tells a
+                                             manager the order is gone and nothing about where the
+                                             money went. -->
+                                        <Label Text="{Binding CancellationDetail}" Style="{StaticResource SecondaryLabel}"
+                                               IsVisible="{Binding CancellationDetail, Converter={StaticResource IsPresent}}"
+                                               LineBreakMode="WordWrap" />
+                                    </VerticalStackLayout>
                                     <!-- CreatedAtText, not StringFormat on Model.CreatedAt. The
                                          raw DateTimeOffset is UTC (migration 3), and StringFormat
                                          renders it without a zone conversion — so the same order
@@ -51,6 +106,27 @@
                                     </BindableLayout.ItemTemplate>
                                 </VerticalStackLayout>
                                 <Label Text="{Binding TotalPrice, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                    <!-- "Подробнее" exists because the void flow and the payment
+                                         ledger both live on the details page, and a history row that
+                                         showed a total with no way to see how it was paid left the
+                                         manager to trust the card. -->
+                                    <Button Text="Подробнее" Padding="8,6" MinimumHeightRequest="48"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.OpenDetailsCommand}"
+                                            CommandParameter="{Binding .}"
+                                            SemanticProperties.Description="Открыть детали заказа" />
+                                    <!-- The void action. Only on rows that are not already cancelled
+                                         (CanCancel), so an order that was already voided cannot be
+                                         voided again — the domain would refuse it, but the control
+                                         that can only fail is the thing this feature spent its
+                                         previous life removing. DangerButton for the same reason the
+                                         board's cancel is: cancelling destroys a sale. -->
+                                    <Button Grid.Column="1" Text="{Binding CancelText}" Style="{StaticResource DangerButton}"
+                                            Padding="8,6" MinimumHeightRequest="48"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CancelOrderCommand}"
+                                            CommandParameter="{Binding .}" IsVisible="{Binding CanCancel}"
+                                            SemanticProperties.Description="{Binding CancelHint}" />
+                                </Grid>
                             </VerticalStackLayout>
                         </Border>
                     </DataTemplate>

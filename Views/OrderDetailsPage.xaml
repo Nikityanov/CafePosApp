@@ -41,19 +41,53 @@
                  on it and the easiest to miss. It now heads the action block, above the
                  "Добавить блюдо" field, where the cart already puts it. -->
             <Label Text="{Binding Total, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" FontSize="20" HorizontalTextAlignment="End" />
-            <!-- Payment area: what was paid and what is left. The total is right above, so this
-                 line carries the paid amount and the remaining balance; a partial payment says
-                 what is still owed, and the wording (not just the colour) carries the state. -->
-            <Label Text="{Binding PaymentSummary}" FontSize="13" FontAttributes="Bold" TextColor="{Binding PaymentColor}" />
+            <!-- Payment area: what was paid, what came back and what is left. The total is right
+                 above, so this line carries the figures; the wording (not just the colour) carries
+                 the state, and a refunded order says it was refunded rather than reading as unpaid.
+                 -->
+            <Label Text="{Binding PaymentSummary}" FontSize="13" FontAttributes="Bold" TextColor="{Binding PaymentColor}" LineBreakMode="WordWrap" />
             <Button Text="Принять оплату" Style="{StaticResource SecondaryButton}" MinimumHeightRequest="48" IsVisible="{Binding CanCollectPayment}" Command="{Binding CollectPaymentCommand}" SemanticProperties.Description="Принять оплату по заказу" />
-            <!-- The individual payments, one line each. -->
+
+            <!-- «Вернуть оплату» sits in the payment block, beside «Принять оплату», because it is
+                 the same control facing the other way and an operator looking for it will look
+                 there. Visible only on a Completed order that still holds money (CanRefundPayment):
+                 the domain restricts refunds to finished sales, and the NET scalar is what makes the
+                 button disappear once everything has been given back — so a fully refunded order
+                 never offers a control that can only fail.
+                 DangerButton rather than SecondaryButton because money leaves the till. The colour
+                 is NOT the signal: the wording is («Вернуть», not «Оплата»), and the sheet it opens
+                 is titled and captioned as a return as well. -->
+            <Button Text="Вернуть оплату" Style="{StaticResource DangerButton}" MinimumHeightRequest="48" IsVisible="{Binding CanRefundPayment}" Command="{Binding RefundPaymentCommand}" SemanticProperties.Description="Вернуть часть оплаты по закрытому заказу" />
+
+            <!-- The individual payments, one line each.
+
+                 Two columns: the words on the left, the signed amount on the right. A refund row
+                 used to render identically to a collection row — the same text for money in and for
+                 money out — because the ledger is one table and IsRefund is a flag, not a shape.
+                 Now the amount carries a minus sign, the text carries «возврат», and the amount is
+                 tinted. The tint is the THIRD signal and never the only one: colour alone is refused
+                 throughout this app, and a screen reader is given the word, not the colour.
+
+                 The tint comes from a DataTrigger rather than a bound Color property so the template
+                 holds no Color value of its own: these rows were always theme-neutral, and a
+                 hard-coded one would have been unreadable on a dark theme. -->
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Payments}" Spacing="2">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="vm:PaymentLine">
-                        <Label Text="{Binding Text}" FontSize="12" Style="{StaticResource SecondaryLabel}" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <Label Text="{Binding Text}" FontSize="12" Style="{StaticResource SecondaryLabel}" />
+                            <Label Grid.Column="1" Text="{Binding AmountText}" FontSize="12" FontAttributes="Bold" VerticalTextAlignment="Start">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding IsRefund}" Value="True">
+                                        <Setter Property="TextColor" Value="{StaticResource Danger}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                        </Grid>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
+
             <Button Text="Добавить в заказ" Command="{Binding AddProductCommand}" IsEnabled="{Binding CanEdit}" />
             <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                 <Button Text="Сохранить" Command="{Binding SaveCommand}" IsEnabled="{Binding CanEdit}" />
@@ -64,6 +98,17 @@
                      x:DataType is what made the mismatch visible at build time. -->
                 <Button Grid.Column="1" Text="Назад" Style="{StaticResource SecondaryButton}" Command="{Binding BackCommand}" />
             </Grid>
+
+            <!-- The void. This page had no cancel control at all before, which left the natural
+                 place to undo one specific order unable to undo anything: the operator had to go
+                 and find the row on a different screen. Same three dialogs as the board's cancel,
+                 in the same order and with the same per-row wording, so the two entry points cannot
+                 drift apart on the phrasing that tells the operator money is leaving. CanCancel
+                 keeps it off an already-cancelled order, where the domain would refuse it.
+
+                 Last in the block on purpose: it is the most destructive thing on the page, and it
+                 reads after everything the operator might have wanted instead. -->
+            <Button Text="{Binding CancelText}" Style="{StaticResource DangerButton}" MinimumHeightRequest="48" IsVisible="{Binding CanCancel}" Command="{Binding CancelOrderCommand}" SemanticProperties.Description="{Binding CancelHint}" />
         </VerticalStackLayout>
     </Grid>
 </ContentPage>

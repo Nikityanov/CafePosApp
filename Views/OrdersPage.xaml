@@ -73,8 +73,13 @@
                     </Grid>
                     <!-- DangerButton, matching "Удалить" on the details page and the restore
                          action in Settings. Cancelling an order is destructive and was wearing the
-                         same filled primary as "Готов" right above it. -->
-                    <Button Text="Отменить заказ" Style="{StaticResource DangerButton}" MinimumHeightRequest="48" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CancelOrderCommand}" CommandParameter="{Binding .}" IsVisible="{Binding CanCancel}" />
+                         same filled primary as "Готов" right above it.
+
+                         The label is per-row (CancelText), because a paid order's cancel also gives
+                         the money back: the button that voids the sale has to say so, or the
+                         operator is reading "Отменить заказ" on an order they were just paid for.
+                         The hint carries the amount for a screen reader. -->
+                    <Button Text="{Binding CancelText}" Style="{StaticResource DangerButton}" MinimumHeightRequest="48" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CancelOrderCommand}" CommandParameter="{Binding .}" IsVisible="{Binding CanCancel}" SemanticProperties.Description="{Binding CancelHint}" />
                 </VerticalStackLayout>
             </Border>
             </VerticalStackLayout>

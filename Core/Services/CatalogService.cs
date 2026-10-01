@@ -356,11 +356,30 @@ public sealed partial class CatalogService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Hard delete, with one exception that is not cosmetic: an ingredient that has ever been
+    /// written off cannot be deleted.
+    /// <para>
+    /// Ingredients have no IsDeleted flag (unlike products), and StockMovements.IngredientId is
+    /// ON DELETE CASCADE — so deleting one physically destroys its stock journal. A cancellation
+    /// with StockDisposition.ReturnToStock reverses the write-off by reading that journal, which
+    /// means a deleted ingredient leaves nothing to invert while the operator is being told the
+    /// stock went back. That is a lie about the shelf, and a lie nobody could audit afterwards: the
+    /// rows that would have shown it are the rows that were deleted. Switching the ingredient off
+    /// (IsAvailable = false) hides it from the catalogue and keeps the journal intact, which is why
+    /// that is the action the message points at.
+    /// </para>
+    /// </summary>
     public async Task DeleteIngredientAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         var ingredient = await db.Ingredients.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (ingredient is null) return;
+
+        if (await db.StockMovements.AnyAsync(movement => movement.IngredientId == id, cancellationToken))
+            throw new ConflictException(
+                $"Нельзя удалить «{ingredient.Name}»: по нему есть записи склада. Отключите ингредиент вместо удаления, иначе возврат остатков на склад будет невозможен.");
+
         db.Ingredients.Remove(ingredient);
         await db.SaveChangesAsync(cancellationToken);
     }

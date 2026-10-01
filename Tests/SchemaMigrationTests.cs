@@ -33,7 +33,7 @@ public class SchemaMigrationTests
         Assert.Equal(migrator.LatestVersion, result.FinalVersion);
         // Pinned on purpose: when the next migration lands this line is the reminder that the
         // expectations above it are no longer enough.
-        Assert.Equal(6, result.FinalVersion);
+        Assert.Equal(7, result.FinalVersion);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class SchemaMigrationTests
 
         Assert.False(result.FreshDatabase);
         Assert.Equal(migrator.LatestVersion, result.FinalVersion);
-        Assert.Equal(5, result.AppliedMigrations.Count); // 2, 3, 4, 5, 6
+        Assert.Equal(6, result.AppliedMigrations.Count); // 2, 3, 4, 5, 6, 7
 
         // Money became integer kopecks; totals were recalculated from the order items.
         await using var connection = new SqliteConnection($"Data Source={host.DatabasePath}");
@@ -126,6 +126,8 @@ public class SchemaMigrationTests
         Assert.Contains("NextOrderNumber", await GetColumnsAsync(connection, "Shifts"));
         Assert.Contains("PaidKopecks", await GetColumnsAsync(connection, "Orders"));
         Assert.Contains("AmountKopecks", await GetColumnsAsync(connection, "OrderPayments"));
+        Assert.Contains("IsRefund", await GetColumnsAsync(connection, "OrderPayments"));
+        Assert.Contains("Note", await GetColumnsAsync(connection, "OrderPayments"));
     }
 
     private static async Task<HashSet<string>> GetColumnsAsync(SqliteConnection connection, string table)

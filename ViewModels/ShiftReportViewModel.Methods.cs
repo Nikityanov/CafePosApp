@@ -1,5 +1,6 @@
 using CafePos.Core.Common;
 using CafePos.Core.Errors;
+using CafePosApp.Services;
 using Microsoft.Extensions.Logging;
 
 namespace CafePosApp.ViewModels;
@@ -27,8 +28,21 @@ public partial class ShiftReportViewModel
             AverageCheck = stats.AverageCheck;
             PeakHour = stats.PeakHour;
 
-            var completed = await orders.GetCompletedOrdersAsync(shift.Id);
-            CompletedOrders.SyncWith(completed.Select(order => new OrderRowViewModel(order, settings)), row => row.Model.Id);
+            // The money through the till. Assigned from the same ShiftStats the CSV export reads, so
+            // the screen and the export cannot disagree about what the drawer did — that pairing is
+            // the entire reason these lines are here.
+            PaymentsCash = stats.PaymentsCash;
+            PaymentsCard = stats.PaymentsCard;
+            RefundsCash = stats.RefundsCash;
+            RefundsCard = stats.RefundsCard;
+            // CashInDrawer is computed from the two above, so it has to be re-notified by hand.
+            OnPropertyChanged(nameof(CashInDrawer));
+
+            // GetShiftOrderHistoryAsync (Completed AND Cancelled), not GetCompletedOrdersAsync.
+            // Cancelling a paid order flips it to Cancelled, so under the old query the one sale a
+            // manager most needs to see after a bad void vanished from the only list they read.
+            var history = await orders.GetShiftOrderHistoryAsync(shift.Id);
+            ShiftHistory.SyncWith(history.Select(order => new OrderRowViewModel(order, settings)), row => row.Model.Id);
 
             Message = string.Empty;
         }
@@ -40,6 +54,62 @@ public partial class ShiftReportViewModel
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Voids a closed order from the history list — the entry point for a handed-over sale, since
+    /// the orders board never lists a Completed one.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately the same three dialogs in the same order as the board's cancel flow
+    /// (confirm, disposition, reason) and with the same wording, because they are the same
+    /// operation. The difference is entirely in what it costs: here the order is finished and paid,
+    /// so the confirmation states the amount that goes back and the outcome message reports it.
+    /// <para>
+    /// The page reloads rather than patching the row. A cancellation writes refund rows to the
+    /// ledger, changes PaidKopecks and can move stock; the row on screen shows status and payment
+    /// state, and a half-updated card is worse than a re-read one. It is also the only way the
+    /// money block above the list can pick up the refund it just caused.
+    /// </para>
+    /// </remarks>
+    private async Task CancelOrderAsync(OrderRowViewModel? row)
+    {
+        if (row is null) return;
+
+        try
+        {
+            var paid = row.Model.PaidKopecks;
+            var paidText = TextFormat.Money(Money.FromKopecks(paid));
+            var summary = paid > 0
+                ? $"{row.OrderTitle} на {TextFormat.Money(row.TotalPrice)} будет отменён, клиенту вернётся {paidText}."
+                : $"{row.OrderTitle} на {TextFormat.Money(row.TotalPrice)} будет отменён.";
+
+            if (!await dialogs.ConfirmAsync("Отменить заказ?", summary, row.CancelText, "Назад"))
+            {
+                return;
+            }
+
+            var stock = await stockDisposition.ChooseAsync(new StockDispositionSheetRequest(
+                row.OrderTitle,
+                row.TotalPrice,
+                Money.FromKopecks(paid)));
+            if (stock is null) return;
+
+            var reason = await dialogs.PromptAsync("Причина отмены", "Необязательно: причина отмены заказа", string.Empty);
+            await orders.CancelOrderAsync(row.Model.Id, reason, stock.Value);
+
+            await LoadAsync();
+            Message = paid > 0
+                ? $"{row.OrderTitle} отменён, возвращено {paidText}."
+                : $"{row.OrderTitle} отменён.";
+            haptics.Warn();
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Failed to cancel order {OrderId} from the shift report", row.Model.Id);
+            Message = UserMessages.Describe(exception, "Не удалось отменить заказ");
+            haptics.Warn();
         }
     }
 

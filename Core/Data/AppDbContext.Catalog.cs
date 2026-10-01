@@ -101,8 +101,14 @@ public partial class AppDbContext
         {
             entity.HasKey(payment => payment.Id);
             entity.Property(payment => payment.Method).HasConversion<string>().HasMaxLength(30);
-            // Payments of one order are read in payment order; the index serves both the details
-            // screen and the migration's NOT IN (SELECT OrderId ...) reconciliation check.
+            // IsRefund deliberately keeps the default bool mapping (INTEGER), no converter — the
+            // same reasoning as DraftOrder.IsActiveCart. Every row that exists before the refund
+            // feature is a collection, so the column's DEFAULT 0 is already the correct backfill
+            // and a value converter would only add a second way for a zero to be spelled.
+            entity.Property(payment => payment.Note).HasMaxLength(300);
+            // Payments of one order are read in payment order; the index serves the details screen,
+            // the migration's NOT IN (SELECT OrderId ...) reconciliation check and the refund
+            // walk, which reads one order's non-refunded rows in PaidAt order (FIFO mirroring).
             entity.HasIndex(payment => new { payment.OrderId, payment.PaidAt });
         });
 

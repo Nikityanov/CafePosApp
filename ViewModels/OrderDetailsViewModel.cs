@@ -13,7 +13,24 @@ namespace CafePosApp.ViewModels;
 /// <summary>
 /// One recorded payment, rendered as a single line on the details page.
 /// </summary>
-public sealed record PaymentLine(string Text);
+/// <remarks>
+/// <paramref name="IsRefund"/> is a separate field rather than something the wording implies,
+/// because the two rows are the same shape in every other respect and a preformatted
+/// <c>PaymentLine(string Text)</c> made a refund line indistinguishable from a collection at the
+/// template level. The template needs it to pick a colour, and the template cannot parse the text.
+/// <para>
+/// <paramref name="AmountText"/> is the signed, formatted figure on its own and <paramref name="Text"/>
+/// is the composed sentence, split so the template can put the amount in its own column. The minus
+/// sign is part of <paramref name="AmountText"/>: the sign is the fastest thing to read on a row
+/// list, and it must not depend on the surrounding prose to be noticed.
+/// </para>
+/// </remarks>
+public sealed record PaymentLine(string Text, string AmountText, bool IsRefund)
+{
+    /// <summary>Money leaving the till is the app's one negative-number case, so it is named once here.</summary>
+    public static string SignedAmount(decimal amount, bool isRefund) =>
+        isRefund ? $"−{TextFormat.Money(amount)}" : TextFormat.Money(amount);
+}
 
 public partial class OrderEditItemViewModel : ObservableObject
 {
@@ -48,6 +65,8 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
     private readonly AppSettings settings;
     private readonly INavigationService navigation;
     private readonly IPaymentSheet paymentSheet;
+    private readonly IStockDispositionSheet stockDisposition;
+    private readonly IDialogService dialogs;
     private readonly IHapticService haptics;
     private readonly ILogger<OrderDetailsViewModel> logger;
 
@@ -61,6 +80,8 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
         AppSettings settings,
         INavigationService navigation,
         IPaymentSheet paymentSheet,
+        IStockDispositionSheet stockDisposition,
+        IDialogService dialogs,
         IHapticService haptics,
         ILogger<OrderDetailsViewModel> logger
     )
@@ -71,6 +92,8 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
         this.settings = settings;
         this.navigation = navigation;
         this.paymentSheet = paymentSheet;
+        this.stockDisposition = stockDisposition;
+        this.dialogs = dialogs;
         this.haptics = haptics;
         this.logger = logger;
 
@@ -80,6 +103,8 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
         DecreaseItemCommand = new RelayCommand<OrderEditItemViewModel>(DecreaseItem);
         RemoveItemCommand = new RelayCommand<OrderEditItemViewModel>(RemoveItem);
         CollectPaymentCommand = new AsyncRelayCommand(CollectPaymentAsync);
+        RefundPaymentCommand = new AsyncRelayCommand(RefundPaymentAsync);
+        CancelOrderCommand = new AsyncRelayCommand(CancelOrderAsync);
         BackCommand = new AsyncRelayCommand(navigation.GoBackAsync);
     }
 
@@ -111,29 +136,149 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
     // even if the balance were non-zero, because the domain does not take payment on a closed one.
 
     /// <summary>True when the order is open and not fully paid — the only case a payment is taken.</summary>
+    /// <remarks>
+    /// Unchanged by the refund feature, and deliberately so. The status clause is what makes it
+    /// safe: refunds only exist on <see cref="OrderStatus.Completed"/> orders, and a refunded order
+    /// is still Completed, so a refunded order can never be re-charged through this path even though
+    /// its <c>PaymentState</c> has fallen back to Unpaid or PartiallyPaid. Verified against the
+    /// partially refunded case specifically — money held for it is money still in the till, and
+    /// taking a second payment against it would credit the drawer twice for one sale.
+    /// </remarks>
     public bool CanCollectPayment =>
         order is not null
         && order.PaymentState is not PaymentState.Paid
         && order.Status is OrderStatus.InProgress or OrderStatus.Ready;
 
     /// <summary>
-    /// The payment line: what was paid and what is left. A partial payment reads differently from
-    /// an unpaid one, and both say the amount so the state is never carried by colour alone.
+    /// True when this order can have money returned: finished, and there is money in it to return.
     /// </summary>
-    public string PaymentSummary => order?.PaymentState switch
+    /// <remarks>
+    /// The two conditions together, and neither is implied by the other. <c>Completed</c> because
+    /// the domain restricts refunds to finished sales — the goods have left the bar, so giving the
+    /// money back is the operator's decision, not a correction to a running total.
+    /// <c>PaidKopecks &gt; 0</c> because it is the NET scalar: after a full refund it reads zero, so
+    /// this is the check that stops the button appearing on an order that has nothing left to give
+    /// back. Without it, an operator could open the sheet on a fully refunded order, key in an
+    /// amount and be refused by the domain's «По заказу нечего возвращать» — the exact
+    /// "control that can only fail" pattern the cancel button used to have.
+    /// </remarks>
+    public bool CanRefundPayment => order is not null && order.Status == OrderStatus.Completed && order.PaidKopecks > 0;
+
+    /// <summary>
+    /// Whether the void control is offered on this page.
+    /// </summary>
+    /// <remarks>
+    /// Anything not already cancelled, for the same reason the board's <c>CanCancel</c> is: a paid
+    /// order is voidable and cancelling takes the money with it. An already-cancelled order is
+    /// excluded because the domain makes cancellation single-shot, and offering the control anyway
+    /// would offer one that can only fail.
+    /// </remarks>
+    public bool CanCancel => order is not null && order.Status != OrderStatus.Cancelled;
+
+    /// <summary>The void button's label. Names the return when there is money to return.</summary>
+    public string CancelText => order is { PaidKopecks: > 0 }
+        ? "Отменить и вернуть деньги"
+        : "Отменить заказ";
+
+    /// <summary>The void button's accessible description, carrying the amount that goes back.</summary>
+    public string CancelHint => order is { PaidKopecks: > 0 }
+        ? $"Отменить заказ и вернуть клиенту {TextFormat.Money(Money.FromKopecks(order.PaidKopecks))}"
+        : "Отменить заказ";
+
+    /// <summary>
+    /// The payment line: what was paid, what came back and what is left.
+    /// </summary>
+    /// <remarks>
+    /// Branches on <c>Status</c> FIRST, then on the money — the ordering is the fix. This used to
+    /// switch on <c>PaymentState</c> alone, which after a full refund renders
+    /// «Не оплачен · к оплате 220.00 ₽» on a finished sale whose money has already gone back to the
+    /// customer: correct arithmetic, completely wrong story, and it asks for money that cannot be
+    /// taken because the order is closed. "Voided of its payment" is not "unpaid", and the only way
+    /// to say that is to look at the status before the figures.
+    /// <para>
+    /// A cancelled order reads the same way — the money went back as part of the cancellation, so
+    /// there is nothing owed and nothing to collect. The stock disposition is left out of this line
+    /// because <c>StatusText</c> above already carries the composed cancellation reason, including it.
+    /// </para>
+    /// <para>
+    /// Every branch names its amounts. Never colour alone: this line is the only place the state is
+    /// stated in words, and a screen reader reads the sentence.
+    /// </para>
+    /// </remarks>
+    public string PaymentSummary => order is null
+        ? string.Empty
+        : order.Status switch
+        {
+            OrderStatus.Cancelled => refundedTotal > 0
+                ? $"Отменён, возвращено {TextFormat.Money(refundedTotal)}"
+                : "Отменён, оплата не поступала",
+            OrderStatus.Completed => DescribeClosedOrder(),
+            _ => DescribeOpenOrder()
+        };
+
+    /// <summary>
+    /// The two closed states. A completed order reads by how much of it still stands.
+    /// </summary>
+    /// <remarks>
+    /// A partially refunded order deliberately does NOT fall into the "unpaid" wording even though
+    /// its <c>PaymentState</c> is now <see cref="PaymentState.PartiallyPaid"/> — because it can still
+    /// hold money (<c>PaidKopecks &gt; 0</c>) or hold none at all (fully refunded), and those are
+    /// different sentences from anything the open-order branch below says, which promises to collect.
+    /// </remarks>
+    private string DescribeClosedOrder()
+    {
+        if (refundedTotal > 0)
+        {
+            return order!.PaidKopecks > 0
+                ? $"Оплачено {TextFormat.Money(collectedTotal)}, возвращено {TextFormat.Money(refundedTotal)}, осталось {TextFormat.Money(Money.FromKopecks(order.PaidKopecks))}"
+                : $"Оплата возвращена полностью: {TextFormat.Money(refundedTotal)}";
+        }
+
+        return order!.IsFullyPaid
+            ? "Оплачен полностью"
+            : $"Оплачено {TextFormat.Money(Money.FromKopecks(order.PaidKopecks))}";
+    }
+
+    /// <summary>
+    /// The open states — the only ones where money can still arrive. Wording unchanged from before
+    /// the refund feature, on purpose: an order in progress that is short of its total is still an
+    /// order that must be paid.
+    /// </summary>
+    private string DescribeOpenOrder() => order!.PaymentState switch
     {
         PaymentState.Paid => "Оплачен полностью",
         PaymentState.PartiallyPaid => $"Оплачено {TextFormat.Money(Money.FromKopecks(order.PaidKopecks))} · осталось {TextFormat.Money(Money.FromKopecks(order.BalanceKopecks))}",
-        _ when order is null => string.Empty,
         _ => $"Не оплачен · к оплате {TextFormat.Money(Money.FromKopecks(order.BalanceKopecks))}"
     };
 
-    public Color PaymentColor => order?.PaymentState switch
+    /// <summary>
+    /// The line's colour. Grey for money that has gone back: it is neither a debt nor a success, and
+    /// green beside a refund row would tell the operator the opposite of what happened.
+    /// </summary>
+    public Color PaymentColor => order switch
     {
-        PaymentState.Paid => Colors.Green,
-        PaymentState.PartiallyPaid => Colors.Orange,
+        null => Colors.Gray,
+        { Status: OrderStatus.Cancelled } => Colors.Gray,
+        { Status: OrderStatus.Completed } when refundedTotal > 0 && order.PaidKopecks > 0 => Colors.Orange,
+        { Status: OrderStatus.Completed } when refundedTotal > 0 => Colors.Gray,
+        { PaymentState: PaymentState.Paid } => Colors.Green,
+        { PaymentState: PaymentState.PartiallyPaid } => Colors.Orange,
         _ => Colors.Red
     };
+
+    // ── Refunds ────────────────────────────────────────────────────────────────────────────────
+    // Summed from the ledger rows, not read off PaidKopecks. PaidKopecks is NET (collected minus
+    // refunded), so the gross collected figure the summary needs is not recoverable from it: an
+    // order refunded all the way down to zero reads identically to one that was never paid.
+
+    private decimal refundedTotal;
+    private decimal collectedTotal;
+
+    /// <summary>What has come back out of the till on this order.</summary>
+    public decimal RefundedTotal => refundedTotal;
+
+    /// <summary>Gross collected, refunds excluded. Net is <c>Order.PaidKopecks</c>.</summary>
+    public decimal CollectedTotal => collectedTotal;
 
     private bool isBusy;
     public bool IsBusy { get => isBusy; private set => SetProperty(ref isBusy, value); }
@@ -148,6 +293,13 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
     public IRelayCommand<OrderEditItemViewModel> DecreaseItemCommand { get; }
     public IRelayCommand<OrderEditItemViewModel> RemoveItemCommand { get; }
     public IAsyncRelayCommand CollectPaymentCommand { get; }
+
+    /// <summary>Returns money on a finished order, in whole rubles, as a partial refund.</summary>
+    public IAsyncRelayCommand RefundPaymentCommand { get; }
+
+    /// <summary>Voids the whole order, refunding in full and settling the stock disposition.</summary>
+    public IAsyncRelayCommand CancelOrderCommand { get; }
+
     public IAsyncRelayCommand BackCommand { get; }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)

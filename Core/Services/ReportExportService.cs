@@ -82,7 +82,9 @@ public sealed class ReportExportService(IDbContextFactory<AppDbContext> factory)
 
         // "Принято оплат" — what the till recorded, next to the revenue figure above. Exported on
         // purpose: the shift report is what a manager takes to the cash count, and without these
-        // lines the drawer total cannot be reconciled against the day on paper.
+        // lines the drawer total cannot be reconciled against the day on paper. The wording and the
+        // GROSS meaning are deliberately untouched: every existing reading of "Принято …" keeps
+        // meaning "what came in".
         var payments = await ShiftPayments.ReadAsync(db, shiftId, cancellationToken);
 
         builder.AppendLine();
@@ -93,6 +95,18 @@ public sealed class ReportExportService(IDbContextFactory<AppDbContext> factory)
         builder.AppendLine(Csv.Join("Принято наличными", Money.FromKopecks(payments.CashKopecks).ToString("F2")));
         builder.AppendLine(Csv.Join("Принято картой", Money.FromKopecks(payments.CardKopecks).ToString("F2")));
         builder.AppendLine(Csv.Join("Принято всего", Money.FromKopecks(payments.TotalKopecks).ToString("F2")));
+
+        // What went back out, by the method it left in. Reported separately from "Принято" rather
+        // than subtracted into it: the gross figure is what the till took, and quietly lowering it
+        // would make a day with refunds look like a day that took less.
+        builder.AppendLine(Csv.Join("Возвращено наличными", Money.FromKopecks(payments.RefundsCashKopecks).ToString("F2")));
+        builder.AppendLine(Csv.Join("Возвращено картой", Money.FromKopecks(payments.RefundsCardKopecks).ToString("F2")));
+        builder.AppendLine(Csv.Join("Возвращено всего", Money.FromKopecks(payments.RefundedKopecks).ToString("F2")));
+
+        // The one line a manager counts against the drawer, so it is the last word in the export and
+        // the only one that nets out. Anything ambiguous about it defeats the whole point of taking
+        // the report to the till.
+        builder.AppendLine(Csv.Join("Итого наличными в кассе", Money.FromKopecks(payments.CashInDrawerKopecks).ToString("F2")));
 
         return builder.ToString();
     }

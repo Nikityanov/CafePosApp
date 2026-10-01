@@ -339,28 +339,65 @@ public partial class OrdersViewModel
     private static bool IsAlreadyPaidConflict(ConflictException exception) =>
         exception.Message.Contains("уже оплачен", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Cancels an order, asking for an optional reason (previously the reason was always null).</summary>
+    /// <summary>
+    /// The whole cancellation, in the order the operator has to make the decisions: confirm,
+    /// disposition, reason. Then one call that voids the sale, refunds it and settles the stock.
+    /// </summary>
+    /// <remarks>
+    /// The stock disposition sits between the confirmation and the reason, not after both. It is
+    /// the only one of the three whose answer changes the shelf rather than the books, so it is
+    /// the one that must not be skippable and must not be last — after the reason prompt the
+    /// operator has already typed their way out of the screen. It is also asked BEFORE the reason
+    /// because a cancellation reason written for "блюдо отменили" and one written for "остатки
+    /// вернули" are different sentences, and the disposition is what tells the operator which kind
+    /// of thing they are describing.
+    /// <para>
+    /// Every step is a separate dialog and every one is a way out. The disposition sheet returns
+    /// null when dismissed, and a dismissal is treated exactly like tapping "Назад" at the
+    /// confirmation: nothing happens, which is the only safe reading of "the operator changed
+    /// their mind".
+    /// </para>
+    /// </remarks>
     private async Task CancelOrderAsync(OrderRowViewModel? row)
     {
         if (row is null) return;
 
         try
         {
-            if (!await dialogs.ConfirmAsync("Отменить заказ?", $"{row.OrderTitle} на {TextFormat.Money(row.TotalPrice)} будет отменён.", "Отменить заказ", "Назад"))
+            // The confirmation names the money when money is involved. "Будет отменён" on a paid
+            // order is now a lie by omission: cancelling takes the payment with it.
+            var paid = Money.FromKopecks(row.Model.PaidKopecks);
+            var summary = row.Model.PaidKopecks > 0
+                ? $"{row.OrderTitle} на {TextFormat.Money(row.TotalPrice)} будет отменён, клиенту вернётся {TextFormat.Money(paid)}."
+                : $"{row.OrderTitle} на {TextFormat.Money(row.TotalPrice)} будет отменён.";
+
+            if (!await dialogs.ConfirmAsync("Отменить заказ?", summary, row.CancelText, "Назад"))
             {
                 return;
             }
 
+            var stock = await stockDisposition.ChooseAsync(new StockDispositionSheetRequest(
+                row.OrderTitle,
+                row.TotalPrice,
+                paid));
+            if (stock is null) return;
+
             var reason = await dialogs.PromptAsync("Причина отмены", "Необязательно: причина отмены заказа", string.Empty);
-            await orders.CancelOrderAsync(row.Model.Id, reason);
+            await orders.CancelOrderAsync(row.Model.Id, reason, stock.Value);
             await ReloadAsync();
-            Message = $"{row.OrderTitle} отменён.";
+
+            // The money is named in the outcome, not just in the confirmation: this is the line the
+            // operator reads afterwards to check they moved the right amount.
+            Message = row.Model.PaidKopecks > 0
+                ? $"{row.OrderTitle} отменён, возвращено {TextFormat.Money(paid)}."
+                : $"{row.OrderTitle} отменён.";
             haptics.Warn();
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to cancel order {OrderId}", row.Model.Id);
             Message = UserMessages.Describe(exception, "Не удалось отменить заказ");
+            haptics.Warn();
         }
     }
 

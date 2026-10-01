@@ -28,12 +28,19 @@ public class Order
     }
 
     /// <summary>
-    /// Amount actually received, in kopecks. Persisted on purpose: every list that shows a payment
-    /// state (GetActiveOrdersAsync, the orders screen) loads orders WITHOUT their payments, and a
-    /// value derived from the <see cref="Payments"/> collection would read zero there — silently,
-    /// with no error anywhere, so every card would claim "unpaid" while the money is on the table.
-    /// EF only links tracked entities into a loaded collection during DetectChanges, so an
-    /// un-Included collection is not merely stale, it is empty.
+    /// NET amount still held for this order, in kopecks: what was collected MINUS what was refunded.
+    /// Net is the figure every screen reads, because it is what the till still owes the customer —
+    /// after a partial refund the order is still paid for, just for less. The ledger reconciles
+    /// against it as <c>SUM(Where(!IsRefund)) − SUM(Where(IsRefund))</c>; the direction lives in
+    /// <see cref="OrderPayment.IsRefund"/>, never in a negative amount.
+    /// <para>
+    /// Persisted on purpose: every list that shows a payment state (GetActiveOrdersAsync, the orders
+    /// screen) loads orders WITHOUT their payments, and a value derived from the
+    /// <see cref="Payments"/> collection would read zero there — silently, with no error anywhere,
+    /// so every card would claim "unpaid" while the money is on the table. EF only links tracked
+    /// entities into a loaded collection during DetectChanges, so an un-Included collection is not
+    /// merely stale, it is empty.
+    /// </para>
     /// </summary>
     public long PaidKopecks { get; set; }
 

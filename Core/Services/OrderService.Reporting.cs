@@ -55,6 +55,12 @@ public sealed partial class OrderService
         // having been recorded; this is what the till actually took, split by method for the cash
         // count. The two coincide for completed orders (they cannot become Ready unpaid) and the
         // payment total additionally covers orders paid in advance while still cooking.
+        //
+        // Both halves stay GROSS and separate: the four Payments* fields keep meaning "what came
+        // in", unchanged and in this order, and the refunds are additive on top. The number a
+        // manager physically counts is PaymentsCash − RefundsCash, and it is computed at the point
+        // of presentation (the report screen and the CSV) rather than stored here, so there is one
+        // subtraction and not two.
         var payments = await ShiftPayments.ReadAsync(db, shiftId, cancellationToken);
 
         return new ShiftStats(
@@ -71,7 +77,10 @@ public sealed partial class OrderService
             payments.Count,
             Money.FromKopecks(payments.CashKopecks),
             Money.FromKopecks(payments.CardKopecks),
-            Money.FromKopecks(payments.TotalKopecks));
+            Money.FromKopecks(payments.TotalKopecks),
+            Money.FromKopecks(payments.RefundsCashKopecks),
+            Money.FromKopecks(payments.RefundsCardKopecks),
+            Money.FromKopecks(payments.RefundedKopecks));
     }
 
     public async Task<List<ProductAnalyticsRowData>> GetProductAnalyticsAsync(Guid shiftId, CancellationToken cancellationToken = default)

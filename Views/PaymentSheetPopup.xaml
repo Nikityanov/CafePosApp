@@ -25,12 +25,21 @@
                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"
                    LineBreakMode="TailTruncation" />
 
-            <!-- What is still owed. The one number the operator is settling. -->
+            <!-- What is still owed — or, on a refund, the most that can be given back. The caption is
+                 written from code because the direction changes what the number MEANS: the same
+                 220.00 ₽ is a debt in one mode and a ceiling in the other, and a caption reading
+                 "К оплате" over money going out would be actively wrong. -->
             <Label x:Name="AmountDueLabel" FontSize="18" FontAttributes="Bold" Margin="0,0,0,2" />
 
-            <!-- Only on a top-up: how much was already paid, so the sheet reads as a part-payment
-                 and not as a second charge for the whole order. -->
+            <!-- Only on a top-up or a partial refund: how much has already been settled in the same
+                 direction, so the sheet reads as a part-settlement rather than as a second full
+                 charge or a second full return. -->
             <Label x:Name="AlreadyPaidLabel" FontSize="12" Margin="0,0,0,6"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+
+            <!-- Refund only. Names where the money goes, because the operator has to hand cash to a
+                 customer or credit a terminal, and the sheet is the last place before they do. -->
+            <Label x:Name="RefundNoteLabel" FontSize="12" Margin="0,0,0,6" IsVisible="False" LineBreakMode="WordWrap"
                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
 
             <!-- The amount being entered. The largest text on the sheet: it is what the operator
@@ -42,7 +51,7 @@
                  payment to the balance, but the change the operator must hand back is
                  entered − balance, so that is what is displayed. -->
             <Label x:Name="ChangeLabel" FontSize="14" FontAttributes="Bold" Margin="0,0,0,6"
-                   HorizontalOptions="Center" TextColor="{StaticResource Warning}" />
+                   HorizontalOptions="Center" LineBreakMode="WordWrap" TextColor="{StaticResource Warning}" />
 
             <!-- The keypad is buttons, not an Entry: the OS keyboard covers half the screen and is
                  slow, and an Entry would bring it up on every tap. Every key is 48dp tall, the
@@ -65,6 +74,11 @@
 
             <!-- Cash or card, single select. The selected one is filled Primary so the choice is
                  visible at a glance; the unselected one is the tonal secondary. -->
+            <!-- The whole grid is hidden on a refund, not merely ignored: a refund has no method, because
+                 the domain mirrors the payments it reverses so the drawer and the terminal each
+                 balance against what they were actually credited. A visible-but-ignored choice
+                 would be worse than none — the operator would reasonably believe the return was
+                 booked the way they picked. -->
             <Grid x:Name="MethodGrid" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,0,0,10">
                 <Button x:Name="CashButton" Grid.Column="0" Text="Наличные" Style="{StaticResource PaymentMethodButton}"
                         CommandParameter="cash" Clicked="OnMethodClicked" SemanticProperties.Description="Оплата наличными" />

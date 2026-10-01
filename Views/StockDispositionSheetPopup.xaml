@@ -1,0 +1,99 @@
+<toolkit:Popup x:TypeArguments="services:StockDispositionChoice"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="clr-namespace:CommunityToolkit.Maui.Views;assembly=CommunityToolkit.Maui"
+             xmlns:views="clr-namespace:CafePosApp.Views"
+             xmlns:services="clr-namespace:CafePosApp.Services"
+             x:Class="CafePosApp.Views.StockDispositionSheetPopup"
+             x:DataType="views:StockDispositionSheetPopup"
+             x:Name="Sheet"
+             VerticalOptions="End"
+             HorizontalOptions="Fill"
+             Margin="0"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+    <!-- VerticalOptions="Start" on the ScrollView is what makes this a sheet rather than a panel:
+         a ScrollView is a View, so it fills whatever height it is offered and its only stop is
+         MaximumHeightRequest, which SizeToWindow sets to 0.9 x the window. Measured on the action
+         sheet before this was set: a 292dp sheet came out 823dp tall on a 914dp screen, ~57% of it
+         empty. Start makes it measure to its content instead.
+
+         The dim and the outside-tap dismissal are NOT here: the toolkit insets popup content by
+         15dp per side, so an in-popup backdrop left the page undimmed down both edges. They come
+         from PopupOptions in Services.StockDispositionSheet instead — the same split as
+         CatalogActionSheetPopup and PaymentSheetPopup. -->
+    <ScrollView x:Name="SheetScroll" VerticalOptions="Start">
+        <VerticalStackLayout x:Name="SheetContent" Padding="16,8,16,16" Spacing="0">
+            <BoxView Style="{StaticResource BottomSheetHandle}" />
+
+            <Label x:Name="TitleLabel" FontSize="17" FontAttributes="Bold" Margin="0,12,0,2" LineBreakMode="WordWrap" />
+
+            <!-- The money the cancellation is about. A separate line rather than folded into the
+                 title so the operator reads the same sentence on a 220 ₽ espresso and on a 4 200 ₽
+                 banquet order. -->
+            <Label x:Name="MoneyLabel" FontSize="13" Margin="0,0,0,4"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+
+            <!-- Why the question is asked at all. Without this sentence "Вернуть на склад" reads as
+                 an optimisation; it is actually a claim about the bar that the app cannot know and
+                 the operator can. -->
+            <Label x:Name="LeadLabel" FontSize="13" Margin="0,0,0,10" LineBreakMode="WordWrap"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+
+            <!-- ═══════════════════════════════════════════════════════════════════════════
+                 OPTION 1 — вернуть остатки на склад.
+
+                 The row is a Grid, not a Button: a MAUI Button is text-and-image only, it has no
+                 content property, so it cannot carry a title AND the sentence explaining it. The
+                 transparent Button is a sibling laid over the labels, exactly as the extended FAB
+                 does (Controls/FloatingActionButton.xaml) — it is the whole input surface and the
+                 only recognizer-free element, so nothing can swallow the tap. Do NOT replace it
+                 with a TapGestureRecognizer on the Border: two recognizers on one element made
+                 that button dead once already.
+
+                 It is LAST so the pressed state layer lands over the text rather than under it.
+                 ═══════════════════════════════════════════════════════════════════════════ -->
+            <Grid x:Name="ReturnOption" MinimumHeightRequest="72" Margin="0,0,0,8">
+                <Border Style="{StaticResource CardBorder}" Stroke="{StaticResource Gray300}" StrokeThickness="1" Padding="12,10">
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Вернуть на склад" FontSize="15" FontAttributes="Bold" />
+                        <Label Text="Блюдо не готовили: клиент передумал, ошибка кассира, дубль заказа"
+                               FontSize="12" LineBreakMode="WordWrap"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+                    </VerticalStackLayout>
+                </Border>
+                <Button Style="{StaticResource FabTouchTarget}" CornerRadius="10" Clicked="OnReturnClicked"
+                        SemanticProperties.Description="Вернуть остатки на склад. Блюдо не готовили: клиент передумал, ошибка кассира, дубль заказа" />
+            </Grid>
+
+            <!-- ═══════════════════════════════════════════════════════════════════════════
+                 OPTION 2 — оставить списанными. Same construction as option 1; the two are kept
+                 as separate markup rather than a bound ItemsSource because there are exactly two
+                 of them and their wording is the whole point of this screen.
+                 ═══════════════════════════════════════════════════════════════════════════ -->
+            <Grid x:Name="LeaveOption" MinimumHeightRequest="72" Margin="0,0,0,0">
+                <Border Style="{StaticResource CardBorder}" Stroke="{StaticResource Gray300}" StrokeThickness="1" Padding="12,10">
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Оставить списанными" FontSize="15" FontAttributes="Bold" />
+                        <Label Text="Блюдо приготовили или отдали, либо расхождение по складу"
+                               FontSize="12" LineBreakMode="WordWrap"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+                    </VerticalStackLayout>
+                </Border>
+                <Button Style="{StaticResource FabTouchTarget}" CornerRadius="10" Clicked="OnLeaveClicked"
+                        SemanticProperties.Description="Оставить остатки списанными. Блюдо приготовили или отдали, либо расхождение по складу" />
+            </Grid>
+
+            <!-- WHY the second option exists, in the operator's terms. The owner asked for this
+                 choice explicitly, and a bare radio pair would hide the reason it is on the
+                 screen at all: restoring stock onto a shelf that already disagrees with the ledger
+                 would restore an already-wrong number and leave the discrepancy in place until
+                 somebody physically counts it. It sits UNDER the options so it is read with the
+                 choice in front of the operator rather than before it. -->
+            <Label x:Name="FootnoteLabel" FontSize="12" Margin="0,10,0,0" LineBreakMode="WordWrap"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+
+            <Button Text="Назад" Style="{StaticResource SecondaryButton}" MinimumHeightRequest="48" Margin="0,10,0,0"
+                    Clicked="OnDismissClicked" SemanticProperties.Description="Не отменять заказ, вернуться назад" />
+        </VerticalStackLayout>
+    </ScrollView>
+</toolkit:Popup>

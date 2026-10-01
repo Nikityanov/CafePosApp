@@ -15,15 +15,23 @@ namespace CafePosApp.Views;
 /// sheet is dismissed.
 /// </summary>
 /// <remarks>
+/// Serves BOTH directions of money: taking a payment and giving one back, told apart by
+/// <see cref="PaymentSheetMode"/>. Sharing the sheet is deliberate - the keypad, the sizing, the
+/// dimmed backdrop and the confirm flow were each measured once, and none of them care which way
+/// the money moves. What does care is the wording, and every caption is rewritten for a refund
+/// (see <see cref="ApplyMode"/>): the title, the amount caption, the confirm button, and whether
+/// the cash/card row exists at all.
+/// <para>
 /// Reuses the measured fixes from <see cref="CatalogActionSheetPopup"/>: the ScrollView carries
 /// <c>VerticalOptions="Start"</c> (without it the sheet stretched to its height cap), the width is
 /// forced in code because the toolkit rewrites <c>HorizontalOptions.Fill</c> to <c>Center</c>, and
 /// the dim comes from <c>PopupOptions.PageOverlayColor</c> in <see cref="Services.PaymentSheet"/>
 /// because the toolkit insets popup content by 15dp per side.
+/// </para>
 /// <para>
 /// The keypad is buttons rather than an <c>Entry</c> on purpose: the owner chose this because the
 /// OS keyboard covers half the screen and is slow to bring up, and an <c>Entry</c> raises it on
-/// every tap. Amounts are entered in whole rubles — there is no decimal key.
+/// every tap. Amounts are entered in whole rubles, so there is no decimal key.
 /// </para>
 /// </remarks>
 [XamlCompilation(XamlCompilationOptions.Compile)]
@@ -36,6 +44,17 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
 
     private long enteredRubles;
     private PaymentMethod selectedMethod = PaymentMethod.Cash;
+
+    /// <summary>
+    /// The most that may be keyed in on a refund, in whole rubles, floored.
+    /// </summary>
+    /// <remarks>
+    /// Floored rather than rounded because a refund above the collected amount is not a thing the
+    /// operator can mean: the cap is a promise about what the till still holds, and rounding 220.60
+    /// up to 221 would offer to give back 40 kopecks the drawer never received. The domain clamps
+    /// with the same floor, so the keypad and the ledger agree.
+    /// </remarks>
+    private long RefundCeilingRubles => (long)Math.Floor(request.AmountDue);
 
     public PaymentSheetPopup(PaymentSheetRequest request)
     {
@@ -52,22 +71,62 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
         TranslationY = 1000;
 
         TitleLabel.Text = request.Title;
-        AmountDueLabel.Text = $"К оплате: {TextFormat.Money(request.AmountDue)}";
-
-        AlreadyPaidLabel.IsVisible = request.AlreadyPaid > 0;
-        if (request.AlreadyPaid > 0)
-        {
-            AlreadyPaidLabel.Text = $"Уже оплачено: {TextFormat.Money(request.AlreadyPaid)} · доплата";
-        }
-
-        Refresh();
-        RefreshMethod();
+        ApplyMode(request);
 
         Opened += (_, _) =>
         {
             SizeToWindow();
             _ = this.TranslateToAsync(0, 0, 300, Easing.CubicOut);
         };
+    }
+
+    /// <summary>
+    /// Rewrites the sheet for the direction the money is going, then draws the first frame.
+    /// </summary>
+    /// <remarks>
+    /// The direction rewrites every caption, not just the confirm button. That is the whole reason
+    /// the sheet knows which way the money is moving: «Оплата заказа» and «К оплате» shown over a
+    /// return are not a cosmetic mismatch, they instruct the operator to do the opposite of what
+    /// they came here to do — and they are the two strings on screen for the whole time they are
+    /// deciding how much to key in.
+    /// <para>
+    /// The method row is hidden on a refund rather than merely ignored, and the reason is that a
+    /// refund takes no method at all: the domain mirrors the payments it reverses so the drawer and
+    /// the terminal each balance against what they were actually credited. A visible-but-ignored
+    /// choice would be worse than no choice — the operator would reasonably believe the return was
+    /// booked the way they picked it.
+    /// </para>
+    /// </remarks>
+    private void ApplyMode(PaymentSheetRequest request)
+    {
+        if (request.IsRefund)
+        {
+            AmountDueLabel.Text = $"Вернуть можно: {TextFormat.Money(request.AmountDue)}";
+            RefundNoteLabel.IsVisible = true;
+            RefundNoteLabel.Text = "Деньги уходят из кассы покупателю. Способ возврата не выбирается: "
+                                 + "он совпадает с тем, как заказ принимали.";
+            ConfirmButton.Text = "Вернуть оплату";
+            SemanticProperties.SetDescription(ConfirmButton, "Вернуть оплату покупателю");
+            MethodGrid.IsVisible = false;
+        }
+        else
+        {
+            AmountDueLabel.Text = $"К оплате: {TextFormat.Money(request.AmountDue)}";
+        }
+
+        // "Already settled in this direction": money collected on a top-up, money returned on a
+        // partial refund. Without this line a second refund reads as a second refund of the FULL
+        // original amount rather than of what is left, which is how an operator over-returns.
+        AlreadyPaidLabel.IsVisible = request.AlreadyPaid > 0;
+        if (request.AlreadyPaid > 0)
+        {
+            AlreadyPaidLabel.Text = request.IsRefund
+                ? $"Уже возвращено: {TextFormat.Money(request.AlreadyPaid)}"
+                : $"Уже оплачено: {TextFormat.Money(request.AlreadyPaid)} · доплата";
+        }
+
+        Refresh();
+        if (!request.IsRefund) RefreshMethod();
     }
 
     private void OnKeyClicked(object? sender, EventArgs e)
@@ -85,7 +144,15 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
             default:
                 if (int.TryParse(key, out var digit) && enteredRubles <= MaxEnteredRubles / 10)
                 {
-                    enteredRubles = enteredRubles * 10 + digit;
+                    var next = enteredRubles * 10 + digit;
+                    // The refund ceiling is enforced HERE rather than left to the service. The
+                    // domain caps the refund too, but a sheet that accepts 500 ₽ against a 220 ₽
+                    // payment and then silently books 220 is telling the operator one thing and
+                    // doing another; refusing the keystroke makes the sheet's promise true.
+                    if (!request.IsRefund || next <= RefundCeilingRubles)
+                    {
+                        enteredRubles = next;
+                    }
                 }
                 break;
         }
@@ -115,12 +182,23 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
     {
         EnteredLabel.Text = TextFormat.Money(enteredRubles);
 
-        var change = enteredRubles - request.AmountDue;
-        ChangeLabel.IsVisible = change > 0;
-        if (change > 0)
+        // The over-amount line means opposite things in the two directions, which is why it is
+        // branched rather than reused. Collecting: the operator tendered MORE than the balance, so
+        // the surplus is change they hand back — and since the service clamps the payment down to
+        // the balance, this line is the only place they learn what to give out. Refunding: there is
+        // no change on a return, and anything above the ceiling is refused at the keypad, so the
+        // line stays hidden — "сдача" over money going out is nonsense, and a silently-clamped
+        // number would be worse. The ceiling is named in the caption above instead, so the operator
+        // knows the limit BEFORE keying rather than after a refused digit.
+        var over = enteredRubles - request.AmountDue;
+        ChangeLabel.IsVisible = !request.IsRefund && over > 0;
+        if (ChangeLabel.IsVisible)
         {
-            ChangeLabel.Text = $"Сдача: {TextFormat.Money(change)}";
+            ChangeLabel.Text = $"Сдача: {TextFormat.Money(over)}";
         }
+
+        // Non-zero in both directions: a confirm button reading "Вернуть оплату" must not be live
+        // at 0 ₽, or it books nothing and reports success.
 
         ConfirmButton.IsEnabled = enteredRubles > 0;
     }

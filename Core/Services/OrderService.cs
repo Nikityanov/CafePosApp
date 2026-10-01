@@ -42,6 +42,21 @@ public sealed partial class OrderService(
         return orders.OrderByDescending(order => order.CreatedAt).ToList();
     }
 
+    /// <inheritdoc />
+    public async Task<List<Order>> GetShiftOrderHistoryAsync(Guid shiftId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        // Completed + Cancelled, i.e. everything that is closed. The status is left on the entity
+        // on purpose: the history list renders it, so a voided sale shows up AS voided instead of
+        // being absent from the only list a manager reads after the fact.
+        var orders = await db.Orders.AsNoTracking()
+            .Include(order => order.Items)
+            .Where(order => order.ShiftId == shiftId
+                && (order.Status == OrderStatus.Completed || order.Status == OrderStatus.Cancelled))
+            .ToListAsync(cancellationToken);
+        return orders.OrderByDescending(order => order.CreatedAt).ToList();
+    }
+
     public async Task<List<Shift>> GetShiftsAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
@@ -86,6 +101,20 @@ public sealed partial class OrderService(
         // Only the two money columns come back: SQLite cannot SUM an expression, so the open
         // orders' totals are projected and the difference folded in memory. The set is a handful
         // of rows (everything else is closed), and a closed shift cannot have orders left open.
+        //
+        // DECISION, stated because it looks like an oversight otherwise: neither cancellation nor
+        // refunding can block the close, and that is deliberate on both counts. A voided order is
+        // Cancelled and a refunded one is Completed, so neither is in the InProgress/Ready set
+        // below; a fully refunded Completed order has PaidKopecks == 0 and is exactly the order a
+        // manager must be able to close out. Nothing here needs a status filter widened or a
+        // "was it paid" test relaxed for the refund feature.
+        //
+        // The consequence, which is a decision rather than a bug: a refund against an ALREADY CLOSED
+        // shift is allowed and retroactively changes that shift's report, because
+        // GetShiftStatsAsync recomputes live off the ledger with no cache. That is correct — the
+        // money physically left the drawer that the shift owned, so it belongs to that shift's
+        // report whether the operator pressed the button during it or the next morning. Booking it
+        // into the new shift instead would be the lie: the new shift's drawer never held the cash.
         var openOrders = await db.Orders.AsNoTracking()
             .Where(order => order.ShiftId != null
                 && (order.Status == OrderStatus.InProgress || order.Status == OrderStatus.Ready))

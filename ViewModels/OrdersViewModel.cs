@@ -41,6 +41,26 @@ public partial class OrderRowViewModel : ObservableObject
     };
 
     /// <summary>
+    /// The cancellation reason for a voided order, or empty.
+    /// </summary>
+    /// <remarks>
+    /// A separate property rather than appended to <see cref="StatusText"/>, because the shift
+    /// report's history row shows the composed reason underneath the status while the orders board
+    /// does not need it at all: the board never lists a cancelled order, since
+    /// <c>GetActiveOrdersAsync</c> excludes both terminal statuses.
+    /// <para>
+    /// Worth having on the history row because the domain composes the whole story into this one
+    /// string — how much was refunded, whether stock came back, and which ingredients could not be
+    /// reversed. A voided sale with only "Отменен" on it tells a manager the order is gone and
+    /// nothing about where the money went.
+    /// </para>
+    /// </remarks>
+    public string CancellationDetail =>
+        Model.Status == OrderStatus.Cancelled && !string.IsNullOrWhiteSpace(Model.CancellationReason)
+            ? Model.CancellationReason
+            : string.Empty;
+
+    /// <summary>
     /// Section this order belongs to in the single-list layout. The orders board is one
     /// scrolling list, not two columns, because a kanban on a 411dp phone gave each card
     /// ~190dp and clipped "Подробнее" to "Подробн". Grouping keeps the visual split the
@@ -144,23 +164,55 @@ public partial class OrderRowViewModel : ObservableObject
 
     public string NextActionText => Model.Status == OrderStatus.InProgress ? "Готов" : "Закрыть";
     public bool CanAdvance => Model.Status is OrderStatus.InProgress or OrderStatus.Ready;
+
+    /// <summary>
+    /// What the cancel button says on this card. A paid order is not just being closed off — money
+    /// is going back to the customer, and the label is the only place that can say so before the
+    /// operator taps.
+    /// </summary>
+    /// <remarks>
+    /// Written out per row rather than put in a resource, because the two variants differ and a
+    /// resource lookup cannot branch. It reads in the imperative so it fits the buttons it sits
+    /// between ("Подробнее" / "Готов"), which are also per-row wording.
+    /// </remarks>
+    public string CancelText => Model.PaidKopecks > 0
+        ? "Отменить и вернуть деньги"
+        : "Отменить заказ";
+
+    /// <summary>
+    /// The pictogram-free sentence for the cancel button, carrying the amount that would go back.
+    /// The button's own text says a return happens; this says how much, for a screen reader.
+    /// </summary>
+    public string CancelHint => Model.PaidKopecks > 0
+        ? $"Отменить заказ и вернуть клиенту {TextFormat.Money(Money.FromKopecks(Model.PaidKopecks))}"
+        : "Отменить заказ";
     /// <summary>
     /// Whether the cancel button is offered at all.
     /// </summary>
     /// <remarks>
-    /// A paid order is not offered the button. CancelOrderAsync refuses it in the domain — money has
-    /// been taken and there is no refund feature to put it back through — but offering a control
-    /// that can only fail walks the operator through the tap, the confirmation and the cancellation
-    /// reason before telling them no. Verified on the emulator: with the button still shown, a paid
-    /// order cost three steps to reach "Нельзя отменить оплаченный заказ".
+    /// Open AND closed orders alike, paid or not. A paid order is cancellable now: cancelling
+    /// voids the sale AND refunds the whole collected amount in the same transaction, so the cash
+    /// goes back to the customer and the order leaves the revenue — which is the only correct
+    /// outcome for a sale that should never have happened at all.
     /// <para>
-    /// Hiding it also removes the easy way around the payment block: cancelling was one tap, paying
-    /// was three, so under queue pressure cancel is the tempting one, and the sale would vanish from
-    /// the shift report.
+    /// This used to carry <c>!Model.IsFullyPaid</c>, which was a UI workaround for a domain guard
+    /// that has since been removed along with the guard itself. The comment it replaced is worth
+    /// keeping in mind, because its reasoning was sound for what the domain did then: with no way
+    /// to put money back, a cancel button on a paid order was a control that could only fail, and a
+    /// failed cancel cost three steps (tap, confirm, reason) to reach "Нельзя отменить оплаченный
+    /// заказ". It was also a hole around the payment block — cancelling was one tap and paying was
+    /// three, so under queue pressure cancel was the tempting one, and the sale silently vanished
+    /// from the shift report while the cash stayed in the drawer. Cancelling a paid order is now a
+    /// working, money-moving operation, so neither cost applies.
+    /// </para>
+    /// <para>
+    /// Note that <see cref="Order.IsFullyPaid"/> was never the same predicate as the domain guard
+    /// it shadowed, which was <c>PaidKopecks &gt; 0</c>. A partially paid order has
+    /// <c>IsFullyPaid == false</c> and so passed the UI, then failed in the domain — the button
+    /// appeared and cancelled nothing. That inconsistency is gone with the guard.
     /// </para>
     /// </remarks>
-    public bool CanCancel => (Model.Status is OrderStatus.InProgress or OrderStatus.Ready)
-        && !Model.IsFullyPaid;
+    public bool CanCancel => Model.Status is not OrderStatus.Cancelled;
     public decimal TotalPrice => Model.TotalPrice;
 
     /// <summary>Timestamps are stored in UTC and rendered in the local time zone.</summary>
@@ -191,6 +243,7 @@ public partial class OrdersViewModel : ObservableObject
     private readonly IDialogService dialogs;
     private readonly IHapticService haptics;
     private readonly IPaymentSheet paymentSheet;
+    private readonly IStockDispositionSheet stockDisposition;
     private readonly ILogger<OrdersViewModel> logger;
 
     private readonly SemaphoreSlim loadGate = new(1, 1);
@@ -204,6 +257,7 @@ public partial class OrdersViewModel : ObservableObject
         IDialogService dialogs,
         IHapticService haptics,
         IPaymentSheet paymentSheet,
+        IStockDispositionSheet stockDisposition,
         ILogger<OrdersViewModel> logger)
     {
         this.orders = orders;
@@ -212,6 +266,7 @@ public partial class OrdersViewModel : ObservableObject
         this.dialogs = dialogs;
         this.haptics = haptics;
         this.paymentSheet = paymentSheet;
+        this.stockDisposition = stockDisposition;
         this.logger = logger;
 
         // AllowConcurrentExecutions: RefreshView.IsRefreshing is bound to IsBusy, so setting

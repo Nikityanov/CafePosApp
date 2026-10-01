@@ -25,7 +25,8 @@ public sealed class SchemaMigrator(
         new Migration003_UtcTimestamps(),
         new Migration004_OrderNumbering(),
         new Migration005_AuditDraftsSoftDelete(),
-        new Migration006_OrderPayments()
+        new Migration006_OrderPayments(),
+        new Migration007_Refunds()
     ];
 
     public int LatestVersion => AllMigrations.Max(migration => migration.Version);
