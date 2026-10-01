@@ -41,6 +41,19 @@
                  on it and the easiest to miss. It now heads the action block, above the
                  "Добавить блюдо" field, where the cart already puts it. -->
             <Label Text="{Binding Total, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" FontSize="20" HorizontalTextAlignment="End" />
+            <!-- Payment area: what was paid and what is left. The total is right above, so this
+                 line carries the paid amount and the remaining balance; a partial payment says
+                 what is still owed, and the wording (not just the colour) carries the state. -->
+            <Label Text="{Binding PaymentSummary}" FontSize="13" FontAttributes="Bold" TextColor="{Binding PaymentColor}" />
+            <Button Text="Принять оплату" Style="{StaticResource SecondaryButton}" MinimumHeightRequest="48" IsVisible="{Binding CanCollectPayment}" Command="{Binding CollectPaymentCommand}" SemanticProperties.Description="Принять оплату по заказу" />
+            <!-- The individual payments, one line each. -->
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Payments}" Spacing="2">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PaymentLine">
+                        <Label Text="{Binding Text}" FontSize="12" Style="{StaticResource SecondaryLabel}" />
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
             <Button Text="Добавить в заказ" Command="{Binding AddProductCommand}" IsEnabled="{Binding CanEdit}" />
             <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                 <Button Text="Сохранить" Command="{Binding SaveCommand}" IsEnabled="{Binding CanEdit}" />

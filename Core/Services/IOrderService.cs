@@ -15,6 +15,16 @@ public interface IOrderService
 
     Task CancelOrderAsync(Guid orderId, string? reason = null, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Records a payment against an order: adds the ledger row and moves Orders.PaidKopecks in one
+    /// save. <paramref name="amount"/> is rubles, clamped to the outstanding balance (a tendered
+    /// surplus is change, not revenue) and rejected when nothing is owed.
+    /// </summary>
+    Task<Order> AddPaymentAsync(Guid orderId, decimal amount, PaymentMethod method, CancellationToken cancellationToken = default);
+
+    /// <summary>Payment ledger of one order, oldest first. Read through the DbSet, never through a collection.</summary>
+    Task<List<OrderPayment>> GetOrderPaymentsAsync(Guid orderId, CancellationToken cancellationToken = default);
+
     /// <summary>Replaces the item list of an editable order (differential update, ids are kept).</summary>
     Task UpdateOrderAsync(Guid orderId, IReadOnlyCollection<OrderItem> items, CancellationToken cancellationToken = default);
 
@@ -39,6 +49,15 @@ public sealed record ShiftStats(
     int ItemsCount,
     double AveragePreparationMinutes,
     double AverageCompletionMinutes,
-    string PeakHour);
+    string PeakHour,
+    // "Принято оплат": what the till actually recorded, split by method. Added at the end and
+    // kept separate from Revenue on purpose — Revenue stays SUM(TotalKopecks) over completed
+    // orders, so a shift's revenue never depends on payments having been recorded. The two agree
+    // for completed orders (they cannot become Ready unpaid) and the payment total additionally
+    // covers orders that were paid in advance and are still cooking.
+    int PaymentsCount,
+    decimal PaymentsCash,
+    decimal PaymentsCard,
+    decimal PaymentsTotal);
 
 public sealed record ProductAnalyticsRowData(string ProductName, string ModifierName, int Quantity, decimal Revenue);

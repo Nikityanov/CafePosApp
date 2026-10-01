@@ -79,10 +79,20 @@ public sealed class ReportExportService(IDbContextFactory<AppDbContext> factory)
 
         var completed = orders.Where(order => order.Status == OrderStatus.Completed).ToList();
         var revenue = completed.Sum(order => order.TotalPrice);
+
+        // "Принято оплат" — what the till recorded, next to the revenue figure above. Exported on
+        // purpose: the shift report is what a manager takes to the cash count, and without these
+        // lines the drawer total cannot be reconciled against the day on paper.
+        var payments = await ShiftPayments.ReadAsync(db, shiftId, cancellationToken);
+
         builder.AppendLine();
         builder.AppendLine(Csv.Join("Итого чеков", completed.Count.ToString()));
         builder.AppendLine(Csv.Join("Выручка", revenue.ToString("F2")));
         builder.AppendLine(Csv.Join("Отменено", orders.Count(order => order.Status == OrderStatus.Cancelled).ToString()));
+        builder.AppendLine(Csv.Join("Принято оплат", payments.Count.ToString()));
+        builder.AppendLine(Csv.Join("Принято наличными", Money.FromKopecks(payments.CashKopecks).ToString("F2")));
+        builder.AppendLine(Csv.Join("Принято картой", Money.FromKopecks(payments.CardKopecks).ToString("F2")));
+        builder.AppendLine(Csv.Join("Принято всего", Money.FromKopecks(payments.TotalKopecks).ToString("F2")));
 
         return builder.ToString();
     }

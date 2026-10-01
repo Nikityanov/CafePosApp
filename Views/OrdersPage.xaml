@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.OrdersPage" x:DataType="vm:OrdersViewModel" Title="Заказы">
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls" x:Class="CafePosApp.Views.OrdersPage" x:DataType="vm:OrdersViewModel" Title="Заказы">
     <ContentPage.Resources>
         <DataTemplate x:Key="OrderCardTemplate" x:DataType="vm:OrderRowViewModel">
             <!-- The template root is a stack, not the card, so the section heading can sit
@@ -39,7 +39,30 @@
                             </DataTemplate>
                         </BindableLayout.ItemTemplate>
                     </VerticalStackLayout>
-                    <Label Text="{Binding TotalPrice, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" />
+                    <!-- The total and the payment pictogram share a row. The pictogram is a 48dp
+                         touch target with the Material mark under it — the same construction as the
+                         catalogue row's overflow button (Controls/CatalogRow.xaml): a MAUI Button
+                         has no content property, so the mark is a sibling under a transparent
+                         button. Tapping it opens the payment sheet on a not-fully-paid card; on a
+                         paid card the button is hidden, so the mark does not look tappable. -->
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Label Text="{Binding TotalPrice, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" VerticalOptions="Center" />
+                        <Grid Grid.Column="1" WidthRequest="48" HeightRequest="48" VerticalOptions="Center">
+                            <shapes:Path Aspect="Uniform" WidthRequest="24" HeightRequest="24"
+                                        HorizontalOptions="Center" VerticalOptions="Center"
+                                        InputTransparent="True" Stroke="Transparent" StrokeThickness="0"
+                                        Fill="{Binding PaymentColor}"
+                                        Data="{Binding PaymentGlyph}" />
+                            <Button Style="{StaticResource RowOverflowButton}"
+                                    IsVisible="{Binding CanCollectPayment}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CollectPaymentCommand}"
+                                    CommandParameter="{Binding .}"
+                                    SemanticProperties.Description="{Binding PaymentHint}" />
+                        </Grid>
+                    </Grid>
+                    <!-- The payment line under the total. The wording carries the state (never colour
+                         alone), and a partial payment says what is still owed. -->
+                    <Label Text="{Binding PaymentText}" TextColor="{Binding PaymentColor}" FontAttributes="Bold" FontSize="12" />
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
                         <!-- "Подробнее" was clipped to "Подробн": Padding="8,6" plus the card
                              padding left the label less room than the word needs. Both buttons

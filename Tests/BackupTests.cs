@@ -21,7 +21,7 @@ public class BackupTests
 
         var validation = await backups.ValidateAsync(backup.FilePath);
         Assert.True(validation.IsValid, validation.Message);
-        Assert.Equal(5, validation.SchemaVersion);
+        Assert.Equal(6, validation.SchemaVersion);
 
         var list = await backups.GetBackupsAsync();
         Assert.Contains(list, item => item.FileName == backup.FileName);

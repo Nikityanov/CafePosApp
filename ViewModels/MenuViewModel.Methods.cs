@@ -29,6 +29,7 @@ public partial class MenuViewModel : ObservableObject
     private readonly IDraftPicker draftPicker;
     private readonly IDialogService dialogs;
     private readonly IHapticService haptics;
+    private readonly IPaymentSheet paymentSheet;
     private readonly TimeProvider timeProvider;
     private readonly ILogger<MenuViewModel> logger;
 
@@ -51,6 +52,7 @@ public partial class MenuViewModel : ObservableObject
         IDraftPicker draftPicker,
         IDialogService dialogs,
         IHapticService haptics,
+        IPaymentSheet paymentSheet,
         TimeProvider timeProvider,
         ILogger<MenuViewModel> logger)
     {
@@ -63,6 +65,7 @@ public partial class MenuViewModel : ObservableObject
         this.draftPicker = draftPicker;
         this.dialogs = dialogs;
         this.haptics = haptics;
+        this.paymentSheet = paymentSheet;
         this.timeProvider = timeProvider;
         this.logger = logger;
 
@@ -77,7 +80,8 @@ public partial class MenuViewModel : ObservableObject
         SelectCategoryCommand = new RelayCommand<CategoryMenuItemViewModel?>(SelectCategory);
         AddItemCommand = new RelayCommand<CartItemViewModel>(AddItem);
         RemoveItemCommand = new RelayCommand<CartItemViewModel>(RemoveItem);
-        CreateOrderCommand = new AsyncRelayCommand(CreateOrderAsync);
+        PayAndCreateCommand = new AsyncRelayCommand(PayAndCreateAsync);
+        CreateWithoutPaymentCommand = new AsyncRelayCommand(CreateWithoutPaymentAsync);
         ParkOrderCommand = new AsyncRelayCommand(ParkOrderAsync);
         OpenParkedCommand = new AsyncRelayCommand(OpenParkedAsync);
     }
@@ -207,7 +211,8 @@ public partial class MenuViewModel : ObservableObject
     public IRelayCommand<CategoryMenuItemViewModel?> SelectCategoryCommand { get; }
     public IRelayCommand<CartItemViewModel> AddItemCommand { get; }
     public IRelayCommand<CartItemViewModel> RemoveItemCommand { get; }
-    public IAsyncRelayCommand CreateOrderCommand { get; }
+    public IAsyncRelayCommand PayAndCreateCommand { get; }
+    public IAsyncRelayCommand CreateWithoutPaymentCommand { get; }
     public IAsyncRelayCommand ParkOrderCommand { get; }
     public IAsyncRelayCommand OpenParkedCommand { get; }
 }

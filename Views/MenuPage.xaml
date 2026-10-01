@@ -149,7 +149,15 @@
                     </Label.Triggers>
                 </Label>
 
-                <Button Text="Создать заказ" HeightRequest="48" MinimumHeightRequest="48" FontAttributes="Bold" Padding="0" IsEnabled="{Binding CanCreateOrder}" Command="{Binding CreateOrderCommand}" />
+                <!-- Two first-class paths, side by side in one row so the cart does not grow
+                     taller: "Оплатить и создать" opens the payment sheet and books the order
+                     paid; "Создать без оплаты" defers payment. Both are obvious choices —
+                     deferring payment is a normal part of a café's day (tabs, staff meals),
+                     not a hidden default. -->
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                    <Button Grid.Column="0" Text="Оплатить и создать" HeightRequest="48" MinimumHeightRequest="48" FontAttributes="Bold" Padding="0" IsEnabled="{Binding CanCreateOrder}" Command="{Binding PayAndCreateCommand}" />
+                    <Button Grid.Column="1" Text="Создать без оплаты" Style="{StaticResource SecondaryButton}" HeightRequest="48" MinimumHeightRequest="48" FontAttributes="Bold" Padding="0" IsEnabled="{Binding CanCreateOrder}" Command="{Binding CreateWithoutPaymentCommand}" />
+                </Grid>
             </VerticalStackLayout>
         </Border>
     </Grid>

@@ -1,6 +1,7 @@
 using CafePos.Core.Common;
 using CafePos.Core.Errors;
 using CafePos.Core.Models;
+using CafePosApp.Services;
 using Microsoft.Extensions.Logging;
 
 namespace CafePosApp.ViewModels;
@@ -23,6 +24,44 @@ public partial class OrdersViewModel
         IsBusy = true;
         try
         {
+            await LoadCoreAsync(clearMessage: true);
+        }
+        finally
+        {
+            IsBusy = false;
+            loadGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Reloads the board after a change made here (status advance, payment, cancel). Unlike
+    /// <see cref="LoadAsync"/> this waits for an in-flight poll instead of returning: a poll that
+    /// was already in flight when the change happened would otherwise swallow the reload, the
+    /// board would keep showing the pre-change state, and a payment just taken would read as
+    /// "the sheet doesn't work" because the pictogram never updated.
+    /// </summary>
+    /// <remarks>
+    /// This deliberately leaves <see cref="IsBusy"/> untouched. The RefreshView re-fires
+    /// LoadCommand on a false→true transition of IsBusy, so a reload that waits for a poll and
+    /// then queries does not re-trigger the spinner. The message is left for the caller to set.
+    /// </remarks>
+    public async Task ReloadAsync()
+    {
+        await loadGate.WaitAsync();
+        try
+        {
+            await LoadCoreAsync(clearMessage: false);
+        }
+        finally
+        {
+            loadGate.Release();
+        }
+    }
+
+    private async Task LoadCoreAsync(bool clearMessage)
+    {
+        try
+        {
             var activeOrders = await orders.GetActiveOrdersAsync();
             // Preparing ahead of ready, then oldest first. Ascending on (Status == Ready)
             // puts false — preparing — first and true — ready for pickup — last, which is the
@@ -40,17 +79,12 @@ public partial class OrdersViewModel
             SyncSectionFilters();
             ApplyFilter();
 
-            Message = string.Empty;
+            if (clearMessage) Message = string.Empty;
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to load active orders");
             Message = UserMessages.Describe(exception, "Не удалось загрузить заказы");
-        }
-        finally
-        {
-            IsBusy = false;
-            loadGate.Release();
         }
     }
 
@@ -176,10 +210,33 @@ public partial class OrdersViewModel
         {
             var updated = await orders.AdvanceStatusAsync(row.Model.Id);
             haptics.Click();
-            await LoadAsync();
+            await ReloadAsync();
             Message = updated.Status == OrderStatus.Completed
                 ? $"{row.OrderTitle} закрыт."
                 : $"{row.OrderTitle} готов к выдаче.";
+        }
+        catch (ConflictException exception) when (IsUnpaidConflict(exception))
+        {
+            // The domain blocks advancing an unpaid order. Offer the payment sheet instead of a
+            // plain error; if the operator pays, retry the advance. A dismissed sheet leaves the
+            // order untouched and says nothing — the board already shows it as unpaid.
+            if (await TryCollectPaymentAsync(row) is not PaymentOutcome.Settled) return;
+
+            try
+            {
+                var updated = await orders.AdvanceStatusAsync(row.Model.Id);
+                haptics.Click();
+                await ReloadAsync();
+                Message = updated.Status == OrderStatus.Completed
+                    ? $"{row.OrderTitle} закрыт."
+                    : $"{row.OrderTitle} готов к выдаче.";
+            }
+            catch (Exception retryException)
+            {
+                logger.LogError(retryException, "Failed to advance order {OrderId} after payment", row.Model.Id);
+                Message = UserMessages.Describe(retryException, "Не удалось изменить статус заказа");
+                haptics.Warn();
+            }
         }
         catch (Exception exception)
         {
@@ -188,6 +245,99 @@ public partial class OrdersViewModel
             haptics.Warn();
         }
     }
+
+    /// <summary>What became of an attempt to collect payment for an order.</summary>
+    /// <remarks>
+    /// Three outcomes, not a bool. A bool could not tell "paid in full" from "partially paid", so a
+    /// top-up still short of the total was reported the same way as a completed payment — the
+    /// advance was then retried, failed the domain's own unpaid guard, and the operator was shown
+    /// "Не удалось изменить статус заказа: Заказ не оплачен" immediately after handing over money.
+    /// <see cref="StillOwing"/> exists so a partial payment states what is left instead.
+    /// </remarks>
+    private enum PaymentOutcome
+    {
+        /// <summary>The sheet was dismissed, or the payment itself failed.</summary>
+        Dismissed,
+
+        /// <summary>Money was taken but the order still has a balance.</summary>
+        StillOwing,
+
+        /// <summary>The order is settled, so the blocked transition may be retried.</summary>
+        Settled
+    }
+
+    /// <summary>
+    /// Opens the payment sheet for an order and books what the operator declares.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="ConflictException"/> with "уже оплачен" is not an error: the board row is a
+    /// snapshot from a poll up to <see cref="AppSettings.AutoRefreshSeconds"/> old, so the details
+    /// screen may already have settled the order. It is treated as a reload at warning level, never
+    /// as a failure.
+    /// </remarks>
+    private async Task<PaymentOutcome> TryCollectPaymentAsync(OrderRowViewModel row)
+    {
+        var payment = await paymentSheet.CollectAsync(new PaymentSheetRequest(
+            row.OrderTitle,
+            Money.FromKopecks(row.Model.BalanceKopecks),
+            Money.FromKopecks(row.Model.PaidKopecks)));
+        if (payment is null) return PaymentOutcome.Dismissed;
+
+        try
+        {
+            var updated = await orders.AddPaymentAsync(row.Model.Id, payment.Amount, payment.Method);
+            haptics.Click();
+            await ReloadAsync();
+
+            if (!updated.IsFullyPaid)
+            {
+                // A deposit, not a settlement. Say what is left and stop: retrying the transition
+                // now would only bounce off the domain guard and report the payment as a failure.
+                var balance = Money.FromKopecks(updated.BalanceKopecks);
+                Message = $"{row.OrderTitle}: оплачено {TextFormat.Money(payment.Amount)} " +
+                          $"({PaymentText.Method(payment.Method)}), осталось {TextFormat.Money(balance)}.";
+                haptics.Warn();
+                return PaymentOutcome.StillOwing;
+            }
+
+            Message = $"{row.OrderTitle}: оплачено {TextFormat.Money(payment.Amount)} ({PaymentText.Method(payment.Method)}).";
+            return PaymentOutcome.Settled;
+        }
+        catch (ConflictException exception) when (IsAlreadyPaidConflict(exception))
+        {
+            logger.LogWarning("Order {OrderId} was already paid when the payment was applied; reloading", row.Model.Id);
+            await ReloadAsync();
+            return PaymentOutcome.Settled;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Failed to accept payment for order {OrderId}", row.Model.Id);
+            Message = UserMessages.Describe(exception, "Не удалось принять оплату");
+            haptics.Warn();
+            return PaymentOutcome.Dismissed;
+        }
+    }
+
+    private async Task CollectPaymentAsync(OrderRowViewModel? row)
+    {
+        if (row is null) return;
+        await TryCollectPaymentAsync(row);
+    }
+
+    /// <summary>
+    /// True when the conflict is the domain's "this order is unpaid" block on advancing. Matched
+    /// on the message because the unpaid check lives in Core and the exact wording is Core's; the
+    /// only other conflict from AdvanceStatusAsync is "Этот заказ уже закрыт.", which does not
+    /// contain "оплат".
+    /// </summary>
+    private static bool IsUnpaidConflict(ConflictException exception) =>
+        exception.Message.Contains("оплат", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when the conflict is "the order is already paid" from a payment that raced a poll.
+    /// </summary>
+    private static bool IsAlreadyPaidConflict(ConflictException exception) =>
+        exception.Message.Contains("уже оплачен", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Cancels an order, asking for an optional reason (previously the reason was always null).</summary>
     private async Task CancelOrderAsync(OrderRowViewModel? row)
@@ -203,7 +353,7 @@ public partial class OrdersViewModel
 
             var reason = await dialogs.PromptAsync("Причина отмены", "Необязательно: причина отмены заказа", string.Empty);
             await orders.CancelOrderAsync(row.Model.Id, reason);
-            await LoadAsync();
+            await ReloadAsync();
             Message = $"{row.OrderTitle} отменён.";
             haptics.Warn();
         }

@@ -72,18 +72,34 @@ public sealed partial class OrderService(
     /// <summary>
     /// Closes the active shift and opens a new one. Refuses to close a shift that still has
     /// orders in progress — previously a shift could be closed while orders were cooking.
+    /// <para>
+    /// The refusal also names how much has not been collected, count and kopecks. A manager must
+    /// not close a shift while 3000 ₽ of uncollected cash is still open on the bar, and a bare
+    /// "3 orders left" gives no reason to go and take the money first.
+    /// </para>
     /// </summary>
     public async Task<Shift> CloseShiftAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         var active = await db.Shifts.FirstOrDefaultAsync(shift => shift.IsActive, cancellationToken);
 
+        // Only the two money columns come back: SQLite cannot SUM an expression, so the open
+        // orders' totals are projected and the difference folded in memory. The set is a handful
+        // of rows (everything else is closed), and a closed shift cannot have orders left open.
         var openOrders = await db.Orders.AsNoTracking()
-            .CountAsync(order => order.ShiftId != null
-                && (order.Status == OrderStatus.InProgress || order.Status == OrderStatus.Ready), cancellationToken);
-        if (openOrders > 0)
+            .Where(order => order.ShiftId != null
+                && (order.Status == OrderStatus.InProgress || order.Status == OrderStatus.Ready))
+            .Select(order => new { order.TotalKopecks, order.PaidKopecks })
+            .ToListAsync(cancellationToken);
+        if (openOrders.Count > 0)
         {
-            throw new ConflictException($"Нельзя закрыть смену: осталось незакрытых заказов — {openOrders}.");
+            var unpaid = openOrders.Where(order => order.PaidKopecks < order.TotalKopecks).ToList();
+            var unpaidKopecks = unpaid.Sum(order => order.TotalKopecks - order.PaidKopecks);
+            var unpaidSummary = unpaid.Count == 0
+                ? string.Empty
+                : $", из них не оплачено {unpaid.Count} на {Money.FromKopecks(unpaidKopecks):F2} ₽";
+
+            throw new ConflictException($"Нельзя закрыть смену: осталось незакрытых заказов — {openOrders.Count}{unpaidSummary}.");
         }
 
         var now = timeProvider.GetUtcNow();

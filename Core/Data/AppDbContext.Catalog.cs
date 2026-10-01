@@ -78,6 +78,10 @@ public partial class AppDbContext
                 .WithOne(history => history.Order)
                 .HasForeignKey(history => history.OrderId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(order => order.Payments)
+                .WithOne(payment => payment.Order)
+                .HasForeignKey(payment => payment.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(order => order.Shift)
                 .WithMany(shift => shift.Orders)
                 .HasForeignKey(order => order.ShiftId)
@@ -91,6 +95,15 @@ public partial class AppDbContext
             entity.Property(item => item.SelectedModifierName).HasMaxLength(120);
             entity.Property(item => item.SelectedVariantName).HasMaxLength(120);
             entity.HasIndex(item => item.OrderId);
+        });
+
+        modelBuilder.Entity<OrderPayment>(entity =>
+        {
+            entity.HasKey(payment => payment.Id);
+            entity.Property(payment => payment.Method).HasConversion<string>().HasMaxLength(30);
+            // Payments of one order are read in payment order; the index serves both the details
+            // screen and the migration's NOT IN (SELECT OrderId ...) reconciliation check.
+            entity.HasIndex(payment => new { payment.OrderId, payment.PaidAt });
         });
 
         modelBuilder.Entity<Shift>(entity =>

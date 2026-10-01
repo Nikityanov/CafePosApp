@@ -16,6 +16,18 @@ public sealed partial class OrderService
         if (order.Status is OrderStatus.Cancelled or OrderStatus.Completed)
             throw new ConflictException("Этот заказ уже закрыт.");
 
+        // Both transitions are gated, so this sits before the switch: nothing may leave the bar
+        // unpaid, which is the only thing that makes "revenue counts completed orders" and "the
+        // till received the money" the same statement.
+        //
+        // WHY checking IsFullyPaid here is sound — and the condition that would break it:
+        // UpdateOrderAsync refuses any order that is not InProgress, so the total is FROZEN the
+        // moment an order becomes Ready. An order that was fully paid can therefore never become
+        // underpaid, because the only writable total cannot change afterwards. That is also why
+        // a refund (which would lower PaidKopecks) is a separate feature: the first one written
+        // must revisit this guard, because "paid" would stop being permanent.
+        if (!order.IsFullyPaid) throw new ConflictException("Заказ не оплачен: сначала примите оплату.");
+
         var now = timeProvider.GetUtcNow();
         if (order.Status == OrderStatus.InProgress)
         {
@@ -47,6 +59,14 @@ public sealed partial class OrderService
             ?? throw new EntityNotFoundException("Заказ не найден.");
         if (order.Status is OrderStatus.Completed or OrderStatus.Cancelled)
             throw new ConflictException("Этот заказ уже закрыт.");
+
+        // One tap of "Отменить заказ" must not be an escape hatch out of the payment block: it
+        // would delete a paid order from the day's revenue while the cash stays in the drawer.
+        // There is no refunds feature yet, so refusing here is the only guard that keeps the sale
+        // in the books; the first refund implementation has to come with its own reversal entries
+        // and may then relax this.
+        if (order.PaidKopecks > 0)
+            throw new ConflictException("Нельзя отменить оплаченный заказ: сначала верните оплату.");
 
         var now = timeProvider.GetUtcNow();
         order.Status = OrderStatus.Cancelled;

@@ -1,6 +1,7 @@
 using CafePos.Core.Common;
 using CafePos.Core.Errors;
 using CafePos.Core.Models;
+using CafePosApp.Services;
 using Microsoft.Extensions.Logging;
 
 namespace CafePosApp.ViewModels;
@@ -39,6 +40,12 @@ public partial class OrderDetailsViewModel
                     $"{entry.ChangedAt.ToLocalTime():dd.MM HH:mm} · {DescribeStatus(entry.Status)}" +
                     (string.IsNullOrWhiteSpace(entry.Comment) ? string.Empty : $" ({entry.Comment})")),
                 entry => entry);
+
+            var payments = await orders.GetOrderPaymentsAsync(orderId);
+            Payments.SyncWith(
+                payments.Select(payment => new PaymentLine(
+                    $"{TextFormat.Money(payment.Amount)} {PaymentText.Method(payment.Method)} · {payment.PaidAt.ToLocalTime():dd.MM HH:mm}")),
+                line => line.Text);
 
             if (AvailableProducts.Count == 0)
             {
@@ -131,6 +138,44 @@ public partial class OrderDetailsViewModel
         }
     }
 
+    /// <summary>
+    /// Opens the payment sheet for this order and books what the operator declares. A dismissed
+    /// sheet leaves the order untouched.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="ConflictException"/> with "уже оплачен" is not an error: the order may have been
+    /// settled on the board since this page loaded. It is treated as a reload at warning level.
+    /// </remarks>
+    private async Task CollectPaymentAsync()
+    {
+        if (order is null || !CanCollectPayment) return;
+
+        var payment = await paymentSheet.CollectAsync(new PaymentSheetRequest(
+            OrderTitle,
+            Money.FromKopecks(order.BalanceKopecks),
+            Money.FromKopecks(order.PaidKopecks)));
+        if (payment is null) return;
+
+        try
+        {
+            await orders.AddPaymentAsync(orderId, payment.Amount, payment.Method);
+            haptics.Click();
+            await LoadAsync();
+            Message = $"Оплата принята: {TextFormat.Money(payment.Amount)} ({PaymentText.Method(payment.Method)}).";
+        }
+        catch (ConflictException exception) when (exception.Message.Contains("уже оплачен", StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogWarning("Order {OrderId} was already paid when the payment was applied; reloading", orderId);
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Failed to accept payment for order {OrderId}", orderId);
+            Message = UserMessages.Describe(exception, "Не удалось принять оплату");
+            haptics.Warn();
+        }
+    }
+
     private void IncreaseItem(OrderEditItemViewModel? item)
     {
         if (!CanEdit || item is null) return;
@@ -160,6 +205,9 @@ public partial class OrderDetailsViewModel
         OnPropertyChanged(nameof(OrderTitle));
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(CanEdit));
+        OnPropertyChanged(nameof(PaymentSummary));
+        OnPropertyChanged(nameof(PaymentColor));
+        OnPropertyChanged(nameof(CanCollectPayment));
         NotifyTotal();
     }
 

@@ -456,6 +456,50 @@
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  PAYMENT SHEET                                                -->
+    <!--  The keypad and the cash/card choice. Both honour the 48dp floor. -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- Keypad keys. Tonal fill like the cart stepper, so the twelve keys read as one control;
+         48dp tall, the minimum every control in the app honours. The labels are spelled-out
+         Russian words ("Сброс", "Стереть") rather than glyphs, so nothing depends on a font
+         having a particular symbol — the same reason the action sheet spells out its entries. -->
+    <Style TargetType="Button" x:Key="KeypadButton">
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HeightRequest" Value="48" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="HorizontalOptions" Value="Fill" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Gray700}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Tertiary}, Dark={StaticResource PrimaryDark}}" />
+    </Style>
+
+    <!-- Payment method buttons, unselected. The same tonal secondary as SecondaryButton. -->
+    <Style TargetType="Button" x:Key="PaymentMethodButton">
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="HeightRequest" Value="48" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray700}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray100}}" />
+    </Style>
+
+    <!-- The selected payment method: filled Primary so the active choice is visible at a glance.
+         The pair (tonal unselected / filled selected) mirrors the FilterChip selection on the
+         catalogue page, so the two read as one control in two places. -->
+    <Style TargetType="Button" x:Key="PaymentMethodActive" BasedOn="{StaticResource PaymentMethodButton}">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
     <!--  ROW ACTIONS                                                   -->
     <!--  Labelled text buttons for list rows. They replaced a set of   -->
     <!--  cryptic glyph buttons (✎ × ↺ ⊕ ✓ ✗) that only made sense with -->

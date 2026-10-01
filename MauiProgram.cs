@@ -66,6 +66,7 @@ namespace CafePosApp
             builder.Services.AddSingleton<IVariantPicker, VariantPicker>();
             builder.Services.AddSingleton<IDraftPicker, DraftPicker>();
             builder.Services.AddSingleton<ICatalogActionSheet, CatalogActionSheet>();
+            builder.Services.AddSingleton<IPaymentSheet, PaymentSheet>();
 
             // ViewModels.
             builder.Services.AddTransient<MenuViewModel>();

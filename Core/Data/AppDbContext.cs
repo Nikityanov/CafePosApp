@@ -12,6 +12,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) : DbCo
     public DbSet<Product> Products => Set<Product>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderPayment> OrderPayments => Set<OrderPayment>();
     public DbSet<Shift> Shifts => Set<Shift>();
     public DbSet<Ingredient> Ingredients => Set<Ingredient>();
     public DbSet<RecipeItem> RecipeItems => Set<RecipeItem>();

@@ -1,0 +1,81 @@
+<toolkit:Popup x:TypeArguments="services:PaymentSheetResult"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="clr-namespace:CommunityToolkit.Maui.Views;assembly=CommunityToolkit.Maui"
+             xmlns:views="clr-namespace:CafePosApp.Views"
+             xmlns:services="clr-namespace:CafePosApp.Services"
+             x:Class="CafePosApp.Views.PaymentSheetPopup"
+             x:DataType="views:PaymentSheetPopup"
+             x:Name="Sheet"
+             VerticalOptions="End"
+             HorizontalOptions="Fill"
+             Margin="0"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+    <!-- VerticalOptions="Start" on the ScrollView is what makes this a sheet rather than a panel —
+         the same measured fix as CatalogActionSheetPopup (a ScrollView fills whatever height it is
+         offered, so without Start the sheet came out 823dp tall on a 914dp screen for 292dp of
+         content). The dim and outside-tap dismissal come from PopupOptions in Services.PaymentSheet,
+         not from here, because the toolkit insets popup content by 15dp per side. -->
+    <ScrollView x:Name="SheetScroll" VerticalOptions="Start">
+        <VerticalStackLayout x:Name="SheetContent" Padding="16,8,16,16" Spacing="0">
+            <BoxView Style="{StaticResource BottomSheetHandle}" />
+
+            <!-- The caller's title: "Оплата заказа" at checkout, the order title on a top-up. -->
+            <Label x:Name="TitleLabel" FontSize="15" Margin="0,12,0,4"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"
+                   LineBreakMode="TailTruncation" />
+
+            <!-- What is still owed. The one number the operator is settling. -->
+            <Label x:Name="AmountDueLabel" FontSize="18" FontAttributes="Bold" Margin="0,0,0,2" />
+
+            <!-- Only on a top-up: how much was already paid, so the sheet reads as a part-payment
+                 and not as a second charge for the whole order. -->
+            <Label x:Name="AlreadyPaidLabel" FontSize="12" Margin="0,0,0,6"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+
+            <!-- The amount being entered. The largest text on the sheet: it is what the operator
+                 reads back to the customer before confirming. -->
+            <Label x:Name="EnteredLabel" FontSize="32" FontAttributes="Bold" Margin="0,0,0,2"
+                   HorizontalOptions="Center" SemanticProperties.Description="Введённая сумма" />
+
+            <!-- Shown only when the entered amount exceeds the balance. The service clamps the
+                 payment to the balance, but the change the operator must hand back is
+                 entered − balance, so that is what is displayed. -->
+            <Label x:Name="ChangeLabel" FontSize="14" FontAttributes="Bold" Margin="0,0,0,6"
+                   HorizontalOptions="Center" TextColor="{StaticResource Warning}" />
+
+            <!-- The keypad is buttons, not an Entry: the OS keyboard covers half the screen and is
+                 slow, and an Entry would bring it up on every tap. Every key is 48dp tall, the
+                 floor the whole app honours. -->
+            <Grid x:Name="KeypadGrid" ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                  ColumnSpacing="8" RowSpacing="8" Margin="0,0,0,10">
+                <Button Text="1" Grid.Row="0" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="1" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 1" />
+                <Button Text="2" Grid.Row="0" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="2" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 2" />
+                <Button Text="3" Grid.Row="0" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="3" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 3" />
+                <Button Text="4" Grid.Row="1" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="4" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 4" />
+                <Button Text="5" Grid.Row="1" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="5" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 5" />
+                <Button Text="6" Grid.Row="1" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="6" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 6" />
+                <Button Text="7" Grid.Row="2" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="7" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 7" />
+                <Button Text="8" Grid.Row="2" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="8" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 8" />
+                <Button Text="9" Grid.Row="2" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="9" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 9" />
+                <Button Text="Сброс" Grid.Row="3" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="clear" Clicked="OnKeyClicked" SemanticProperties.Description="Очистить введённую сумму" />
+                <Button Text="0" Grid.Row="3" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="0" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 0" />
+                <Button Text="Стереть" Grid.Row="3" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="backspace" Clicked="OnKeyClicked" SemanticProperties.Description="Стереть последнюю цифру" />
+            </Grid>
+
+            <!-- Cash or card, single select. The selected one is filled Primary so the choice is
+                 visible at a glance; the unselected one is the tonal secondary. -->
+            <Grid x:Name="MethodGrid" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,0,0,10">
+                <Button x:Name="CashButton" Grid.Column="0" Text="Наличные" Style="{StaticResource PaymentMethodButton}"
+                        CommandParameter="cash" Clicked="OnMethodClicked" SemanticProperties.Description="Оплата наличными" />
+                <Button x:Name="CardButton" Grid.Column="1" Text="Карта" Style="{StaticResource PaymentMethodButton}"
+                        CommandParameter="card" Clicked="OnMethodClicked" SemanticProperties.Description="Оплата картой" />
+            </Grid>
+
+            <!-- Disabled while the entered amount is 0: there is nothing to take payment for. -->
+            <Button x:Name="ConfirmButton" Text="Принять оплату" HeightRequest="48" MinimumHeightRequest="48"
+                    FontAttributes="Bold" Padding="0" Clicked="OnConfirmClicked"
+                    SemanticProperties.Description="Принять оплату и продолжить" />
+        </VerticalStackLayout>
+    </ScrollView>
+</toolkit:Popup>

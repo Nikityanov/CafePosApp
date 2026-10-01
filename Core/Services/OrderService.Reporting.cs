@@ -50,6 +50,13 @@ public sealed partial class OrderService
             .Select(row => (row.CompletedAt!.Value - row.CreatedAt).TotalMinutes)
             .ToList();
 
+        // "Принято оплат" is a separate aggregate from Revenue on purpose. Revenue stays
+        // SUM(TotalKopecks) over completed orders, so a day's revenue never depends on payments
+        // having been recorded; this is what the till actually took, split by method for the cash
+        // count. The two coincide for completed orders (they cannot become Ready unpaid) and the
+        // payment total additionally covers orders paid in advance while still cooking.
+        var payments = await ShiftPayments.ReadAsync(db, shiftId, cancellationToken);
+
         return new ShiftStats(
             allCount,
             completedCount,
@@ -60,7 +67,11 @@ public sealed partial class OrderService
             itemsCount,
             preparation.Count == 0 ? 0 : preparation.Average(),
             completion.Count == 0 ? 0 : completion.Average(),
-            BuildPeakHour(timestamps));
+            BuildPeakHour(timestamps),
+            payments.Count,
+            Money.FromKopecks(payments.CashKopecks),
+            Money.FromKopecks(payments.CardKopecks),
+            Money.FromKopecks(payments.TotalKopecks));
     }
 
     public async Task<List<ProductAnalyticsRowData>> GetProductAnalyticsAsync(Guid shiftId, CancellationToken cancellationToken = default)
