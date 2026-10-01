@@ -1,146 +1,183 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.ShiftReportPage" x:DataType="vm:ShiftReportViewModel" Title="Смена">
-    <!-- The order history used to sit inside a ScrollView, which made the CollectionView measure
-         every completed order up front and killed recycling. The static summary rows stay Auto,
-         the list takes the remaining space. -->
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" Padding="16" RowSpacing="10">
-        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-            <!-- No PageTitle label. The Shell nav bar already reads "Смена", and the page put
-                 "Смена / Отчёт" straight under it — the same word twice at two sizes before any
-                 content. "Отчёт" adds nothing the report's own section headings do not say. -->
-            <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить отчёт" />
-        </Grid>
-        <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
-            <Border Grid.Row="2" Style="{StaticResource CardBorder}">
-                <VerticalStackLayout Spacing="6">
-                    <Label Text="{Binding Revenue, StringFormat='Выручка: {0:F2} ₽'}" FontAttributes="Bold" />
-                    <Label Text="{Binding ClosedOrdersCount, StringFormat='Чеков: {0}'}" />
-                    <Label Text="{Binding CancelledOrdersCount, StringFormat='Отменено: {0}'}" />
-                    <Label Text="{Binding AverageCheck, StringFormat='Средний чек: {0:F2} ₽'}" />
+    <!-- ═══════════════════════════════════════════════════════════════════════════════════════
+         THE WHOLE PAGE SCROLLS. The owner's decision, and it is settled — read this before
+         "fixing" the missing ScrollView.
 
-                    <!-- ═══════════════════════════════════════════════════════════════════════
-                         MONEY THROUGH THE TILL.
+         This page HAD one and it was deliberately REMOVED, to hand the leftover height to a
+         recycling CollectionView: the list was the only `*` row, so it received whatever the Auto
+         rows above it left behind. That is arithmetic, and it is how this page broke. Content
+         above the list grew until «История заказов смены» had no height left at all — the list
+         rendered no rows and there was nothing to scroll — and what it did have was a cramped
+         window scrolling inside itself. Recycling was never the bug. The layout that served it was.
 
-                         These four Payments* figures on ShiftStats existed since the payments
-                         feature and were consumed ONLY by the CSV export — «Принято оплат» had
-                         never been on screen at all. That is fine until there are refunds: revenue
-                         falls, the export grows a «Возвращено» line, and without this the operator
-                         watches the money leave with nothing on the device to reconcile the drawer
-                         against. This block is the on-screen twin of the export's, and it must keep
-                         the export's GROSS wording: "Принято" always means what came in, never what
-                         is left.
+         So there is ONE scroller again, and the list renders its FULL content inside it. A
+         CollectionView inside a ScrollView must be handed an explicit HeightRequest guessed from an
+         item count, which is either wrong today or a maintenance trap the next time a row changes
+         height, so the list is a BindableLayout on a VerticalStackLayout instead — the idiom
+         already used for the item lines inside each card below, and on SettingsPage and the
+         catalogue forms. The list measures itself, so NO part of this layout depends on how much
+         height is left over: a short phone, landscape and a tall one all behave the same.
 
-                         All inside the existing summary card, which the brief's "Auto" row absorbs
-                         without a grid change. A divider rather than a nested card: a Border
-                         inside a Border reads as two competing surfaces on one block, and the
-                         grouping only has to be legible, not boxed.
-                         ═══════════════════════════════════════════════════════════════════════ -->
-                    <BoxView HeightRequest="1" Margin="0,4,0,2" Color="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray700}}" />
-                    <Label Text="Деньги" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
-                    <Label Text="{Binding PaymentsCash, StringFormat='Принято наличными: {0:F2} ₽'}" />
-                    <Label Text="{Binding PaymentsCard, StringFormat='Принято картой: {0:F2} ₽'}" />
-                    <Label Text="{Binding RefundsCash, StringFormat='Возвращено наличными: {0:F2} ₽'}" />
-                    <Label Text="{Binding RefundsCard, StringFormat='Возвращено картой: {0:F2} ₽'}" />
+         The trade-off, stated here rather than discovered later: nothing on this list recycles. It
+         is bounded — one shift's closed orders — so rendering it whole is affordable, and the
+         alternative costs a guessed pixel count on every future edit to the list.
 
-                    <!-- The drawer total. 20pt bold against the 14pt components above, because this
-                         is the number somebody physically counts and everything else on the card is
-                         a component of it. Not coloured: the emphasis is size and weight, and the
-                         label already says what the number is, so nothing here depends on colour to
-                         be read. -->
-                    <Label Text="{Binding CashInDrawer, StringFormat='Итого наличными в кассе: {0:F2} ₽'}"
-                           FontSize="20" FontAttributes="Bold" Margin="0,4,0,0"
-                           SemanticProperties.Description="Итого наличными в кассе: принято наличными минус возвращено наличными" />
-                </VerticalStackLayout>
-            </Border>
-            <Button Grid.Row="3" Text="Анализировать смену" Command="{Binding OpenAnalyticsCommand}" />
-            <Label Grid.Row="4" Text="История заказов смены" Style="{StaticResource SectionTitle}" />
-            <!-- ShiftHistory, not CompletedOrders: it is GetShiftOrderHistoryAsync's Completed AND
-                 Cancelled, so a voided sale shows up AS voided instead of disappearing from the
-                 only list a manager reads after the fact. -->
-            <CollectionView Grid.Row="5" ItemsSource="{Binding ShiftHistory}" SelectionMode="None">
-                <CollectionView.EmptyView>
-                    <Label Text="Закрытых заказов пока нет." Style="{StaticResource EmptyLabel}" />
-                </CollectionView.EmptyView>
-                <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="vm:OrderRowViewModel">
-                        <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
-                            <VerticalStackLayout Spacing="4">
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <VerticalStackLayout Spacing="1">
-                                        <Label Text="{Binding OrderTitle}" FontAttributes="Bold" />
-                                        <!-- The status is on the card because the list now contains
-                                             voided orders. Without it a cancelled sale and a
-                                             completed one were visually identical — same rows, same
-                                             total, same date — and the one the manager needs to
-                                             identify is the one that says nothing about itself.
-                                             CancellationReason rides along, because the domain
-                                             composes the money and the stock disposition into it. -->
-                                        <Label Text="{Binding StatusText}" Style="{StaticResource SecondaryLabel}"
-                                               TextColor="{Binding StatusColor}" FontAttributes="Bold"
-                                               SemanticProperties.Description="{Binding StatusHint}" />
-                                        <!-- The composed cancellation reason: how much came back and
-                                             what happened to the stock. "Отменен" alone tells a
-                                             manager the order is gone and nothing about where the
-                                             money went. -->
-                                        <Label Text="{Binding CancellationDetail}" Style="{StaticResource SecondaryLabel}"
-                                               IsVisible="{Binding CancellationDetail, Converter={StaticResource IsPresent}}"
-                                               LineBreakMode="WordWrap" />
+         Do not remove this ScrollView a third time without knowing the verdict above.
+         ═══════════════════════════════════════════════════════════════════════════════════════ -->
+    <ScrollView>
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <!-- No PageTitle label. The Shell nav bar already reads "Смена", and the page put
+                     "Смена / Отчёт" straight under it — the same word twice at two sizes before any
+                     content. "Отчёт" adds nothing the report's own section headings do not say. -->
+                <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить отчёт" />
+            </Grid>
+            <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
+                <Border Grid.Row="2" Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="{Binding Revenue, StringFormat='Выручка: {0:F2} ₽'}" FontAttributes="Bold" />
+                        <Label Text="{Binding ClosedOrdersCount, StringFormat='Чеков: {0}'}" />
+                        <Label Text="{Binding CancelledOrdersCount, StringFormat='Отменено: {0}'}" />
+                        <Label Text="{Binding AverageCheck, StringFormat='Средний чек: {0:F2} ₽'}" />
+    
+                        <!-- ═══════════════════════════════════════════════════════════════════════
+                             MONEY THROUGH THE TILL.
+    
+                             These four Payments* figures on ShiftStats existed since the payments
+                             feature and were consumed ONLY by the CSV export — «Принято оплат» had
+                             never been on screen at all. That is fine until there are refunds: revenue
+                             falls, the export grows a «Возвращено» line, and without this the operator
+                             watches the money leave with nothing on the device to reconcile the drawer
+                             against. This block is the on-screen twin of the export's, and it must keep
+                             the export's GROSS wording: "Принято" always means what came in, never what
+                             is left.
+    
+                             All inside the existing summary card, which the brief's "Auto" row absorbs
+                             without a grid change. A divider rather than a nested card: a Border
+                             inside a Border reads as two competing surfaces on one block, and the
+                             grouping only has to be legible, not boxed.
+                             ═══════════════════════════════════════════════════════════════════════ -->
+                        <BoxView HeightRequest="1" Margin="0,4,0,2" Color="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray700}}" />
+                        <Label Text="Деньги" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
+                        <Label Text="{Binding PaymentsCash, StringFormat='Принято наличными: {0:F2} ₽'}" />
+                        <Label Text="{Binding PaymentsCard, StringFormat='Принято картой: {0:F2} ₽'}" />
+                        <Label Text="{Binding RefundsCash, StringFormat='Возвращено наличными: {0:F2} ₽'}" />
+                        <Label Text="{Binding RefundsCard, StringFormat='Возвращено картой: {0:F2} ₽'}" />
+    
+                        <!-- The drawer total. 20pt bold against the 14pt components above, because this
+                             is the number somebody physically counts and everything else on the card is
+                             a component of it. Not coloured: the emphasis is size and weight, and the
+                             label already says what the number is, so nothing here depends on colour to
+                             be read. -->
+                        <Label Text="{Binding CashInDrawer, StringFormat='Итого наличными в кассе: {0:F2} ₽'}"
+                               FontSize="20" FontAttributes="Bold" Margin="0,4,0,0"
+                               SemanticProperties.Description="Итого наличными в кассе: принято наличными минус возвращено наличными" />
+                    </VerticalStackLayout>
+                </Border>
+                <Button Grid.Row="3" Text="Анализировать смену" Command="{Binding OpenAnalyticsCommand}" />
+                <Label Grid.Row="4" Text="История заказов смены" Style="{StaticResource SectionTitle}" />
+                <!-- ShiftHistory, not CompletedOrders: it is GetShiftOrderHistoryAsync's Completed AND
+                     Cancelled, so a voided sale shows up AS voided instead of disappearing from the
+                     only list a manager reads after the fact.
+
+                     BindableLayout, not a CollectionView: the trade-off of putting the list
+                     inside the page ScrollView is spelled out at the top of this file. One
+                     scroller, one gesture, and the list is as tall as the orders it holds.
+                     Spacing 0 because the 4dp between cards is already on each Border.
+                     SelectionMode="None" went with it — a BindableLayout has no selection
+                     to disable, and it was already the default for these rows. -->
+                <VerticalStackLayout Grid.Row="5" BindableLayout.ItemsSource="{Binding ShiftHistory}" Spacing="0">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:OrderRowViewModel">
+                            <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
+                                <VerticalStackLayout Spacing="4">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <VerticalStackLayout Spacing="1">
+                                            <Label Text="{Binding OrderTitle}" FontAttributes="Bold" />
+                                            <!-- The status is on the card because the list now contains
+                                                 voided orders. Without it a cancelled sale and a
+                                                 completed one were visually identical — same rows, same
+                                                 total, same date — and the one the manager needs to
+                                                 identify is the one that says nothing about itself.
+                                                 CancellationReason rides along, because the domain
+                                                 composes the money and the stock disposition into it. -->
+                                            <Label Text="{Binding StatusText}" Style="{StaticResource SecondaryLabel}"
+                                                   TextColor="{Binding StatusColor}" FontAttributes="Bold"
+                                                   SemanticProperties.Description="{Binding StatusHint}" />
+                                            <!-- The composed cancellation reason: how much came back and
+                                                 what happened to the stock. "Отменен" alone tells a
+                                                 manager the order is gone and nothing about where the
+                                                 money went. -->
+                                            <Label Text="{Binding CancellationDetail}" Style="{StaticResource SecondaryLabel}"
+                                                   IsVisible="{Binding CancellationDetail, Converter={StaticResource IsPresent}}"
+                                                   LineBreakMode="WordWrap" />
+                                        </VerticalStackLayout>
+                                        <!-- CreatedAtText, not StringFormat on Model.CreatedAt. The
+                                             raw DateTimeOffset is UTC (migration 3), and StringFormat
+                                             renders it without a zone conversion — so the same order
+                                             read 18:46 on the orders board and 16:46 in this history
+                                             on a UTC+2 device. The binding was valid, so no build
+                                             caught it; OrderRowViewModel.CreatedAtText already does
+                                             the ToLocalTime() the orders page relies on. -->
+                                        <Label Grid.Column="1" Text="{Binding CreatedAtText}" Style="{StaticResource SecondaryLabel}" />
+                                    </Grid>
+                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Spacing="3">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:OrderItemLine">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Padding="0,0,2,0">
+                                                    <Label Text="{Binding Name}" LineBreakMode="WordWrap" />
+                                                    <Label Grid.Column="1" Text="{Binding Quantity, StringFormat='× {0}'}" FontAttributes="Bold" VerticalTextAlignment="Start" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
                                     </VerticalStackLayout>
-                                    <!-- CreatedAtText, not StringFormat on Model.CreatedAt. The
-                                         raw DateTimeOffset is UTC (migration 3), and StringFormat
-                                         renders it without a zone conversion — so the same order
-                                         read 18:46 on the orders board and 16:46 in this history
-                                         on a UTC+2 device. The binding was valid, so no build
-                                         caught it; OrderRowViewModel.CreatedAtText already does
-                                         the ToLocalTime() the orders page relies on. -->
-                                    <Label Grid.Column="1" Text="{Binding CreatedAtText}" Style="{StaticResource SecondaryLabel}" />
-                                </Grid>
-                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Spacing="3">
-                                    <BindableLayout.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:OrderItemLine">
-                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Padding="0,0,2,0">
-                                                <Label Text="{Binding Name}" LineBreakMode="WordWrap" />
-                                                <Label Grid.Column="1" Text="{Binding Quantity, StringFormat='× {0}'}" FontAttributes="Bold" VerticalTextAlignment="Start" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </BindableLayout.ItemTemplate>
+                                    <Label Text="{Binding TotalPrice, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                        <!-- "Подробнее" exists because the void flow and the payment
+                                             ledger both live on the details page, and a history row that
+                                             showed a total with no way to see how it was paid left the
+                                             manager to trust the card. -->
+                                        <Button Text="Подробнее" Padding="8,6" MinimumHeightRequest="48"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.OpenDetailsCommand}"
+                                                CommandParameter="{Binding .}"
+                                                SemanticProperties.Description="Открыть детали заказа" />
+                                        <!-- The void action. Only on rows that are not already cancelled
+                                             (CanCancel), so an order that was already voided cannot be
+                                             voided again — the domain would refuse it, but the control
+                                             that can only fail is the thing this feature spent its
+                                             previous life removing. DangerButton for the same reason the
+                                             board's cancel is: cancelling destroys a sale. -->
+                                        <Button Grid.Column="1" Text="{Binding CancelText}" Style="{StaticResource DangerButton}"
+                                                Padding="8,6" MinimumHeightRequest="48"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CancelOrderCommand}"
+                                                CommandParameter="{Binding .}" IsVisible="{Binding CanCancel}"
+                                                SemanticProperties.Description="{Binding CancelHint}" />
+                                    </Grid>
                                 </VerticalStackLayout>
-                                <Label Text="{Binding TotalPrice, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" />
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-                                    <!-- "Подробнее" exists because the void flow and the payment
-                                         ledger both live on the details page, and a history row that
-                                         showed a total with no way to see how it was paid left the
-                                         manager to trust the card. -->
-                                    <Button Text="Подробнее" Padding="8,6" MinimumHeightRequest="48"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.OpenDetailsCommand}"
-                                            CommandParameter="{Binding .}"
-                                            SemanticProperties.Description="Открыть детали заказа" />
-                                    <!-- The void action. Only on rows that are not already cancelled
-                                         (CanCancel), so an order that was already voided cannot be
-                                         voided again — the domain would refuse it, but the control
-                                         that can only fail is the thing this feature spent its
-                                         previous life removing. DangerButton for the same reason the
-                                         board's cancel is: cancelling destroys a sale. -->
-                                    <Button Grid.Column="1" Text="{Binding CancelText}" Style="{StaticResource DangerButton}"
-                                            Padding="8,6" MinimumHeightRequest="48"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CancelOrderCommand}"
-                                            CommandParameter="{Binding .}" IsVisible="{Binding CanCancel}"
-                                            SemanticProperties.Description="{Binding CancelHint}" />
-                                </Grid>
-                            </VerticalStackLayout>
-                        </Border>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-            </CollectionView>
-            <!-- No reconciliation block on THIS page, and that is a decision rather than an
-                 omission: the page rebinds to the newly created shift after a close and its route
-                 carries no shift id, so it can only ever display the open shift — which by
-                 definition has no count. A block here would have been permanently invisible, and
-                 the analytics page is the one screen that can read a closed shift.
-                 The description carries the one thing the operator must know before pressing it:
-                 the count is asked for and the shift does not close without one. -->
-            <Button Grid.Row="6" Text="Закрыть смену и открыть новую" Style="{StaticResource DangerButton}"
-                    Command="{Binding CloseShiftCommand}"
-                    SemanticProperties.Description="Закрыть смену и открыть новую. Будет запрошен пересчёт наличных в кассе; без него смена не закроется." />
-    </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <!-- The empty state CollectionView.EmptyView carried for free, now an ordinary
+                     label: BindableLayout has no EmptyView, and dropping this line would have left a
+                     shift with no closed orders showing a bare heading and nothing under it. It
+                     gets its own row so it costs nothing while the list has content — and while
+                     it does, the collapsed row costs only the 10dp RowSpacing, which on a page
+                     that scrolls is not a measurement that matters. -->
+                <Label Grid.Row="6" Text="Закрытых заказов пока нет." Style="{StaticResource EmptyLabel}"
+                       IsVisible="{Binding HasNoShiftHistory}" />
+                <!-- No reconciliation block on THIS page, and that is a decision rather than an
+                     omission: the page rebinds to the newly created shift after a close and its route
+                     carries no shift id, so it can only ever display the open shift — which by
+                     definition has no count. A block here would have been permanently invisible, and
+                     the analytics page is the one screen that can read a closed shift.
+                     The description carries the one thing the operator must know before pressing it:
+                     the count is asked for and the shift does not close without one. -->
+                <Button Grid.Row="7" Text="Закрыть смену и открыть новую" Style="{StaticResource DangerButton}"
+                        Command="{Binding CloseShiftCommand}"
+                        SemanticProperties.Description="Закрыть смену и открыть новую. Будет запрошен пересчёт наличных в кассе; без него смена не закроется." />
+        </Grid>
+    </ScrollView>
 </ContentPage>

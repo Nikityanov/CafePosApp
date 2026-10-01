@@ -41,6 +41,18 @@ public class ShiftAnalyticsViewModel : ObservableObject
     public ObservableCollection<ShiftChoice> Shifts { get; } = [];
     public ObservableCollection<ProductAnalyticsRow> ProductRows { get; } = [];
 
+    /// <summary>
+    /// True while the selected shift has no product breakdown to show.
+    /// </summary>
+    /// <remarks>
+    /// The breakdown is a BindableLayout inside the page's ScrollView rather than a CollectionView on
+    /// a star row, so «За выбранную смену нет закрытых заказов.» has no <c>EmptyView</c> to live in —
+    /// BindableLayout has none. An ordinary label bound to this is what carries it, and it is why this
+    /// property exists. Re-announced from <c>AnalyzeAsync</c> after every <c>SyncWith</c>, which is the
+    /// only place <see cref="ProductRows"/> changes.
+    /// </remarks>
+    public bool HasNoProductRows => ProductRows.Count == 0;
+
     private ShiftChoice? selectedShift;
     public ShiftChoice? SelectedShift { get => selectedShift; set => SetProperty(ref selectedShift, value); }
 
@@ -103,8 +115,9 @@ public class ShiftAnalyticsViewModel : ObservableObject
     /// derived here, in one place, and the caption says which part of it came back, so the cell
     /// cannot be read as a gross "how much we took" and quietly disagree with the shift report's
     /// «Принято картой». It is hidden at zero: a caption with nothing to add would make this one
-    /// card taller than the eight around it for no information, and this page has no ScrollView —
-    /// every dp here comes out of the list below.
+    /// card taller than the eight around it for no information. That used to be reinforced by the
+    /// page having no ScrollView — every dp here came out of the list below — but the page scrolls
+    /// now and the hiding stands on its own merit.
     /// </remarks>
     public string CardRefundsText => refundsCard <= 0
         ? string.Empty
@@ -338,6 +351,10 @@ public class ShiftAnalyticsViewModel : ObservableObject
             ProductRows.SyncWith(
                 rows.Select(row => new ProductAnalyticsRow(row.ProductName, row.ModifierName, row.Quantity, row.Revenue)),
                 row => $"{row.ProductName}|{row.ModifierName}");
+            // BindableLayout has no EmptyView, so the empty state is a label bound to this flag. It
+            // is derived from the count and notifies itself when it has to — but only when something
+            // asks it to, and SyncWith raises collection changes without consulting the ViewModel.
+            OnPropertyChanged(nameof(HasNoProductRows));
 
             Message = string.Empty;
         }

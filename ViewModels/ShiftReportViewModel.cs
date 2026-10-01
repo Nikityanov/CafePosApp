@@ -82,6 +82,18 @@ public partial class ShiftReportViewModel : ObservableObject
     /// </remarks>
     public ObservableCollection<OrderRowViewModel> ShiftHistory { get; } = [];
 
+    /// <summary>
+    /// True while the shift has no closed orders at all.
+    /// </summary>
+    /// <remarks>
+    /// The list is a BindableLayout inside the page's ScrollView, not a CollectionView on a star
+    /// row, so «Закрытых заказов пока нет.» has no <c>EmptyView</c> to live in — BindableLayout has
+    /// none. An ordinary label bound to this is what carries it, and it is the reason this property
+    /// exists at all. Re-announced from <c>LoadAsync</c> after every <c>SyncWith</c>, which is the
+    /// only place <see cref="ShiftHistory"/> changes.
+    /// </remarks>
+    public bool HasNoShiftHistory => ShiftHistory.Count == 0;
+
     private Guid shiftId;
     private decimal revenue;
     public decimal Revenue { get => revenue; private set => SetProperty(ref revenue, value); }

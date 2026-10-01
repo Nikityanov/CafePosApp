@@ -48,6 +48,12 @@ public partial class ShiftReportViewModel
             // manager most needs to see after a bad void vanished from the only list they read.
             var history = await orders.GetShiftOrderHistoryAsync(shift.Id);
             ShiftHistory.SyncWith(history.Select(order => new OrderRowViewModel(order, settings)), row => row.Model.Id);
+            // BindableLayout has no EmptyView, so «Закрытых заказов пока нет.» is a label bound to
+            // this flag. The flag is derived from the count and therefore notifies itself when it
+            // has to — but only if something asks it to, and SyncWith raises collection changes
+            // without consulting the ViewModel. This is the one line that keeps a shift with no
+            // closed orders from rendering a bare section heading.
+            OnPropertyChanged(nameof(HasNoShiftHistory));
 
             Message = string.Empty;
         }
