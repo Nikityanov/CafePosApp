@@ -132,6 +132,15 @@
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>
-            <Button Grid.Row="6" Text="Закрыть смену и открыть новую" Style="{StaticResource DangerButton}" Command="{Binding CloseShiftCommand}" />
+            <!-- No reconciliation block on THIS page, and that is a decision rather than an
+                 omission: the page rebinds to the newly created shift after a close and its route
+                 carries no shift id, so it can only ever display the open shift — which by
+                 definition has no count. A block here would have been permanently invisible, and
+                 the analytics page is the one screen that can read a closed shift.
+                 The description carries the one thing the operator must know before pressing it:
+                 the count is asked for and the shift does not close without one. -->
+            <Button Grid.Row="6" Text="Закрыть смену и открыть новую" Style="{StaticResource DangerButton}"
+                    Command="{Binding CloseShiftCommand}"
+                    SemanticProperties.Description="Закрыть смену и открыть новую. Будет запрошен пересчёт наличных в кассе; без него смена не закроется." />
     </Grid>
 </ContentPage>

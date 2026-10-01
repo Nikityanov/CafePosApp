@@ -62,7 +62,18 @@ internal static class ShiftPayments
         long RefundsCashKopecks,
         long RefundsCardKopecks)
     {
-        /// <summary>What is physically in the drawer: taken in cash, minus cash handed back.</summary>
+        /// <summary>
+        /// What is physically in the drawer: taken in cash, minus cash handed back.
+        /// <para>
+        /// NEVER NEGATIVE, and that is a guarantee rather than an observation. The join above takes
+        /// this shift's payments and this shift's refunds from the shift's OWN orders, so the
+        /// per-order per-method inequality <c>refunded &lt;= collected</c> that
+        /// <c>PaymentRecorder.AllocateMirroredSlices</c> guarantees sums to the same inequality for
+        /// the shift. A refund pressed during a later shift on an order belonging to this one is
+        /// still this shift's refund — that is the attribution the join performs — so it lowers the
+        /// figure exactly as much as it raised it, and never below zero.
+        /// </para>
+        /// </summary>
         public long CashInDrawerKopecks => CashKopecks - RefundsCashKopecks;
     }
 }

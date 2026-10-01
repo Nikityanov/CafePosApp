@@ -23,7 +23,7 @@ public class BackupTests
         Assert.True(validation.IsValid, validation.Message);
         // Pinned like the other schema expectations: a backup is only useful if the app that opens it
         // knows exactly what is inside, so this number is the one thing worth failing over.
-        Assert.Equal(7, validation.SchemaVersion);
+        Assert.Equal(8, validation.SchemaVersion);
 
         var list = await backups.GetBackupsAsync();
         Assert.Contains(list, item => item.FileName == backup.FileName);

@@ -65,10 +65,40 @@ public interface IOrderService
 
     Task<Shift> GetOrCreateActiveShiftAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Closes the current shift and opens a new one. Fails when orders are still open.</summary>
-    Task<Shift> CloseShiftAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Closes the active shift and opens a new one, recording the counted cash against the drawer
+    /// figure the ledger holds at that moment. Fails when orders are still open.
+    /// <para>
+    /// Reconciling is MANDATORY: a shift cannot be closed without entering what was counted, and a
+    /// mismatch has to carry a reason. <paramref name="countedCashKopecks"/> is kopecks, may be 0
+    /// (an empty drawer is the case that matters most, not an absent count) and may never be
+    /// negative. <paramref name="discrepancyReason"/> is required iff the count differs from the
+    /// expectation, accepted but never required when it matches, and rejected rather than truncated
+    /// when it is over-long — it is a mandatory audit field.
+    /// </para>
+    /// <para>
+    /// There is NO shiftId parameter, deliberately: the service resolves the active shift itself.
+    /// A caller naming it could reconcile one shift and have the service close another.
+    /// </para>
+    /// <para>
+    /// A count, once recorded, is NOT re-editable — there is no path that rewrites these four
+    /// columns. A silently overwritten count is worse than no count. Recounting, if it is ever
+    /// wanted, needs an append-only <c>CashCounts(ShiftId, CountedAt, CashKopecks, Reason)</c>
+    /// table and a report that reads both.
+    /// </para>
+    /// </summary>
+    Task<Shift> CloseShiftAsync(long countedCashKopecks, string? discrepancyReason, CancellationToken cancellationToken = default);
 
-    /// <summary>All shift aggregates. Single source of truth for the shift report and analytics.</summary>
+    /// <summary>
+    /// All shift aggregates. Single source of truth for the shift report and analytics.
+    /// <para>
+    /// It also carries the ONE definition of "what is in the drawer right now"
+    /// (<see cref="ShiftStats.ExpectedCashNow"/>) and the frozen count comparison
+    /// (<see cref="ShiftStats.Reconciliation"/>). Presentation subtracts nothing: a view model that
+    /// recomputes the difference is a second definition, and a second definition is how a report
+    /// ends up netting one meaning of "принято" against another.
+    /// </para>
+    /// </summary>
     Task<ShiftStats> GetShiftStatsAsync(Guid shiftId, CancellationToken cancellationToken = default);
 
     Task<List<ProductAnalyticsRowData>> GetProductAnalyticsAsync(Guid shiftId, CancellationToken cancellationToken = default);
@@ -101,6 +131,46 @@ public sealed record ShiftStats(
     // refunds, only money.
     decimal RefundsCash,
     decimal RefundsCard,
-    decimal RefundsTotal);
+    decimal RefundsTotal,
+    // The cash reconciliation, appended strictly last and additively like the Payments* block above.
+    //
+    // ExpectedCashNow is the LIVE drawer figure, PaymentsCash − RefundsCash, and it is a real field
+    // rather than something each screen subtracts for itself: one definition, computed once where
+    // both halves already exist. Reconciliation is what was physically counted at the close, with
+    // the ledger figure it was compared against FROZEN into it, so the comparison survives every
+    // refund taken afterwards. IsReconciliationStale is the single boolean that says the frozen
+    // expectation and the live figure have parted company — a refund against a closed shift moves
+    // the live figure and leaves the snapshot alone, because the money physically left that
+    // drawer. There is no second money column and no "expected" without a moment attached.
+    decimal ExpectedCashNow,
+    CashReconciliation? Reconciliation,
+    bool IsReconciliationStale);
+
+/// <summary>
+/// The recorded cash count of one closed shift: what the ledger said the drawer held at the close
+/// (<paramref name="ExpectedKopecks"/>, frozen and never moved afterwards), what was physically
+/// counted, when it was RECORDED and, when the two differ, why.
+/// <para>
+/// The difference is DERIVED, not stored. A column for it would be a third copy of
+/// <c>Counted − Expected</c>, and a third copy is a third thing to keep in step when one of the two
+/// is written; there are four columns on the shift and none of them is the discrepancy.
+/// </para>
+/// </summary>
+public sealed record CashReconciliation(
+    long ExpectedKopecks,
+    long CountedKopecks,
+    DateTimeOffset CountedAt,
+    string? Reason)
+{
+    /// <summary>Counted − Expected. Negative is a shortage, positive an overage.</summary>
+    public long DiscrepancyKopecks => CountedKopecks - ExpectedKopecks;
+
+    public CashDifference Difference => DiscrepancyKopecks switch
+    {
+        0 => CashDifference.Matched,
+        < 0 => CashDifference.Shortage,
+        _ => CashDifference.Overage
+    };
+}
 
 public sealed record ProductAnalyticsRowData(string ProductName, string ModifierName, int Quantity, decimal Revenue);

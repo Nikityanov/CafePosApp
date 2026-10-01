@@ -587,7 +587,9 @@ public class OrderPaymentTests
         var shiftId = (await orders.GetOrCreateActiveShiftAsync()).Id;
         await CompleteAsync(orders, order.Id);
 
-        var next = await orders.CloseShiftAsync();
+        // The count is the mandatory part of a close now: 220 ₽ was taken in cash and the drawer is
+        // counted as holding exactly that, so the close needs no reason.
+        var next = await orders.CloseShiftAsync(LatteKopecks, null);
         Assert.NotEqual(shiftId, next.Id);
 
         await orders.RefundAsync(order.Id, 120m, "вернули после смены");
@@ -617,7 +619,7 @@ public class OrderPaymentTests
         Assert.Equal(OrderStatus.Completed, reloaded!.Status);
         Assert.Equal(0, reloaded.PaidKopecks);
 
-        var next = await orders.CloseShiftAsync();
+        var next = await orders.CloseShiftAsync(0, "всё вернули, касса пуста");
 
         Assert.True(next.IsActive);
     }
@@ -909,7 +911,9 @@ public class OrderPaymentTests
         await CheckoutAsync(host.Get<ICheckoutService>(), product); // 220 ₽, untouched
         await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
 
-        var exception = await Assert.ThrowsAsync<ConflictException>(() => orders.CloseShiftAsync());
+        // No count is given here and none is needed: the bar still has orders on it, so the close is
+        // refused before anything about the cash is even looked at.
+        var exception = await Assert.ThrowsAsync<ConflictException>(() => orders.CloseShiftAsync(0, null));
 
         Assert.Contains("незакрытых заказов — 2", exception.Message);
         Assert.Contains("не оплачено 1", exception.Message);
@@ -997,6 +1001,13 @@ public class OrderPaymentTests
         Assert.Contains("Возвращено картой;200.00", csv);
         Assert.Contains("Возвращено всего;290.00", csv);
         Assert.Contains("Итого наличными в кассе;150.00", csv);
+
+        // This shift was never closed, so it was never counted. The export has to SAY that in one
+        // line: an uncounted shift printed as a drawer of 0.00 would be a fabricated count on
+        // exactly the historical rows somebody re-checks first.
+        Assert.Contains("Пересчёт;не проводился", csv);
+        Assert.DoesNotContain("Ожидалось на момент закрытия", csv);
+        Assert.DoesNotContain("Пересчитано в кассе", csv);
 
         // The per-order block is untouched: it prints status and amount per row, so a voided sale is
         // already visible in the CSV today and did not need a change.

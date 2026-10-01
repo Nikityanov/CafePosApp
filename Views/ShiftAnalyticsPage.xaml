@@ -1,6 +1,26 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.ShiftAnalyticsPage" x:DataType="vm:ShiftAnalyticsViewModel" Title="Аналитика смены">
     <!-- Same fix as the shift report: the product breakdown was inside a ScrollView, so the
-         CollectionView realised every row at once. -->
+         CollectionView realised every row at once.
+         ═══════════════════════════════════════════════════════════════════════════════════════
+         EVERY Auto ROW ABOVE THE `*` IS PAID FOR OUT OF THE LIST.
+
+         This page has no ScrollView, and that is deliberate — a ScrollView would swallow the
+         CollectionView's recycling, which is the whole reason the layout is hand-laid-out. The
+         consequence is arithmetic: the list is the only `*` row, so every dp added above it comes
+         straight out of how many product rows fit on a phone. Nothing may be added as a new page
+         row for that reason; new information goes INSIDE an existing Auto row.
+
+         The cash reconciliation is the one addition, and it is inside the peak-hour row rather than
+         in a row of its own. A collapsed row is NOT free here: GridLayoutManager.SumDefinitions
+         adds RowSpacing for every index above the first regardless of whether the row has a
+         visible child, so a hidden `Auto` row behind a 10dp RowSpacing still costs 10dp of list
+         (dotnet/maui#11222). VerticalStackLayout really does cost nothing — its measure loop
+         `continue`s over a collapsed child and counts it in neither the height nor the spacing
+         count — so stacking the two cards is what makes "no reconciliation" render exactly the
+         layout this page had before the feature. A dedicated row would have quietly taken 10dp
+         from the list on the open shift and on every historical one, which is precisely the case
+         the block is hidden for.
+         ═══════════════════════════════════════════════════════════════════════════════════════ -->
     <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*" Padding="16" RowSpacing="10">
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <Picker Title="Смена" ItemsSource="{Binding Shifts}" ItemDisplayBinding="{Binding DisplayName}" SelectedItem="{Binding SelectedShift}" VerticalOptions="Center" />
@@ -8,7 +28,13 @@
         </Grid>
         <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
             <Button Grid.Row="2" Text="Обновить аналитику" Command="{Binding AnalyzeCommand}" />
-            <Grid Grid.Row="3" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+            <!-- Ten cells in five rows. The two new ones are the MONEY the shift's revenue is made
+                 of: a manager holding a reconciled cash figure next to an unreconcilable total
+                 cannot answer "did the till balance" — the owner's actual question — because the
+                 other half of the money is not on the page. Cash is the net (the count in the
+                 drawer); card is the net too, with the refunds that produced it in a caption, so
+                 the two can be added up against «Выручка» without guessing which is gross. -->
+            <Grid Grid.Row="3" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
                 <Border Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Выручка" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding Revenue, StringFormat='{0:F2} ₽'}" FontSize="18" FontAttributes="Bold" /></VerticalStackLayout></Border>
                 <Border Grid.Column="1" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Заказов" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding OrdersCount}" FontSize="18" FontAttributes="Bold" /></VerticalStackLayout></Border>
                 <Border Grid.Row="1" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Средний чек" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding AverageCheck, StringFormat='{0:F2} ₽'}" FontSize="18" FontAttributes="Bold" /></VerticalStackLayout></Border>
@@ -17,13 +43,91 @@
                 <Border Grid.Row="2" Grid.Column="1" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Среднее выполнение" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding AverageCompletionTime}" FontSize="16" FontAttributes="Bold" /></VerticalStackLayout></Border>
                 <Border Grid.Row="3" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Всего заказов" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding AllOrdersCount}" FontSize="18" FontAttributes="Bold" /></VerticalStackLayout></Border>
                 <Border Grid.Row="3" Grid.Column="1" Style="{StaticResource CardBorder}"><VerticalStackLayout><Label Text="Отменено" Style="{StaticResource SecondaryLabel}" /><Label Text="{Binding CancelledOrdersCount}" FontSize="18" FontAttributes="Bold" /></VerticalStackLayout></Border>
+                <Border Grid.Row="4" Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout>
+                        <Label Text="Наличные в кассе" Style="{StaticResource SecondaryLabel}" />
+                        <!-- The description rides on the VALUE, not on the Border: a container with a
+                             contentDescription is announced as a single node and its children stop
+                             being traversed, so putting it on the card would cost a screen reader
+                             both labels to explain one number. -->
+                        <Label Text="{Binding CashInDrawer, StringFormat='{0:F2} ₽'}" FontSize="18" FontAttributes="Bold"
+                               SemanticProperties.Description="Наличные в кассе: принято наличными минус возвращено наличными" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Grid.Row="4" Grid.Column="1" Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout>
+                        <Label Text="Картой" Style="{StaticResource SecondaryLabel}" />
+                        <Label Text="{Binding CardTotal, StringFormat='{0:F2} ₽'}" FontSize="18" FontAttributes="Bold"
+                               SemanticProperties.Description="Картой, за вычетом возвратов" />
+                        <Label Text="{Binding CardRefundsText}" Style="{StaticResource CountLabel}" IsVisible="{Binding HasCardRefunds}" />
+                    </VerticalStackLayout>
+                </Border>
             </Grid>
-            <Border Grid.Row="4" Style="{StaticResource CardBorder}">
-                <VerticalStackLayout Spacing="4">
-                    <Label Text="Пиковый час" FontAttributes="Bold" />
-                    <Label Text="{Binding PeakHour}" Style="{StaticResource SecondaryLabel}" />
-                </VerticalStackLayout>
-            </Border>
+            <!-- Two Auto-sized cards, one page row. Spacing 10 mirrors the Grid's RowSpacing so the
+                 rhythm is unchanged when both are visible, and a hidden child costs neither height
+                 nor spacing — see the note at the top. -->
+            <VerticalStackLayout Grid.Row="4" Spacing="10">
+                <Border Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Пиковый час" FontAttributes="Bold" />
+                        <Label Text="{Binding PeakHour}" Style="{StaticResource SecondaryLabel}" />
+                    </VerticalStackLayout>
+                </Border>
+                <!-- ═══════════════════════════════════════════════════════════════════════════
+                     ПЕРЕСЧЁТ КАССЫ — the recorded count of THIS shift, and the reason this screen
+                     is its only home. The shift report cannot show it: that page rebinds to the new
+                     shift after a close and carries no shift id in its route, so it can only ever
+                     display the open shift, which by definition has no count. A block there would
+                     have been permanently invisible.
+
+                     Four rules on what is rendered:
+                       1. No bare signed number, ever. "-240,00" alone is ambiguous in Russian — as
+                          a delta it is a shortage, as a balance it is an overdraft — so the
+                          direction lives in the sentence (Сходится / Не хватает … / Лишние …) and
+                          the amount is printed unsigned. See CashWording.
+                       2. The expectation always carries its moment. A bare "Ожидалось" is a claim
+                          about an unspecified drawer, and read a week later it cannot be used.
+                       3. Never a counted zero. A shift that was not counted yields no card at all,
+                          which is a different fact from a drawer that came out empty.
+                       4. Colour is the third signal, never the first: the word carries the state,
+                          the tint only repeats it, and a screen reader is handed the phrase.
+                     ═══════════════════════════════════════════════════════════════════════════ -->
+                <Border Style="{StaticResource CardBorder}" IsVisible="{Binding HasReconciliation}">
+                    <VerticalStackLayout Spacing="4">
+                        <!-- Same title treatment as «Пиковый час» above it: two cards stacked on one
+                             page row that styled their headings differently would read as two
+                             unrelated systems. The emphasis belongs on the difference line. -->
+                        <Label Text="Пересчёт кассы" FontAttributes="Bold" />
+                        <Label Text="{Binding CountedAtText}" Style="{StaticResource SecondaryLabel}" />
+                        <Label Text="{Binding ExpectedAtCloseText}" />
+                        <Label Text="{Binding CountedText}" />
+                        <!-- The description is on the difference line, NOT on the card: a container
+                             with a contentDescription is announced as one node and its children are
+                             not traversed, so it would hide the two figures above. It repeats the
+                             word because a screen reader cannot see the tint and has no other way
+                             to learn that a figure is short rather than merely different. -->
+                        <Label Text="{Binding DifferenceText}" FontSize="18" FontAttributes="Bold"
+                               SemanticProperties.Description="{Binding DifferenceHint}">
+                            <Label.Triggers>
+                                <DataTrigger TargetType="Label" Binding="{Binding HasDiscrepancy}" Value="True">
+                                    <Setter Property="TextColor" Value="{StaticResource Danger}" />
+                                </DataTrigger>
+                            </Label.Triggers>
+                        </Label>
+                        <Label Text="{Binding ReasonText, StringFormat='Причина: {0}'}" Style="{StaticResource SecondaryLabel}"
+                               IsVisible="{Binding HasReason}" LineBreakMode="WordWrap" />
+                        <!-- Stale: the ledger moved AFTER the count. Shown as its own paragraph with
+                             both figures, because it answers a different question from the one
+                             above — "did the cashier err at close" and "are the books right now"
+                             deliberately have different answers. -->
+                        <BoxView HeightRequest="1" Margin="0,4,0,2" Color="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray700}}" IsVisible="{Binding IsReconciliationStale}" />
+                        <Label Text="Учёт изменился после пересчёта" FontAttributes="Bold" IsVisible="{Binding IsReconciliationStale}" />
+                        <Label Text="{Binding StaleText}" Style="{StaticResource SecondaryLabel}"
+                               IsVisible="{Binding IsReconciliationStale}" LineBreakMode="WordWrap"
+                               SemanticProperties.Description="{Binding StaleHint}" />
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
             <Label Grid.Row="5" Text="Продажи по блюдам и модификаторам" Style="{StaticResource SectionTitle}" />
             <CollectionView Grid.Row="6" ItemsSource="{Binding ProductRows}" SelectionMode="None">
                 <CollectionView.EmptyView><Label Text="За выбранную смену нет закрытых заказов." Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>

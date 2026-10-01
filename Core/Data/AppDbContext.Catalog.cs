@@ -116,6 +116,14 @@ public partial class AppDbContext
         {
             entity.HasKey(shift => shift.Id);
             entity.HasIndex(shift => shift.IsActive);
+            // Declared length matches OrderPayment.Note (300). CloseShiftAsync REFUSES an over-long
+            // discrepancy reason rather than truncating it, the opposite of PaymentRecorder's note
+            // handling on purpose — this one is the only record of why a drawer did not balance.
+            entity.Property(shift => shift.CashDiscrepancyReason).HasMaxLength(300);
+            // CountedCashKopecks / ExpectedCashKopecks / ReconciledAt keep the default nullable long?
+            // / DateTimeOffset? mapping. No value converter: NULL means "never counted", and a
+            // converter or a 0 default would erase that distinction — a counted 0 is missing money,
+            // while NULL is a shift nobody stood at the till for.
         });
     }
 }

@@ -11,6 +11,17 @@ namespace CafePosApp.ViewModels;
 
 public partial class ShiftReportViewModel : ObservableObject
 {
+    /// <summary>
+    /// Mirror of the domain's reason length, used only to refuse an over-long reason BEFORE it is
+    /// thrown away. See the remark at the check itself.
+    /// </summary>
+    /// <remarks>
+    /// A copy, and deliberately so: <c>OrderService.MaxDiscrepancyReasonLength</c> is private, and
+    /// making it public would put a presentation concern into the domain's API. The rule that counts
+    /// is the domain's — this one only decides whether the operator keeps their text.
+    /// </remarks>
+    private const int MaxDiscrepancyReasonLength = 300;
+
     private readonly IOrderService orders;
     private readonly IReportExportService reports;
     private readonly IBackupService backups;
@@ -100,17 +111,50 @@ public partial class ShiftReportViewModel : ObservableObject
     /// its components rather than as a fourth line among them.
     /// </summary>
     /// <remarks>
-    /// Derived, never read from Core: the domain exposes the two halves as
-    /// <c>PaymentsCash</c>/<c>RefundsCash</c> and deliberately does not name the difference, so
-    /// that no report can quietly subtract one definition of "принято" from another. Doing the
-    /// subtraction here keeps that property — the subtraction only ever happens where it is shown.
+    /// It CANNOT go negative. An earlier version of this comment claimed the opposite — "a refund
+    /// taken in this shift on an order whose payment landed in the previous one" — and that reasoning
+    /// was false: attribution follows the ORDER's shift, not the shift in which the refund button was
+    /// pressed. <c>ShiftPayments</c> joins the ledger to Orders and filters on <c>order.ShiftId</c>
+    /// with no timestamp filter, and <c>PaymentRecorder</c> guarantees per-order per-method
+    /// <c>refunded &lt;= collected</c>; summed over a shift's own orders that is the same inequality
+    /// for the shift. So the drawer figure is <c>&gt;= 0</c> always.
     /// <para>
-    /// It can legitimately go NEGATIVE within a shift (a refund taken in this shift on an order
-    /// whose payment landed in the previous one), so it is rendered as an ordinary signed amount
-    /// rather than clamped: a drawer that is short must not look empty.
+    /// The claim was harmless while this number was only rendered, and stops being harmless the moment
+    /// a stored snapshot is compared against it — a reader who believed it would expect a negative
+    /// drawer figure to be a legitimate, unremarkable outcome rather than a bug.
+    /// </para>
+    /// <para>
+    /// SOURCED, NOT COMPUTED. This used to be <c>PaymentsCash - RefundsCash</c> written out here,
+    /// and it is now a straight copy of <c>ShiftStats.ExpectedCashNow</c>. The local arithmetic was
+    /// deleted rather than kept as a convenience because it was a SECOND definition of the same
+    /// figure, and a second definition is exactly what the remark above warns about one level up:
+    /// once the close stores <c>Counted − Expected</c> and compares it against what the screen says,
+    /// two definitions are two answers, and the operator is asked to arbitrate between them. The
+    /// arithmetic now lives once, in the service, where both halves already exist — which is also
+    /// why the hand-written <c>OnPropertyChanged(nameof(CashInDrawer))</c> in LoadAsync is gone:
+    /// the property is fed, not derived, so SetProperty raises the change itself.
     /// </para>
     /// </remarks>
-    public decimal CashInDrawer => PaymentsCash - RefundsCash;
+    private decimal cashInDrawer;
+    public decimal CashInDrawer { get => cashInDrawer; private set => SetProperty(ref cashInDrawer, value); }
+
+    /// <summary>
+    /// The last amount the operator typed into the cash-count prompt, kept so a failed close does
+    /// not cost them the count.
+    /// </summary>
+    /// <remarks>
+    /// The drawer is emptied BEFORE the close is attempted, so by the time the domain refuses —
+    /// orders still open, most often — the money the operator just counted is in no drawer at all
+    /// and no longer on screen. Making them re-type "4 320,00" to satisfy an unrelated guard is how
+    /// a shift ends up closed with a count of 0, which reads as "the till was robbed" and is the
+    /// single most damaging value this feature can store. The retry pre-fills the previous entry
+    /// instead, so the second attempt is one tap.
+    /// <para>
+    /// Null means "nothing typed yet", which is NOT the same as a typed 0: a count of 0 is a real
+    /// count and the pre-fill for it is "0", not the live figure.
+    /// </para>
+    /// </remarks>
+    private long? lastCountedCashKopecks;
 
     private int closedOrdersCount;
     public int ClosedOrdersCount { get => closedOrdersCount; private set => SetProperty(ref closedOrdersCount, value); }
