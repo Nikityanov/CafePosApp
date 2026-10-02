@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  THE ANDROID 12+ SPLASH ICON. Icon content ONLY - deliberately no background fill.
+
+  This is the drawable behind android:windowSplashScreenAnimatedIcon in
+  Platforms/Android/Resources/values/styles.xml, and it exists because of a specific,
+  measured defect. .NET MAUI's Maui.SplashTheme points that attribute at
+  @drawable/maui_splash, and the library's maui_splash is a LAYER-LIST whose first item
+  is a solid @color/maui_splash_color fill (with android:opacity="opaque"). The system
+  treats the whole layer-list as icon content, so it masks the opaque fill into the icon
+  shape and draws the logo inside it. That is the "tiny logo on an oddly shaped navy
+  patch" symptom: one third of the foreground is masked away and the part that survives
+  is a colour swatch.
+
+  THE TWO SIZE NUMBERS, AND WHY THIS FILE IS 288dp
+  =================================================
+  Android's spec for the splash app-icon area:
+      with an icon background     240 x 240dp, guaranteed-visible circle 160dp
+      with no icon background     288 x 288dp, guaranteed-visible circle 192dp
+  The old path put a layer-list whose item was hard-sized to 108dp into that area, so the
+  logo rendered at 108/240 = 45% of the intended size (and the mark inside that item at
+  108 * 0.59 = 63dp). MAUI 10.0.101 exposes no attribute, metadata or property to change
+  that 108dp box.
+
+  So the size is fixed here instead, by the drawable's own intrinsic size:
+      288dp intrinsic on a 108 viewport  =>  the mark (60.75dp of 108) lands at
+      60.75 / 108 * 288 = 162.0dp across, i.e. 84% of the 192dp guaranteed-visible
+      circle, with 15dp of margin inside it.
+  That is 2.6x the old 63dp.
+
+  A larger intrinsic size is safe under either model the platform might use: with
+  FIT_CENTER the drawable is scaled down to whatever the container is (so a 240dp or
+  160dp OEM container still gives a bigger, correct mark), and with an exact/intrinsic
+  container 288dp is what the spec asks for.
+
+  No windowSplashScreenIconBackgroundColor is set, deliberately. The splash background is
+  already navy #143D59 and the mark is gold, so painting an icon background circle would
+  only add a visible disc - and omitting it is also what selects the roomier 288/192
+  geometry over the 240/160 one.
+
+  Geometry, path data and the reasoning behind it: drawable/cafepos_mark.xml. The only
+  difference from that file is the intrinsic size (288dp vs 108dp) and the lack of any
+  background layer. Do not add one - a fill here is the bug being fixed.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- cup body: 26.0 wide, y 42..71 -->
+    <path
+        android:fillColor="#F2C14E"
+        android:pathData="M34,42 L60,42 L56.5,64 C55.4,68.7 51.6,71 47,71 C42.4,71 38.6,68.7 37.5,64 Z" />
+
+    <!-- handle: stroked ring, r 5.75 stroke 3.5, so the 8.0 counter is real negative space -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#F2C14E"
+        android:strokeWidth="3.5"
+        android:pathData="M64.65,45.75 C67.83,45.75 70.4,48.32 70.4,51.5 C70.4,54.68 67.83,57.25 64.65,57.25 C61.47,57.25 58.9,54.68 58.9,51.5 C58.9,48.32 61.47,45.75 64.65,45.75 Z" />
+
+    <!-- steam: two curls, 11.0 tall on a 3.0 stroke, 4.0 apart, 2.5 clear of the rim -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#F2C14E"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M43,38 C40.8,33.5 45.2,31.5 45,27" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#F2C14E"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M52,38 C49.8,33.5 54.2,31.5 54,27" />
+
+    <!-- saucer: 35.0 wide rounded bar, y 73..79, 2.0 clear of the cup base -->
+    <path
+        android:fillColor="#F2C14E"
+        android:pathData="M39,73 L68,73 C69.66,73 71,74.34 71,76 C71,77.66 69.66,79 68,79 L39,79 C37.34,79 36,77.66 36,76 C36,74.34 37.34,73 39,73 Z" />
+</vector>

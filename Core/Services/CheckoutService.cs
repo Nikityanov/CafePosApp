@@ -14,7 +14,15 @@ public sealed class CheckoutService(
 {
     private const int MaxAttempts = 3;
 
-    public async Task<Order> CheckoutAsync(IReadOnlyList<CheckoutLine> lines, CancellationToken cancellationToken = default)
+    /// <summary>Payment is deferred unless the caller asks for it: the order starts unpaid.</summary>
+    public Task<Order> CheckoutAsync(IReadOnlyList<CheckoutLine> lines, CancellationToken cancellationToken = default) =>
+        CheckoutCoreAsync(lines, payment: null, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Order> CheckoutAsync(IReadOnlyList<CheckoutLine> lines, PaymentIntent payment, CancellationToken cancellationToken = default) =>
+        CheckoutCoreAsync(lines, payment, cancellationToken);
+
+    private async Task<Order> CheckoutCoreAsync(IReadOnlyList<CheckoutLine> lines, PaymentIntent? payment, CancellationToken cancellationToken)
     {
         if (lines.Count == 0) throw new ValidationFailureException("Нельзя создать пустой заказ.");
         if (lines.Any(line => line.Quantity <= 0)) throw new ValidationFailureException("У каждой позиции заказа должно быть положительное количество.");
@@ -23,7 +31,7 @@ public sealed class CheckoutService(
         {
             try
             {
-                return await CheckoutOnceAsync(lines, cancellationToken);
+                return await CheckoutOnceAsync(lines, payment, cancellationToken);
             }
             catch (DbUpdateException exception) when (attempt < MaxAttempts && IsUniqueConstraintViolation(exception))
             {
@@ -33,7 +41,7 @@ public sealed class CheckoutService(
         }
     }
 
-    private async Task<Order> CheckoutOnceAsync(IReadOnlyList<CheckoutLine> lines, CancellationToken cancellationToken)
+    private async Task<Order> CheckoutOnceAsync(IReadOnlyList<CheckoutLine> lines, PaymentIntent? payment, CancellationToken cancellationToken)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
@@ -79,6 +87,12 @@ public sealed class CheckoutService(
             ChangedAt = now
         });
         db.StockMovements.AddRange(plan.WriteOff(order, now, logger));
+
+        // Inside the transaction and before the single SaveChanges below: the payment row and
+        // Orders.PaidKopecks have to land together with the order, or the till records money
+        // against an order that does not exist.
+        if (payment is not null)
+            PaymentRecorder.Record(db, order, payment.Amount, payment.Method, now, logger);
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

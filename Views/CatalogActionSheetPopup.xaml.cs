@@ -1,5 +1,6 @@
 using CafePos.Core.Services;
 using CafePosApp.Controls;
+using CafePosApp.Converters;
 using CafePosApp.Diagnostics;
 using CommunityToolkit.Maui.Views;
 using Microsoft.Maui.Controls.Xaml;
@@ -8,8 +9,8 @@ using Microsoft.Maui.Devices;
 namespace CafePosApp.Views;
 
 /// <summary>
-/// The overflow menu of a catalogue row: the item name as a large sheet title, then one full-width
-/// labelled button per action.
+/// The overflow menu of a catalogue row: the item name as a sheet title, then one full-width
+/// labelled entry per action, pinned to the bottom edge of the screen.
 /// </summary>
 /// <remarks>
 /// MAUI has no cross-platform context menu — there is no <c>ContextMenu</c> control, and the
@@ -54,12 +55,21 @@ public partial class CatalogActionSheetPopup : Popup<string?>
             if (action.IsDestructive && !dividerAdded)
             {
                 dividerAdded = true;
+
+                // Palette lookup, not literals. This used to branch on RequestedTheme itself
+                // and hardcode Color.FromRgb(97,97,97) / (224,224,224), which is a private copy of
+                // two Colors.xaml entries (Gray700 / Gray300) that can drift from the palette
+                // without anything noticing. The TOKENS are deliberately unchanged — Gray300 in the
+                // light theme and Gray700 in the dark one is the divider pairing this file has
+                // always shipped, and the palette pass moved tonal button fills to Gray800, not
+                // dividers: a 1dp separator wants to recede, and Gray800 on SurfaceDark is 1.66:1,
+                // which is a hairline the eye loses entirely. What changed is only how the value is
+                // obtained. ThemeColors picks the key for the running theme and falls back to the
+                // other token if one is renamed, so this cannot throw.
                 OptionsLayout.Add(new BoxView
                 {
                     HeightRequest = 1,
-                    Color = Application.Current?.RequestedTheme == AppTheme.Dark
-                        ? Color.FromRgb(117, 117, 117)   // Gray600
-                        : Color.FromRgb(224, 224, 224),  // Gray300
+                    Color = ThemeColors.Resolve("Gray300", "Gray700"),
                     Margin = new Thickness(0, 4, 0, 4)
                 });
             }
@@ -80,10 +90,19 @@ public partial class CatalogActionSheetPopup : Popup<string?>
     }
 
     /// <summary>
-    /// Matches the sheet to the width and height of the window it is shown over. The previous
-    /// version read <see cref="DeviceDisplay"/>, which is the physical display size — wrong in
-    /// split-screen/freeform and after a rotation. The window width and height are used instead.
+    /// Matches the sheet to the width and height of the window it is shown over.
     /// </summary>
+    /// <remarks>
+    /// The previous version read <see cref="DeviceDisplay"/>, which is the physical display size —
+    /// wrong in split-screen/freeform and after a rotation. The window width and height are used
+    /// instead.
+    /// <para>
+    /// The height is only a cap, never a target: <c>MaximumHeightRequest</c> stops the ScrollView
+    /// growing, and the ScrollView's own VerticalOptions="Start" is what makes it stop at its
+    /// content. Raising this cap alone will not make the sheet taller — that was the bug, where a
+    /// 292dp sheet was stretched to the full 823dp cap and left 57% of itself empty.
+    /// </para>
+    /// </remarks>
     private void SizeToWindow()
     {
         try

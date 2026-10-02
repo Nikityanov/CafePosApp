@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <toolkit:Popup x:TypeArguments="x:String" xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit" x:Class="CafePosApp.Views.VariantPickerPopup" x:DataType="x:String">
-    <ScrollView MaximumHeightRequest="520">
+    <!-- VerticalOptions="Start" so the sheet is as tall as its options. A ScrollView fills
+         whatever height it is offered and MaximumHeightRequest is only a stop, so without this the
+         popup reported 520dp as its desired height however few variants there were and reserved
+         that much blank sheet. Same defect and same fix as ModifierPickerPopup, which works around
+         it by computing a HeightRequest in code. -->
+    <ScrollView MaximumHeightRequest="520" VerticalOptions="Start">
         <VerticalStackLayout Padding="20" Spacing="12">
             <Label x:Name="TitleLabel" FontSize="22" FontAttributes="Bold" />
             <Label Text="Выберите вариант" Style="{StaticResource SecondaryLabel}" />

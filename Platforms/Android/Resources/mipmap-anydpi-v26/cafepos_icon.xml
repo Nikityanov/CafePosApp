@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ADAPTIVE ICON, API 26 and up.
+
+  WHY THIS FILE IS NOT CALLED appicon.xml
+  =======================================
+  Resizetizer generates mipmap-anydpi-v26/appicon.xml from the MauiIcon Include's
+  basename, and hard-codes the monochrome layer to the full-colour foreground raster:
+
+    <monochrome android:drawable="@mipmap/appicon_foreground" />
+
+  MonochromeFile is a .NET MAUI 11 property and does not exist in 10.0.101, so the only
+  way to supply a real monochrome layer is a project resource. A project resource that
+  used the name "appicon" would land in the app's own res directory
+  (MonoAndroidResDirIntermediate, which aapt2 link receives as a primary overlay via -R)
+  while the generated file arrives as a LibraryResourceDirectory (aapt2's library-path
+  argument). That pairing is resolved as an overlay rather than a duplicate, but it depends
+  on aapt2's precedence rules holding for this toolchain, and the generated name is derived
+  from the MauiIcon Include - rename the Include, or add a second MauiIcon, and the
+  override silently stops matching.
+
+  So the name is deliberately different: "cafepos_icon" is a name Resizetizer cannot
+  generate. It is derived from the MauiIcon basename ("appicon") plus "_round", never
+  from a project file name, so there is nothing for it to collide with under any
+  precedence rule. AndroidManifest.xml points android:icon and android:roundIcon here.
+
+  WHY THE LAYERS ARE WHAT THEY ARE
+  ===============================
+  background  @mipmap/appicon_background - the raster Resizetizer produces from
+              Resources/AppIcon/appicon.svg, which is now a flat #143D59 fill and nothing
+              else. Using the generated raster keeps the MauiIcon Color attribute the one
+              place the background colour is declared.
+  foreground  @drawable/cafepos_mark - vector, 108x108 viewport, geometry documented
+              there. Preferable to the generated PNG foreground: the themed layer below
+              is a vector, and having the colour layer as one too means the two can be
+              diffed.
+  monochrome  @drawable/cafepos_icon_monochrome - the actual fix. Themed icons are
+              required from API 33, and from Android 16 QPR2 the system auto-themes apps
+              that have no monochrome layer, which with targetSdkVersion=36 happens
+              whether or not the operator opts in. That tag is only parsed on API 33+,
+              which is also why cafepos_icon_monochrome.xml can rely on being a vector
+              without worrying about API 21-32.
+
+  No separate round variant: the launcher applies its own circular crop, which is what
+  android:roundIcon is for. The generated mipmap/appicon_round.png is a byte-for-byte copy
+  of mipmap/appicon.png, so pointing roundIcon at it bought nothing.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@mipmap/appicon_background" />
+    <foreground android:drawable="@drawable/cafepos_mark" />
+    <monochrome android:drawable="@drawable/cafepos_icon_monochrome" />
+</adaptive-icon>

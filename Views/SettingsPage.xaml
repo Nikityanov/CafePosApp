@@ -31,7 +31,15 @@
                     </VerticalStackLayout>
                     <Label Text="Настройки сохраняются только на этом устройстве." Style="{StaticResource SecondaryLabel}" />
                     <Button Text="Сохранить настройки" Command="{Binding SaveCommand}" />
-                    <Label Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Success}" />
+                    <!-- Colour comes from MessageColor, not from an AppThemeBinding here: AppThemeBinding only
+                         governs values that come from XAML, so it cannot switch on a bound property,
+                         and this label has to change with the severity. The ViewModel resolves
+                         Success/SuccessDark or Danger/DangerDark through ThemeColors, which is the
+                         same answer OrdersViewModel.StatusColor gives.
+                         The message text always says what happened, so the colour is a second cue
+                         and never the message — six of the paths that write here are failures. -->
+                    <Label Text="{Binding Message}" IsVisible="{Binding HasMessage}"
+                           TextColor="{Binding MessageColor}" />
                 </VerticalStackLayout>
             </Border>
 
@@ -42,12 +50,32 @@
                         <Button Text="Создать копию" Command="{Binding CreateBackupCommand}" />
                         <Button Grid.Column="1" Text="Экспорт данных" Command="{Binding ExportDataCommand}" />
                     </Grid>
+                    <!-- The catalogue CSV round-trip, moved here from the catalogue screen. There it
+                         was one «CSV» button whose only entry point was an action sheet, a few
+                         millimetres from every product's price — and one of the two directions
+                         rewrites working rows. Both are data-in / data-out against the same
+                         database this card already backs up and restores, so the card is where they
+                         belong. Export is grouped with the other data-OUT actions, ABOVE the
+                         warning below; import is not, and never will be.
+                         The caption is here because «CSV» is the only format name on this card and
+                         the button alone does not say what a CSV is for.
+                    -->
+                    <Label Text="Формат CSV — для переноса каталога на другое устройство." Style="{StaticResource Caption}" />
+                    <Button Text="Экспорт каталога в CSV" Style="{StaticResource SecondaryButton}" Command="{Binding ExportCsvCommand}" />
+
                     <!-- Restoring overwrites the working database, so it carries DangerButton and
                          a written warning rather than the same filled primary as "Создать копию"
                          next to it. Two identical primary buttons either side of a
-                         data-destroying action is how an operator loses a day's takings. -->
-                    <Label Text="Восстановление заменит текущую базу данными из копии." Style="{StaticResource FieldLabel}" />
+                         data-destroying action is how an operator loses a day's takings.
+                         The warning now names BOTH buttons below it, and import carries DangerButton
+                         too: it rewrites the working catalogue with no undo and no restart, which
+                         is the same family of consequence as a restore, and it asks before it
+                         writes (SettingsViewModel.Catalog.cs). Two same-coloured buttons in a row
+                         is deliberate — the difference between them is written on them, not only
+                         drawn in. -->
+                    <Label Text="Восстановление заменит текущую базу данными из копии, а импорт CSV перезапишет товары в каталоге." Style="{StaticResource FieldLabel}" />
                     <Button Text="Восстановить из копии…" Style="{StaticResource DangerButton}" Command="{Binding RestoreBackupCommand}" />
+                    <Button Text="Импорт каталога из CSV…" Style="{StaticResource DangerButton}" Command="{Binding ImportCsvCommand}" />
                     <!-- A CollectionView inside a ScrollView created two competing scrollers: on
                          Android the inner one won the drag gesture and froze the page. BindableLayout
                          keeps a single scroller (the ScrollView) and renders the same rows. -->

@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.OrdersPage" x:DataType="vm:OrdersViewModel" Title="Заказы">
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls" x:Class="CafePosApp.Views.OrdersPage" x:DataType="vm:OrdersViewModel" Title="Заказы">
     <ContentPage.Resources>
         <DataTemplate x:Key="OrderCardTemplate" x:DataType="vm:OrderRowViewModel">
+            <!-- The template root is a stack, not the card, so the section heading can sit
+                 ABOVE the card it introduces instead of inside it. -->
+            <VerticalStackLayout>
+                <Label Text="{Binding StatusGroupName}" FontAttributes="Bold" FontSize="15" TextColor="{StaticResource Tertiary}"
+                       IsVisible="{Binding ShowGroupHeader}" Padding="2,10,2,6"
+                       SemanticProperties.Description="Раздел" />
             <Border Style="{StaticResource CardBorder}" Stroke="{Binding StatusColor}" StrokeThickness="2" Margin="0,0,0,8">
                 <VerticalStackLayout Spacing="7">
                     <Grid ColumnDefinitions="*,Auto">
@@ -33,7 +39,30 @@
                             </DataTemplate>
                         </BindableLayout.ItemTemplate>
                     </VerticalStackLayout>
-                    <Label Text="{Binding TotalPrice, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" />
+                    <!-- The total and the payment pictogram share a row. The pictogram is a 48dp
+                         touch target with the Material mark under it — the same construction as the
+                         catalogue row's overflow button (Controls/CatalogRow.xaml): a MAUI Button
+                         has no content property, so the mark is a sibling under a transparent
+                         button. Tapping it opens the payment sheet on a not-fully-paid card; on a
+                         paid card the button is hidden, so the mark does not look tappable. -->
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Label Text="{Binding TotalPrice, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" VerticalOptions="Center" />
+                        <Grid Grid.Column="1" WidthRequest="48" HeightRequest="48" VerticalOptions="Center">
+                            <shapes:Path Aspect="Uniform" WidthRequest="24" HeightRequest="24"
+                                        HorizontalOptions="Center" VerticalOptions="Center"
+                                        InputTransparent="True" Stroke="Transparent" StrokeThickness="0"
+                                        Fill="{Binding PaymentColor}"
+                                        Data="{Binding PaymentGlyph}" />
+                            <Button Style="{StaticResource RowOverflowButton}"
+                                    IsVisible="{Binding CanCollectPayment}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CollectPaymentCommand}"
+                                    CommandParameter="{Binding .}"
+                                    SemanticProperties.Description="{Binding PaymentHint}" />
+                        </Grid>
+                    </Grid>
+                    <!-- The payment line under the total. The wording carries the state (never colour
+                         alone), and a partial payment says what is still owed. -->
+                    <Label Text="{Binding PaymentText}" TextColor="{Binding PaymentColor}" FontAttributes="Bold" FontSize="12" />
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
                         <!-- "Подробнее" was clipped to "Подробн": Padding="8,6" plus the card
                              padding left the label less room than the word needs. Both buttons
@@ -44,39 +73,86 @@
                     </Grid>
                     <!-- DangerButton, matching "Удалить" on the details page and the restore
                          action in Settings. Cancelling an order is destructive and was wearing the
-                         same filled primary as "Готов" right above it. -->
-                    <Button Text="Отменить заказ" Style="{StaticResource DangerButton}" MinimumHeightRequest="48" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CancelOrderCommand}" CommandParameter="{Binding .}" IsVisible="{Binding CanCancel}" />
+                         same filled primary as "Готов" right above it.
+
+                         The label is per-row (CancelText), because a paid order's cancel also gives
+                         the money back: the button that voids the sale has to say so, or the
+                         operator is reading "Отменить заказ" on an order they were just paid for.
+                         The hint carries the amount for a screen reader. -->
+                    <Button Text="{Binding CancelText}" Style="{StaticResource DangerButton}" MinimumHeightRequest="48" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CancelOrderCommand}" CommandParameter="{Binding .}" IsVisible="{Binding CanCancel}" SemanticProperties.Description="{Binding CancelHint}" />
                 </VerticalStackLayout>
+            </Border>
+            </VerticalStackLayout>
+        </DataTemplate>
+        <!-- Section filter, same FilterChip shape and same selected-fill trigger as the
+             catalogue page's category strip, so the two read as one control in two places.
+             The count rides on the chip because deciding where to look is an arithmetic
+             question, and it is text rather than a badge so it survives a screen reader. -->
+        <DataTemplate x:Key="SectionFilterChipTemplate" x:DataType="vm:OrderFilterChip">
+            <Border Style="{StaticResource FilterChip}" Margin="0,0,8,0">
+                <Border.Triggers>
+                    <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                        <Setter Property="Stroke" Value="Transparent" />
+                    </DataTrigger>
+                </Border.Triggers>
+                <Label Text="{Binding Label}" Style="{StaticResource FilterChipText}">
+                    <Label.Triggers>
+                        <DataTrigger TargetType="Label" Binding="{Binding IsSelected}" Value="True">
+                            <Setter Property="TextColor" Value="White" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer
+                        Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectSectionFilterCommand}"
+                        CommandParameter="{Binding .}" />
+                </Border.GestureRecognizers>
             </Border>
         </DataTemplate>
     </ContentPage.Resources>
+    <!-- Three rows, not four. The header row existed only to carry «Обновить»: the board
+         already polls on the interval from Settings, so the button was a second way to do
+         something the page does on its own, and the Shell nav bar already reads "Заказы" over
+         the page that repeated it as "Активные заказы". Removing the button means removing the
+         row, and the chip strip takes its place with no chrome lost. -->
     <Grid RowDefinitions="Auto,Auto,*" Padding="12" RowSpacing="8">
-        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-            <!-- No PageTitle label. The Shell nav bar already reads "Заказы", and this page
-                 repeated it as "Активные заказы" underneath. Both the kanban and the list show
-                 only active orders, so the extra word distinguished nothing. -->
-            <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить заказы" />
-            <Button Grid.Column="2" Text="{Binding ViewModeText}" Command="{Binding ToggleViewCommand}" Padding="12,6" />
-        </Grid>
-        <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
-        <Grid Grid.Row="2">
-                <Grid IsVisible="{Binding IsKanban}" RowDefinitions="*" ColumnDefinitions="*,*" ColumnSpacing="8">
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="Готовятся" FontAttributes="Bold" TextColor="{StaticResource Warning}" />
-                        <CollectionView ItemsSource="{Binding PreparingOrders}" SelectionMode="None" ItemTemplate="{StaticResource OrderCardTemplate}">
-                            <CollectionView.EmptyView><Label Text="Нет заказов" Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
-                        </CollectionView>
-                    </VerticalStackLayout>
-                    <VerticalStackLayout Grid.Column="1" Spacing="6">
-                        <Label Text="Ждут выдачи" FontAttributes="Bold" TextColor="{StaticResource Success}" />
-                        <CollectionView ItemsSource="{Binding ReadyOrders}" SelectionMode="None" ItemTemplate="{StaticResource OrderCardTemplate}">
-                            <CollectionView.EmptyView><Label Text="Нет заказов" Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
-                        </CollectionView>
-                    </VerticalStackLayout>
-                </Grid>
-                <CollectionView ItemsSource="{Binding ActiveOrders}" SelectionMode="None" IsVisible="{Binding IsList}" ItemTemplate="{StaticResource OrderCardTemplate}">
-                    <CollectionView.EmptyView><Label Text="Активных заказов нет." Style="{StaticResource EmptyLabel}" /></CollectionView.EmptyView>
-                </CollectionView>
-        </Grid>
+        <!-- Static value, so an AppThemeBinding on the attribute is the whole fix and needs no ViewModel
+             change. A bare {StaticResource Danger} declared the light token in both themes: this
+             label sits on the page fill (#FAFAFA / #121212), where that is 4.77:1 in light and
+             3.76:1 in dark against the 4.5:1 owed at 14pt. DangerDark #FF9E8E on #121212 is 9.40:1.
+             Every message OrdersViewModel raises is a failure, so one tone is correct — and the
+             text still says what failed. -->
+        <Label Grid.Row="0" Text="{Binding Message}" IsVisible="{Binding HasMessage}"
+               TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
+               LineBreakMode="WordWrap" />
+        <!-- "Все" is the default and stays the default: a board that hides half the orders on
+             open is worse than one that shows a heading. The chips narrow it on demand. -->
+        <ScrollView Grid.Row="1" Orientation="Horizontal" HorizontalScrollBarVisibility="Never"
+                    HeightRequest="44" Margin="-12,0,-12,0">
+            <HorizontalStackLayout BindableLayout.ItemsSource="{Binding SectionFilters}"
+                                    Spacing="0"
+                                    BindableLayout.ItemTemplate="{StaticResource SectionFilterChipTemplate}" />
+        </ScrollView>
+        <!-- One list, not two columns.
+
+             The kanban split 411dp into two ~190dp columns, and a card in that width clipped
+             "Подробнее" to "Подробн" while three buttons in a row had no room. Every card now
+             gets the full width, and the split the board had is kept by sorting preparing
+             ahead of ready and letting the first card of each group carry the section name.
+
+             The header is a flag on the row rather than CollectionView grouping: XamlC
+             cannot resolve PropertyGroupDescription, so IsGrouped was a Debug-only green
+             build and a Release failure (XC0000). ShowGroupHeader needs no new type and is
+             verified by the same Release build as everything else.
+
+             Bound to VisibleOrders, not ActiveOrders: the filter narrows what is on screen while
+             ActiveOrders stays the full set behind it. -->
+        <CollectionView x:Name="OrdersList" Grid.Row="2" ItemsSource="{Binding VisibleOrders}" SelectionMode="None"
+                        ItemTemplate="{StaticResource OrderCardTemplate}">
+            <CollectionView.EmptyView>
+                <Label Text="{Binding EmptyListText}" Style="{StaticResource EmptyLabel}" />
+            </CollectionView.EmptyView>
+        </CollectionView>
     </Grid>
 </ContentPage>

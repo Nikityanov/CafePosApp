@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  COLOUR FOREGROUND of the adaptive icon: the CafePos mark, as a vector.
+
+  Same role as before: this file and cafepos_icon_monochrome.xml carry byte-identical
+  pathData so the colour layer and the themed layer can be diffed. Keep that invariant.
+  The colour mark has no interior detail, which is what lets one geometry serve both
+  jobs; the moment the colour layer grows a feature the tint cannot carry, the
+  monochrome file has to be redrawn separately.
+
+  CANVAS AND MEASURED EXTREMES (radius from the canvas centre, 54,54)
+  =================================================================
+  The mark is designed to the 72dp MASKABLE zone (the guaranteed-visible area once the
+  launcher has applied its mask), not the 66dp guaranteed-visible-UNMASKED zone.
+
+    element                          point        radius
+    steam A top-cap LEFT corner      (43.5, 25.5)  30.373   <- BINDING
+    steam A top-cap top              (45, 25.5)    29.89
+    steam B top-cap left corner      (52.5, 25.5)  28.54
+    saucer left cap                  (36, 76)      28.43
+    saucer right cap                 (71, 76)      27.80
+    cup rim left                     (34, 42)      23.32
+    handle outer right               (72.15, 51.5) 18.32
+    handle outer top                 (64.65, 44)   14.61
+    cup base                         (47, 71)      18.39
+
+  MAX RADIUS = 30.373, so the mark is 60.75 across. That leaves
+      2.63 units inside the 33.0 guaranteed-visible-unmasked zone, and
+      5.63 units inside the 36.0 maskable hard limit.
+  (This revision is SMALLER than the previous max radius of 31.83, even though the
+  steam got much taller, because narrowing the saucer gave back the room the steam
+  needed. See SAUCER below.)
+
+  HANDLE: WHY r 5.75 / stroke 3.5
+  =============================
+  Ring outer diameter 15.0 against a 26.0-wide cup = 57.7%, which is what a cup
+  handle actually looks like. It was 22.0 against the same cup (85%), which is why the
+  icon read as a cup with a bagel strapped to it. Counter diameter 8.0, still an
+  obviously open hole and still real negative space, which is the entire reason the
+  handle is a ring and not a filled outline.
+
+  Two clearances, both recomputed at the new size, against the cup's right wall
+  (the line through (60,42) and (56.5,64)):
+
+    perpendicular distance from ring centre to that wall   d = 6.085
+    MERGE    ring's left arc sits INSIDE the cup wall     7.500 - 6.085 = 1.415
+    CLEARANCE counter stays clear of the cup wall          6.085 - 4.000 = 2.085
+
+  These two numbers are not independent, and that is worth knowing before anyone
+  "improves" one of them. A wall crossing a ring band splits the band, so
+
+      merge + clearance == stroke width        (1.415 + 2.085 == 3.5)
+
+  holds exactly. With the 2-unit floor on the negative space, a 3.5 stroke caps the
+  merge at 1.5 no matter where the ring is placed. The clearance was set to 2.085
+  (just over the floor) precisely to hand the rest of the band to the merge. A 1.415
+  unit merge is not a hairline: the buried arc is +/-35.8 degrees, 9.37 units of
+  circumference, because the wall is near-vertical and crosses the band square-on.
+
+  Ring top is y 44.0, which is 2.0 units BELOW the cup rim at y 42. The old ring top
+  was y 41, i.e. 1.0 unit above the rim, and that peek over the rim was a large part of
+  the bagel look. Ring bottom y 59.0, clear of the cup base (71) and the saucer (73).
+
+  STEAM: WHY 11 TALL ON A 3 STROKE
+  ===============================
+  Each curl is 11.0 units tall on a 3.0 stroke, a 3.67:1 ratio, so the stroke is 27%
+  of the curl height and the path is not swallowed by its own line weight. The previous
+  curls were 5.0 tall on a 5.0 stroke, a 1:1 ratio: the stroke filled the path and the
+  render was an 8x10 rounded lozenge, which is why they read as two tick marks.
+  Two curls, not three. Bottom caps stop at y 39.5, a 2.5 gap below the rim, and the
+  two curls are 4.0 apart.
+
+  SAUCER: NARROWED, RE-CENTRED, GAP CUT
+  =====================================
+  35.0 wide (was 42.0), spanning x 36..71, thickness 6.0, y 73..79.
+    overhang left of the cup   2.0
+    overhang right of the cup  11.0   (was 14.0, and it reached out under the handle)
+  Centred at x 53.5, against a cup+handle mass of x 34..72.15 centred at 53.08, so the
+  overhang is now balanced under the whole silhouette instead of only under the cup.
+  The handle extends 1.15 past the saucer's right edge, which is how a cup on a saucer
+  looks. The gap from the cup base (71) to the saucer top (73) is 2.0, was 3.0, so the
+  cup now sits on the saucer rather than hovering over it.
+
+  EVERY FLOOR, STATED
+  ===================
+  Nothing is below the 2-unit (2dp) floor:
+    steam stroke 3.0, handle stroke 3.5, saucer thickness 6.0
+    counter diameter 8.0, counter-to-cup-wall 2.085
+    steam-to-rim 2.5, curl-to-curl 4.0, cup-to-saucer 2.0
+  The one number below 2 is the 1.415 handle merge, and that is a connection, not a
+  stroke and not a gap. It is bounded above by the stroke width as shown above.
+
+  Thumbnail: contrast of #F2C14E on #143D59 is 6.8:1.
+  No baked-in mask and no drop shadow; the launcher supplies its own mask and shadow.
+  The saucer's 3dp semicircular caps are cubics, not arcs, so nothing here needs arc
+  support below API 24. The handle circle is four cubics for the same reason.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- cup body: 26.0 wide, y 42..71. Unchanged by this revision. -->
+    <path
+        android:fillColor="#F2C14E"
+        android:pathData="M34,42 L60,42 L56.5,64 C55.4,68.7 51.6,71 47,71 C42.4,71 38.6,68.7 37.5,64 Z" />
+
+    <!--
+      handle: a ring, i.e. a stroked circle with no fill, so its 8.0 counter is genuine
+      negative space that survives being flattened to a single colour.
+      centre (64.65, 51.5), r 5.75, stroke 3.5; four cubics, k = 0.5523 * 5.75 = 3.18.
+    -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#F2C14E"
+        android:strokeWidth="3.5"
+        android:pathData="M64.65,45.75 C67.83,45.75 70.4,48.32 70.4,51.5 C70.4,54.68 67.83,57.25 64.65,57.25 C61.47,57.25 58.9,54.68 58.9,51.5 C58.9,48.32 61.47,45.75 64.65,45.75 Z" />
+
+    <!-- steam: two curls, 11.0 tall on a 3.0 stroke, 4.0 apart, 2.5 clear of the rim -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#F2C14E"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M43,38 C40.8,33.5 45.2,31.5 45,27" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#F2C14E"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M52,38 C49.8,33.5 54.2,31.5 54,27" />
+
+    <!-- saucer: 35.0 wide rounded bar, y 73..79, 2.0 clear of the cup base -->
+    <path
+        android:fillColor="#F2C14E"
+        android:pathData="M39,73 L68,73 C69.66,73 71,74.34 71,76 C71,77.66 69.66,79 68,79 L39,79 C37.34,79 36,77.66 36,76 C36,74.34 37.34,73 39,73 Z" />
+</vector>

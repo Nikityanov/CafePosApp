@@ -78,6 +78,10 @@ public partial class AppDbContext
                 .WithOne(history => history.Order)
                 .HasForeignKey(history => history.OrderId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(order => order.Payments)
+                .WithOne(payment => payment.Order)
+                .HasForeignKey(payment => payment.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(order => order.Shift)
                 .WithMany(shift => shift.Orders)
                 .HasForeignKey(order => order.ShiftId)
@@ -93,10 +97,33 @@ public partial class AppDbContext
             entity.HasIndex(item => item.OrderId);
         });
 
+        modelBuilder.Entity<OrderPayment>(entity =>
+        {
+            entity.HasKey(payment => payment.Id);
+            entity.Property(payment => payment.Method).HasConversion<string>().HasMaxLength(30);
+            // IsRefund deliberately keeps the default bool mapping (INTEGER), no converter — the
+            // same reasoning as DraftOrder.IsActiveCart. Every row that exists before the refund
+            // feature is a collection, so the column's DEFAULT 0 is already the correct backfill
+            // and a value converter would only add a second way for a zero to be spelled.
+            entity.Property(payment => payment.Note).HasMaxLength(300);
+            // Payments of one order are read in payment order; the index serves the details screen,
+            // the migration's NOT IN (SELECT OrderId ...) reconciliation check and the refund
+            // walk, which reads one order's non-refunded rows in PaidAt order (FIFO mirroring).
+            entity.HasIndex(payment => new { payment.OrderId, payment.PaidAt });
+        });
+
         modelBuilder.Entity<Shift>(entity =>
         {
             entity.HasKey(shift => shift.Id);
             entity.HasIndex(shift => shift.IsActive);
+            // Declared length matches OrderPayment.Note (300). CloseShiftAsync REFUSES an over-long
+            // discrepancy reason rather than truncating it, the opposite of PaymentRecorder's note
+            // handling on purpose — this one is the only record of why a drawer did not balance.
+            entity.Property(shift => shift.CashDiscrepancyReason).HasMaxLength(300);
+            // CountedCashKopecks / ExpectedCashKopecks / ReconciledAt keep the default nullable long?
+            // / DateTimeOffset? mapping. No value converter: NULL means "never counted", and a
+            // converter or a 0 default would erase that distinction — a counted 0 is missing money,
+            // while NULL is a shift nobody stood at the till for.
         });
     }
 }

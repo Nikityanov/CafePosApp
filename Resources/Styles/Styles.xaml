@@ -249,6 +249,21 @@
     <!--  code (see Views/CatalogActionSheetPopup), which is why the     -->
     <!--  lookup is by key — see Controls/ResourceStyles.                 -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- THE DARK TONAL FILL IS Gray800, NOT Gray700. One note here covers every tonal control
+         in this file, because they were all Gray700 and they are all Gray800 now.
+         A tonal button is a label on a fill, so the fill's lightness caps the label's contrast:
+         Gray700 #616161 has relative luminance 0.1195, so a foreground on it needs luminance
+         0.7128 to reach 4.5:1. No hue gets there while staying itself — the most saturated red
+         that qualifies is #FFD1D1 (a pale pink) and the most saturated green is #00FF08 (a
+         neon). Shipping either would have been a worse defect than the one being fixed.
+         Gray800 #424242 drops the bar to luminance 0.4201, which every palette tone clears:
+         Gray100 9.22:1, Gray200 8.66:1, Gray300 7.61:1, PrimaryDark 4.07:1, DangerDark 5.04:1,
+         WarningDark 5.81:1, SuccessDark 4.99:1, InfoDark 5.74:1.
+         It also stays visible as a raised surface: 1.66:1 against a SurfaceDark #1E1E1E card,
+         where Gray700 was 2.69:1 — and Gray800 was already this file's dark fill for form
+         fields, so a field and a button now share one surface instead of two greys.
+         StepperButton/KeypadButton carry 20pt bold digits, so their 3:1 large-text threshold is
+         the one that applies, and PrimaryDark clears it at 4.07:1 with room to spare. -->
     <Style TargetType="Button" x:Key="SheetAction">
         <Setter Property="FontFamily" Value="OpenSansRegular" />
         <Setter Property="FontSize" Value="15" />
@@ -256,18 +271,22 @@
         <Setter Property="BorderWidth" Value="1" />
         <Setter Property="Padding" Value="16,10" />
         <Setter Property="MinimumHeightRequest" Value="48" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray800}}" />
         <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}" />
     </Style>
 
     <!-- Destructive sheet entries stay filled (like the rest) but in the danger colour, and are
          separated from the safe entries by a divider added in code — an outline would read as a
-         second, competing button style. -->
+         second, competing button style.
+         DangerDark in the dark branch, not Danger: this setter used to declare Danger in BOTH
+         branches, i.e. a theme binding that changed nothing, while the fill underneath flipped
+         to grey. Measured on the device as "red on grey"; the light token on the old dark fill
+         was 1.24:1, and it is now 5.04:1. -->
     <Style TargetType="Button" x:Key="SheetActionDanger" BasedOn="{StaticResource SheetAction}">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource Gray800}}" />
         <Setter Property="BorderColor" Value="Transparent" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource Danger}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}" />
     </Style>
 
     <!-- The row's overflow trigger: a 48dp icon-only button showing the Material "more_vert" mark.
@@ -301,7 +320,9 @@
                     </VisualState>
                     <VisualState x:Name="Pressed">
                         <VisualState.Setters>
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+                            <!-- Same tonal fill as every other pressed surface in the file, so a
+                                 press does not briefly flash a grey the eye has never seen. -->
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray800}}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -360,11 +381,15 @@
         <Setter Property="StrokeThickness" Value="0" />
         <Setter Property="Stroke" Value="Transparent" />
         <Setter Property="StrokeShape" Value="RoundRectangle 4" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray800}}" />
     </Style>
 
+    <!-- TagInfo/TagTextInfo and TagWarning/TagTextWarning are label-on-fill pairs, so BOTH halves
+         of each pair take the dark tonal fill and the matching dark semantic tone. TagTextInfo was
+         not a same-value binding — it used Gray200 — but 11pt is body text, so it owes 4.5:1 and
+         the tint was simply absent. Info now measures 9.53:1 on a SurfaceDark card. -->
     <Style TargetType="Border" x:Key="TagInfo" BasedOn="{StaticResource Tag}">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InfoLight}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InfoLight}, Dark={StaticResource Gray800}}" />
     </Style>
 
     <!-- 10pt was below a readable floor for a POS operator reading stock counts and unit costs at
@@ -375,18 +400,39 @@
     </Style>
 
     <Style TargetType="Label" x:Key="TagTextInfo" BasedOn="{StaticResource TagText}">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Info}, Dark={StaticResource Gray200}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Info}, Dark={StaticResource InfoDark}}" />
     </Style>
 
     <!-- Availability is state, not an action, so it is shown as a tag rather than as a button
          once the action itself moved into the row's overflow menu. Declared after Tag/TagText
          because a StaticResource in BasedOn is resolved in document order. -->
     <Style TargetType="Border" x:Key="TagWarning" BasedOn="{StaticResource Tag}">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource WarningLight}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Warning}, Dark={StaticResource Gray800}}" />
     </Style>
 
+    <!-- «Нет в наличии» on three rows of the catalogue page. This was the second same-value binding
+         in the file — Warning in BOTH branches over a Gray700 fill, i.e. 1.99:1, the same defect as
+         the void button, on the one pill an operator reads to decide whether a product can be sold.
+         The dark branch was then corrected to WarningDark on Gray800, 5.81:1.
+
+         THE LIGHT BRANCH WAS NEVER MEASURED, AND NO DARKER WARNING CAN FIX IT.
+         Light was WarningLight fill + Warning label: 2.84:1. TagText is 11pt, which is body text, so
+         it owes 4.5:1 and 2.84:1 is not close. There is no darker orange in this palette — Warning
+         #ED6C02 is the only warm token and at L=0.287 it cannot reach 4.5:1 on ANY light background,
+         pure white included (3.11:1). A WarningText/Amber800 token is the real fix and belongs in
+         Colors.xaml, which is not this file's to change.
+
+         So the hue moves to the FILL, exactly as it did for WarningToolbarButton above, and the
+         label takes an ink that clears the bar:
+           Gray900 #212121 on Warning #ED6C02   5.17:1   (light)
+           WarningDark #FFB74D on Gray800 #424242 5.81:1 (dark, unchanged)
+         5.17:1 is a body-text pass at 11pt, not a large-text exemption. The pill becomes a solid
+         orange with near-black lettering rather than a cream one with orange lettering, which is a
+         visible change on the three «Нет в наличии» tags — but an unreadable tag cannot be traded
+         against a quiet one. The wording is unchanged, so the state is still carried by the text and
+         not only by the tint. -->
     <Style TargetType="Label" x:Key="TagTextWarning" BasedOn="{StaticResource TagText}">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Warning}, Dark={StaticResource Warning}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource WarningDark}}" />
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -396,6 +442,28 @@
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <!-- A keyed style does NOT inherit the implicit TargetType="Button" style, so every
          variant below restates the shared button metrics. -->
+    <!-- Cart quantity stepper.
+         The tap target stays 48dp — it is the minimum every control in the app honours and
+         shrinking it to close the visual gap would cost accuracy on a screen an operator
+         taps all day. What changed is the visual weight instead: the buttons were solid
+         Primary, so 96dp of saturated fill flanked a 13sp digit in a 24dp column and the
+         number read as a caption on its own controls. Tonal fill plus a 19sp bold quantity
+         moves the emphasis onto the number, which is the value being read. Measured before
+         the change: button 48x48dp each, quantity 24x48dp with a ~7dp glyph. -->
+    <Style TargetType="Button" x:Key="StepperButton">
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="WidthRequest" Value="48" />
+        <Setter Property="HeightRequest" Value="48" />
+        <Setter Property="MinimumWidthRequest" Value="48" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Gray800}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Tertiary}, Dark={StaticResource PrimaryDark}}" />
+    </Style>
+
     <Style TargetType="Button" x:Key="SecondaryButton">
         <Setter Property="FontFamily" Value="OpenSansRegular" />
         <Setter Property="FontSize" Value="14" />
@@ -405,13 +473,20 @@
         <Setter Property="Padding" Value="12,8" />
         <Setter Property="MinimumHeightRequest" Value="44" />
         <Setter Property="MinimumWidthRequest" Value="44" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray800}}" />
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray100}}" />
     </Style>
 
+    <!-- The «Восстановить из копии…» button the owner reported, and every other DangerButton:
+         OrdersPage's per-card void, ShiftReportPage's void and «Закрыть смену», OrderDetailsPage's
+         «Удалить» and «Вернуть оплату». Same-value binding before: Danger in both branches over a
+         Gray700 fill, 1.24:1. Now DangerDark on Gray800, 5.04:1.
+         48dp on the reportable instances; the two 44dp call sites on the details page are noted
+         in the handoff, not changed here — the touch minimum is a product decision about the
+         design system, not a colour fix. -->
     <Style TargetType="Button" x:Key="DangerButton" BasedOn="{StaticResource SecondaryButton}">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource Gray700}}" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource Danger}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource Gray800}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}" />
     </Style>
 
     <!-- 40dp was below the touch minimum every other control in the app honours; these are the
@@ -424,13 +499,82 @@
         <Setter Property="Padding" Value="14,0" />
         <Setter Property="MinimumHeightRequest" Value="48" />
         <Setter Property="HeightRequest" Value="48" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InfoLight}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InfoLight}, Dark={StaticResource Gray800}}" />
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Info}, Dark={StaticResource Gray100}}" />
     </Style>
 
+    <!-- The warning variant's dark branch was Gray100 — a deliberate de-tint, and defensible: these
+         header buttons are neutral chrome and only «Применить» on the catalogue page uses this one.
+         But the pairing was broken the same way as the four the owner reported, because the fill
+         beneath it flipped to grey while the label stayed untinted on a *semantic* button. It now
+         carries the tone it exists for: WarningDark on Gray800, 5.81:1.
+
+         THE LIGHT BRANCH WAS THE SAME DEFECT, UNMEASURED, AND NO DARKER WARNING CAN FIX IT.
+         Light was WarningLight fill + Warning label — 2.84:1, which fails even the 3:1 that 13pt
+         bold would owe as large text, let alone the 4.5:1 it owes as body text at this size. The
+         instinct is to reach for a darker orange; there is not one. Warning #ED6C02 is the palette's
+         only warm token, and at L=0.287 it cannot reach 4.5:1 on ANY light background — even pure
+         white only manages 3.11:1. WarningDark is the fix for the DARK branch, where the fill is
+         dark grey; on a pale fill it is nothing. Danger (#D32F2F on DangerLight, 4.36:1) and Info
+         (#1976D2 on InfoLight, 4.03:1) both clear the bar on their tonal fills; Warning is the one
+         hue in this palette that is too light to be light-theme text, and that is a Colors.xaml
+         limitation — a WarningText / Amber800 token is the real fix and is not added here because
+         the palette is not this file.
+
+         So the fill takes the hue instead and the label takes a tone that clears the bar:
+           Gray900 #212121 on Warning #ED6C02   5.17:1
+         That keeps the button unmistakably a warning — a saturated orange against the grey of every
+         neutral header button and the pale red of DangerButton — instead of a cream fill with grey
+         text, which at 13pt in a header row would read as SecondaryButton and waste the style.
+         The dark branch keeps Gray800 + WarningDark (5.81:1) and its quiet tonal chrome: the two
+         themes are built differently on purpose, because one of them has no choice. -->
     <Style TargetType="Button" x:Key="WarningToolbarButton" BasedOn="{StaticResource ToolbarButton}">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource WarningLight}, Dark={StaticResource Gray700}}" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Warning}, Dark={StaticResource Gray100}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Warning}, Dark={StaticResource Gray800}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource WarningDark}}" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  PAYMENT SHEET                                                -->
+    <!--  The keypad and the cash/card choice. Both honour the 48dp floor. -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- Keypad keys. Tonal fill like the cart stepper, so the twelve keys read as one control;
+         48dp tall, the minimum every control in the app honours. The labels are spelled-out
+         Russian words ("Сброс", "Стереть") rather than glyphs, so nothing depends on a font
+         having a particular symbol — the same reason the action sheet spells out its entries. -->
+    <Style TargetType="Button" x:Key="KeypadButton">
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HeightRequest" Value="48" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="HorizontalOptions" Value="Fill" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Gray800}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Tertiary}, Dark={StaticResource PrimaryDark}}" />
+    </Style>
+
+    <!-- Payment method buttons, unselected. The same tonal secondary as SecondaryButton. -->
+    <Style TargetType="Button" x:Key="PaymentMethodButton">
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="HeightRequest" Value="48" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray800}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray100}}" />
+    </Style>
+
+    <!-- The selected payment method: filled Primary so the active choice is visible at a glance.
+         The pair (tonal unselected / filled selected) mirrors the FilterChip selection on the
+         catalogue page, so the two read as one control in two places. -->
+    <Style TargetType="Button" x:Key="PaymentMethodActive" BasedOn="{StaticResource PaymentMethodButton}">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -450,15 +594,20 @@
         <Setter Property="Padding" Value="10,0" />
         <Setter Property="MinimumHeightRequest" Value="44" />
         <Setter Property="MinimumWidthRequest" Value="44" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray800}}" />
         <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray100}}" />
     </Style>
 
+    <!-- TWO same-value bindings here, not one: the label AND the border both declared Danger in
+         both branches over a Gray700 fill. The label was 1.24:1; the border, at 1.34:1 against
+         RowAction's own Gray600 border, was also doing nothing a reader could see. «Удалить» in
+         the two catalogue form footer lists is the consumer, and on the footer Danger is the one
+         label that must be legible. -->
     <Style TargetType="Button" x:Key="RowActionDanger" BasedOn="{StaticResource RowAction}">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource Gray700}}" />
-        <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource Danger}}" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource Danger}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource Gray800}}" />
+        <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}" />
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -561,7 +710,10 @@
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
                             <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray600}}" />
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}" />
+                            <!-- 2.18:1, from 1.34:1. Still below 4.5:1, and deliberately so: WCAG
+                                 1.4.3 exempts an inactive control, and this state has to stay
+                                 visibly inert rather than merely quiet. -->
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray800}}" />
                         </VisualState.Setters>
                     </VisualState>
                     <VisualState x:Name="PointerOver" />
@@ -657,10 +809,16 @@
         <Setter Property="MinimumHeightRequest" Value="44"/>
     </Style>
 
+    <!-- A shadow was an AppThemeBinding with Black in BOTH branches — a theme binding that changed
+         nothing, and the third of its kind in this file. Unwrapped, because the value genuinely is
+         theme-independent and the wrapper only invited the next reader to look for a dark variant.
+         Note what is NOT fixed here: a black shadow is near-invisible on a SurfaceDark card, so
+         elevation currently reads as nothing in dark mode. Material 3 answers that with surface
+         tint rather than shadow, which is a design decision for this app and not a colour fix. -->
     <Style TargetType="Shadow">
         <Setter Property="Radius" Value="8" />
         <Setter Property="Opacity" Value="0.15" />
-        <Setter Property="Brush" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource Black}}" />
+        <Setter Property="Brush" Value="{StaticResource Black}" />
         <Setter Property="Offset" Value="0,2" />
     </Style>
 
@@ -703,7 +861,10 @@
         <!-- Magenta was left over from the template: it matched no other accent in the app. -->
         <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
         <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
-        <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray500}}" />
+        <!-- Also a same-value theme binding, and also unwrapped rather than given a second token.
+             Gray500 is 6.22:1 on a SurfaceDark tab bar, so it was never the problem: a mid grey is
+             what an unselected tab wants to be in both themes. -->
+        <Setter Property="Shell.TabBarUnselectedColor" Value="{StaticResource Gray500}" />
     </Style>
 
     <Style TargetType="NavigationPage">

@@ -1,6 +1,8 @@
 using CafePos.Core.Common;
 using CafePos.Core.Errors;
+using CafePos.Core.Models;
 using CafePos.Core.Services;
+using CafePosApp.Services;
 using Microsoft.Extensions.Logging;
 
 namespace CafePosApp.ViewModels;
@@ -8,7 +10,31 @@ namespace CafePosApp.ViewModels;
 /// <summary>Checkout, cart autosave and parked ("held") carts.</summary>
 public partial class MenuViewModel
 {
-    private async Task CreateOrderAsync()
+    /// <summary>
+    /// Snapshots the cart and pre-flights the stock check shared by both checkout paths, so the
+    /// operator gets an actionable shortage message before any payment is taken.
+    /// </summary>
+    private async Task<IReadOnlyList<CheckoutLine>> PrepareCheckoutAsync()
+    {
+        var lines = Cart.Select(item => item.ToCheckoutLine()).ToList();
+
+        // Pre-flight check so the operator gets an actionable message before the transaction.
+        var shortages = await inventory.PreviewShortagesAsync(lines.Select(line => (line.ProductId, line.Quantity)).ToList());
+        if (shortages.Count > 0)
+        {
+            throw new InsufficientStockException(shortages
+                .Select(shortage => $"{shortage.IngredientName}: нужно {shortage.Required:0.##} {shortage.Unit}, есть {shortage.Available:0.##} {shortage.Unit}")
+                .ToList());
+        }
+
+        return lines;
+    }
+
+    /// <summary>
+    /// «Оплатить и создать»: take the payment first, then book the order paid. The sheet is opened
+    /// before the checkout so a dismissed sheet leaves the cart untouched.
+    /// </summary>
+    private async Task PayAndCreateAsync()
     {
         if (Cart.Count == 0)
         {
@@ -19,23 +45,46 @@ public partial class MenuViewModel
         IsBusy = true;
         try
         {
-            var lines = Cart.Select(item => item.ToCheckoutLine()).ToList();
+            var lines = await PrepareCheckoutAsync();
 
-            // Pre-flight check so the operator gets an actionable message before the transaction.
-            var shortages = await inventory.PreviewShortagesAsync(lines.Select(line => (line.ProductId, line.Quantity)).ToList());
-            if (shortages.Count > 0)
-            {
-                throw new InsufficientStockException(shortages
-                    .Select(shortage => $"{shortage.IngredientName}: нужно {shortage.Required:0.##} {shortage.Unit}, есть {shortage.Available:0.##} {shortage.Unit}")
-                    .ToList());
-            }
+            var payment = await paymentSheet.CollectAsync(new PaymentSheetRequest("Оплата заказа", Total, 0));
+            if (payment is null) return;
 
+            var order = await checkout.CheckoutAsync(lines, new PaymentIntent(payment.Amount, payment.Method));
+
+            await FinishOrderCreatedAsync(order, $"оплачено {PaymentText.Method(payment.Method)}");
+            haptics.Click();
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Checkout with payment failed");
+            SetError(exception, "Не удалось создать заказ");
+            haptics.Warn();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// «Создать без оплаты»: book the order unpaid. It shows as unpaid on the board and payment
+    /// can be collected later from its card or the details page.
+    /// </summary>
+    private async Task CreateWithoutPaymentAsync()
+    {
+        if (Cart.Count == 0)
+        {
+            Message = "Добавьте товары в заказ.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var lines = await PrepareCheckoutAsync();
             var order = await checkout.CheckoutAsync(lines);
-
-            Cart.Clear();
-            Recalculate();
-            await drafts.ClearActiveCartAsync();
-            Message = $"Заказ #{order.OrderNumber} создан на {TextFormat.Money(order.TotalPrice)}.";
+            await FinishOrderCreatedAsync(order, "оплата не получена");
             haptics.Click();
         }
         catch (Exception exception)
@@ -48,6 +97,18 @@ public partial class MenuViewModel
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Clears the cart and reports what happened. The message names the outcome — paid by which
+    /// method, or unpaid — so the operator does not have to open the board to find out.
+    /// </summary>
+    private async Task FinishOrderCreatedAsync(Order order, string paymentText)
+    {
+        Cart.Clear();
+        Recalculate();
+        await drafts.ClearActiveCartAsync();
+        Message = $"Заказ #{order.OrderNumber} создан на {TextFormat.Money(order.TotalPrice)}, {paymentText}.";
     }
 
     private async Task ParkOrderAsync()

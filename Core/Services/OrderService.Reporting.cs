@@ -50,6 +50,33 @@ public sealed partial class OrderService
             .Select(row => (row.CompletedAt!.Value - row.CreatedAt).TotalMinutes)
             .ToList();
 
+        // "Принято оплат" is a separate aggregate from Revenue on purpose. Revenue stays
+        // SUM(TotalKopecks) over completed orders, so a day's revenue never depends on payments
+        // having been recorded; this is what the till actually took, split by method for the cash
+        // count. The two coincide for completed orders (they cannot become Ready unpaid) and the
+        // payment total additionally covers orders paid in advance while still cooking.
+        //
+        // Both halves stay GROSS and separate: the four Payments* fields keep meaning "what came
+        // in", unchanged and in this order, and the refunds are additive on top. The number a
+        // manager physically counts is PaymentsCash − RefundsCash, and it is named ONCE, here, as
+        // ShiftStats.ExpectedCashNow — not computed at each point of presentation, because a screen
+        // that subtracts the two halves itself is a second definition of the same figure, and a
+        // second definition is how two reports end up disagreeing about the drawer.
+        var payments = await ShiftPayments.ReadAsync(db, shiftId, cancellationToken);
+
+        // The frozen count comes off the shift row itself. AsNoTracking on purpose: this is a
+        // report, and nothing here may accidentally mark a shift modified. A shift that was never
+        // counted yields null — which is a fact of its own (every shift that predates the feature is
+        // in that state) and NOT the same thing as a counted zero.
+        var shift = await db.Shifts.AsNoTracking()
+            .FirstOrDefaultAsync(current => current.Id == shiftId, cancellationToken);
+        var reconciliation = ShiftReconciliation.Read(shift);
+        // Staleness lives here because this is the one place both numbers exist. A refund taken
+        // against a closed shift moves the live figure and leaves the frozen snapshot alone, so the
+        // two disagree from that moment on — and that disagreement is exactly what a manager has to
+        // be shown, rather than a snapshot quietly rewritten to match the new reality.
+        var isStale = ShiftReconciliation.IsStale(reconciliation, payments.CashInDrawerKopecks);
+
         return new ShiftStats(
             allCount,
             completedCount,
@@ -60,7 +87,17 @@ public sealed partial class OrderService
             itemsCount,
             preparation.Count == 0 ? 0 : preparation.Average(),
             completion.Count == 0 ? 0 : completion.Average(),
-            BuildPeakHour(timestamps));
+            BuildPeakHour(timestamps),
+            payments.Count,
+            Money.FromKopecks(payments.CashKopecks),
+            Money.FromKopecks(payments.CardKopecks),
+            Money.FromKopecks(payments.TotalKopecks),
+            Money.FromKopecks(payments.RefundsCashKopecks),
+            Money.FromKopecks(payments.RefundsCardKopecks),
+            Money.FromKopecks(payments.RefundedKopecks),
+            Money.FromKopecks(payments.CashInDrawerKopecks),
+            reconciliation,
+            isStale);
     }
 
     public async Task<List<ProductAnalyticsRowData>> GetProductAnalyticsAsync(Guid shiftId, CancellationToken cancellationToken = default)

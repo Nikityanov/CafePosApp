@@ -22,21 +22,42 @@
         </DataTemplate>
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16" RowSpacing="6">
-        <Border Style="{StaticResource CardBorder}" Padding="10,6" Margin="0">
-            <Entry Placeholder="Поиск блюда" Text="{Binding SearchText}" BackgroundColor="Transparent" Margin="0" MinimumHeightRequest="44" />
-        </Border>
+    <!-- ═══ ROOT ═══ -->
+    <!-- Three rows: the chip strip, the product list, the cart.
+         ════════════════════════════════════════════════════════════════════════════════════
+         WHY THERE IS NO SEARCH ON THIS PAGE
+         ════════════════════════════════════════════════════════════════════════════════════
+         The owner's decision: «Удали поиск вообще. У меня в приложении не так много позиций, чтобы
+         не найти их просто скроллом.» The catalogue is small enough that the section chips plus
+         scrolling the list find anything faster than typing, and every row of chrome above the
+         list pushed the two things the screen is for — the chips and the list — down.
+
+         This page carried two searches in turn: a permanent Entry above the chips, then a magnifier
+         button with a collapsible panel. Both are gone, along with the header row they lived in.
+         The chip strip is now the primary way to narrow the list, and it is the first row, so it
+         is the first thing under the tab bar; the product list starts higher than it ever has.
+         ════════════════════════════════════════════════════════════════════════════════════ -->
+    <!-- Three rows: the chip strip, the product list, the cart. The list is the only `*` row,
+         so it absorbs whatever the chips and the cart take. -->
+    <Grid RowDefinitions="Auto,*,Auto" Padding="16" RowSpacing="6">
 
         <!-- Single scrolling list of chips. It used to be a lone "Все" Button next to a
              CollectionView wrapped in a horizontal ScrollView, so the two scrollers competed
-             for the same gesture. -->
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Categories}" SelectionMode="None" ItemTemplate="{StaticResource CategoryChipTemplate}" HeightRequest="48">
+             for the same gesture.
+
+             56, not 48. This was a real 2dp defect: the chip inside is 44dp tall with a 3dp
+             margin all round, so 50dp of chip was being asked to fit a 48dp strip and every
+             chip lost 2dp off its bottom. The strip is now exactly the chip plus its margins,
+             with 6dp spare. The chip itself stays at 44dp because that is what the FilterChip
+             style sets app-wide and 44dp is the height every chip in the app already measures at
+             — the clipping was the defect, not the chip. -->
+        <CollectionView ItemsSource="{Binding Categories}" SelectionMode="None" ItemTemplate="{StaticResource CategoryChipTemplate}" HeightRequest="56">
             <CollectionView.ItemsLayout>
                 <LinearItemsLayout Orientation="Horizontal" ItemSpacing="6" />
             </CollectionView.ItemsLayout>
         </CollectionView>
 
-        <CollectionView Grid.Row="2" ItemsSource="{Binding FilteredProducts}" SelectionMode="None" Margin="0,0,0,2">
+        <CollectionView Grid.Row="1" ItemsSource="{Binding FilteredProducts}" SelectionMode="None" Margin="0,0,0,2">
             <CollectionView.ItemsLayout>
                 <!-- The span is set from code (see MenuPage.PublishAvailableWidth), not bound.
                      Two reasons, both measured: ItemsLayout is a BindableObject outside the visual
@@ -79,7 +100,7 @@
             </CollectionView.ItemTemplate>
         </CollectionView>
 
-        <Border Grid.Row="3" Style="{StaticResource CardBorder}" Padding="6" Margin="0,0,0,0">
+        <Border Grid.Row="2" Style="{StaticResource CardBorder}" Padding="6" Margin="0,0,0,0">
             <VerticalStackLayout Spacing="2">
                 <Label Text="Корзина" FontSize="15" FontAttributes="Bold" />
 
@@ -109,12 +130,16 @@
                                 </VerticalStackLayout>
                                 <!-- The per-unit price was dropped from the row: it sat next to the
                                      bold line total and ate the width the stepper needed.
-                                     The steppers were 40x40, under the 44dp minimum every other
-                                     control in the app honours; they are 48 now. -->
-                                <Grid Grid.Column="1" ColumnDefinitions="48,24,48" ColumnSpacing="0" VerticalOptions="Center">
-                                    <Button Text="−" Padding="0" WidthRequest="48" HeightRequest="48" MinimumWidthRequest="48" MinimumHeightRequest="48" FontSize="18" BorderWidth="0" SemanticProperties.Description="Убрать одну штуку" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveItemCommand}" CommandParameter="{Binding .}" />
-                                    <Label Grid.Column="1" Text="{Binding Quantity}" FontSize="13" WidthRequest="24" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
-                                    <Button Grid.Column="2" Text="+" Padding="0" WidthRequest="48" HeightRequest="48" MinimumWidthRequest="48" MinimumHeightRequest="48" FontSize="18" BorderWidth="0" SemanticProperties.Description="Добавить ещё одну" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.AddItemCommand}" CommandParameter="{Binding .}" />
+                                     Two 48dp buttons in solid Primary made the quantity look like
+                                     a caption on its own controls rather than the value: measured
+                                     on the emulator, 96dp of saturated fill flanked a 13sp digit in
+                                     a 24dp column. The tap targets stay 48dp — that is the minimum
+                                     every control here honours — and the weight moves instead, onto
+                                     a 19sp bold number in a 40dp column with tonal buttons. -->
+                                <Grid Grid.Column="1" ColumnDefinitions="48,40,48" ColumnSpacing="0" VerticalOptions="Center">
+                                    <Button Text="−" Style="{StaticResource StepperButton}" SemanticProperties.Description="Убрать одну штуку" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveItemCommand}" CommandParameter="{Binding .}" />
+                                    <Label Grid.Column="1" Text="{Binding Quantity}" FontSize="19" FontAttributes="Bold" WidthRequest="40" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" SemanticProperties.Description="Количество" />
+                                    <Button Grid.Column="2" Text="+" Style="{StaticResource StepperButton}" SemanticProperties.Description="Добавить ещё одну" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.AddItemCommand}" CommandParameter="{Binding .}" />
                                 </Grid>
                                 <Label Grid.Column="2" Text="{Binding LineTotal, StringFormat='{0:F2} ₽'}" FontAttributes="Bold" FontSize="12" VerticalOptions="Center" HorizontalTextAlignment="End" />
                             </Grid>
@@ -132,20 +157,29 @@
                 <!-- The message sits above the button it reports on, not below it. "Заказ #1
                      создан на 640.00 ₽" is the most important feedback in the app and it was
                      the last line on the screen, in SecondaryLabel grey, styled identically to
-                     a failure. Now it is bold, above the action, and the DataTriggers colour
-                     it by outcome — colour reinforcing the text, never replacing it. -->
-                <Label Text="{Binding Message}" IsVisible="{Binding HasMessage}" FontSize="14" FontAttributes="Bold" Margin="0,2,0,0">
-                    <Label.Triggers>
-                        <DataTrigger TargetType="Label" Binding="{Binding IsErrorMessage}" Value="True">
-                            <Setter Property="TextColor" Value="{StaticResource Danger}" />
-                        </DataTrigger>
-                        <DataTrigger TargetType="Label" Binding="{Binding IsErrorMessage}" Value="False">
-                            <Setter Property="TextColor" Value="{StaticResource Success}" />
-                        </DataTrigger>
-                    </Label.Triggers>
-                </Label>
+                     a failure. Now it is bold, above the action, and coloured by outcome —
+                     colour reinforcing the text, never replacing it.
 
-                <Button Text="Создать заказ" HeightRequest="48" MinimumHeightRequest="48" FontAttributes="Bold" Padding="0" IsEnabled="{Binding CanCreateOrder}" Command="{Binding CreateOrderCommand}" />
+                     The colour is a BINDING, and that is the whole point. It used to be two
+                     DataTriggers setting TextColor to a bare {StaticResource Danger} and
+                     {StaticResource Success}. A trigger's Setter takes a value, not a binding
+                     expression, so each token was resolved once at parse time against the light
+                     theme and could never follow a theme change: measured on a Pixel 7 in dark
+                     theme this label painted Success #2E7D32 on #1E1E1E, 3.28:1, where
+                     SuccessDark would have been 8.28:1. MenuViewModel.MessageColor resolves
+                     against the live theme instead; see its remarks for the measurement. -->
+                <Label Text="{Binding Message}" IsVisible="{Binding HasMessage}" FontSize="14" FontAttributes="Bold" Margin="0,2,0,0"
+                       TextColor="{Binding MessageColor}" />
+
+                <!-- Two first-class paths, side by side in one row so the cart does not grow
+                     taller: "Оплатить и создать" opens the payment sheet and books the order
+                     paid; "Создать без оплаты" defers payment. Both are obvious choices —
+                     deferring payment is a normal part of a café's day (tabs, staff meals),
+                     not a hidden default. -->
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                    <Button Grid.Column="0" Text="Оплатить и создать" HeightRequest="48" MinimumHeightRequest="48" FontAttributes="Bold" Padding="0" IsEnabled="{Binding CanCreateOrder}" Command="{Binding PayAndCreateCommand}" />
+                    <Button Grid.Column="1" Text="Создать без оплаты" Style="{StaticResource SecondaryButton}" HeightRequest="48" MinimumHeightRequest="48" FontAttributes="Bold" Padding="0" IsEnabled="{Binding CanCreateOrder}" Command="{Binding CreateWithoutPaymentCommand}" />
+                </Grid>
             </VerticalStackLayout>
         </Border>
     </Grid>

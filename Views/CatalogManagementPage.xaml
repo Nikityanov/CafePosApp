@@ -64,19 +64,14 @@
          Auto/*/Fill guessing. The previous approach (a *,Auto,* wrapper with Fill on the
          content) overflowed because Fill takes all offered space while Auto sizes to the
          child's desired size, so the column grew unbounded and pushed the FAB and "Обновить"
-         off-screen. The first chip aligns with the left edge of the first card; "Обновить"
-         aligns with the right edge of the last column / the FAB.
+         off-screen. The first chip aligns with the left edge of the first card.
          The FAB is a true overlay — a child of the content Grid, VerticalOptions=End /
          HorizontalOptions=End. It floats over the list; the list scrolls underneath it. The FAB
          may overlap the last row — the operator nudges it out from under by scrolling. -->
     <Grid RowDefinitions="Auto,Auto,*">
 
-        <!-- ═══ HEADER: entity switcher + refresh ═══ -->
-            <!-- The "Обновить" button used to sit in a reserved Auto column of the content row
-                 (ColumnDefinitions="*,Auto"), which squeezed every list for its full height — the
-                 dead vertical strip on the right. It now lives in the header, next to the section
-                 chips, where it takes no space away from the lists.
-                 Four equal columns gave "Модификаторы" ~81dp on a 360dp phone, less than the word needs
+        <!-- ═══ HEADER: entity switcher ═══ -->
+            <!-- Four equal columns gave "Модификаторы" ~81dp on a 360dp phone, less than the word needs
                  at 13pt bold, and SectionTab pinned HeightRequest=36 so the overflow was clipped rather
                  than wrapped. The buttons now size to their text and the strip scrolls: on a 320dp
                  phone it scrolls sideways, on a tablet it fits. No width is hardcoded anywhere, which
@@ -91,29 +86,29 @@
                  measure pass comes back with a bogus height — the strip reserved ~230dp of blank space
                  below the chips. The old comment claimed the chips "take two rows" on a narrow phone,
                  which a horizontal ScrollView cannot do anyway. The category strip below was already
-                 NoWrap for the same reason. -->
-        <Grid x:Name="HeaderRow" Grid.Row="0" HorizontalOptions="Center" MaximumWidthRequest="1400" ColumnDefinitions="*,Auto" Padding="12,8,12,4" ColumnSpacing="8">
-                <!-- The strip does scroll, but with the scrollbar hidden and a chip clipped
-                     mid-word at the right edge it read as a broken layout rather than as
-                     "there is more to the right" — measured on the emulator: "Модификатор"
-                     was cut after the "р" against the "Обновить" button. "Default" is the
-                     affordance: the bar appears exactly when there is something to scroll to.
-                     Microsoft.Maui.ScrollBarVisibility has exactly three members — Default,
-                     Always, Never — and ScrollView exposes no thickness property at all, so
-                     nothing else is set here. Both facts were read off the shipped assembly:
-                     "Visible" and "Auto" are not members, and ScrollBarThickness does not
-                     exist, and each of those three aborted the process at inflation. -->
-                <ScrollView Grid.Column="0" Orientation="Horizontal"
-                            HorizontalScrollBarVisibility="Default" VerticalScrollBarVisibility="Never">
-                    <FlexLayout BindableLayout.ItemsSource="{Binding Sections}"
-                                BindableLayout.ItemTemplate="{StaticResource SectionChipTemplate}"
-                                Direction="Row" Wrap="NoWrap" AlignItems="Start" />
-                </ScrollView>
-                <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}"
-                        VerticalOptions="Center"
-                        IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}"
-                        Command="{Binding LoadCommand}"
-                        SemanticProperties.Description="Обновить каталог" />
+                 NoWrap for the same reason.
+
+                 «Обновить» is gone from this header too, by the same owner decision as the orders,
+                 shift report and analytics pages. The single trailing Auto column existed to hold it,
+                 so the header is one wide scrolling strip again and the chips get the whole width —
+                 which on a narrow phone is the difference between "Модификаторы" being fully visible
+                 and being clipped mid-word. This page does not poll, so the reload is
+                 leave-and-re-enter, which OnAppearing already does. -->
+        <Grid x:Name="HeaderRow" Grid.Row="0" HorizontalOptions="Center" MaximumWidthRequest="1400" Padding="12,8,12,4">
+                <!-- The strip scrolls with the scrollbar visible, because the scrollbar is the affordance:
+                 a chip clipped mid-word at the right edge reads as a broken layout rather than as
+                 "there is more to the right" — measured on the emulator, "Модификатор" was cut
+                 after the "р" against the old «Обновить» button. "Default" is the setting that
+                 shows the bar exactly when there is something to scroll to. It is one of exactly
+                 three members — Default, Always, Never — and ScrollView exposes no thickness
+                 property, so nothing else is available; "Visible" and "Auto" are not members and
+                 each of them aborted the process at inflation. -->
+            <ScrollView Orientation="Horizontal"
+                        HorizontalScrollBarVisibility="Default" VerticalScrollBarVisibility="Never">
+                <FlexLayout BindableLayout.ItemsSource="{Binding Sections}"
+                            BindableLayout.ItemTemplate="{StaticResource SectionChipTemplate}"
+                            Direction="Row" Wrap="NoWrap" AlignItems="Start" />
+            </ScrollView>
             </Grid>
 
             <!-- ═══ NOTICE ═══ -->
@@ -145,29 +140,43 @@
                  list — the list scrolls underneath it. The FAB may overlap the last row; the
                  operator nudges it out from under by scrolling. -->
         <Grid x:Name="ContentGrid" Grid.Row="2" HorizontalOptions="Fill">
+                <!-- Why there is no pull-to-refresh anywhere on this page, and why there was a
+                     «Обновить» button instead: the four sections are four independently-scrolling
+                     CollectionViews, not one scrollable surface. A RefreshView whose child is a Grid
+                     never fires the pull gesture on Android, and its IsRefreshing was bound OneWay to
+                     IsBusy, so the control could write true and nothing wrote the false that stopped
+                     the spinner (dotnet/maui#12469). Nesting a ScrollView per list to make the gesture
+                     work would defeat the recycling this layout exists for.
+                     «Обновить» was the workaround and is now gone by the owner's decision; the reload
+                     it performed is OnAppearing's LoadAsync, so navigating away and back is the
+                     manual refresh. Nothing on this page polls. -->
                 <Grid Padding="12,4">
 
-                    <!-- Refresh.
-                         The old markup wrapped this content in a RefreshView whose direct child was a plain
-                         Grid, which is not a scrollable: on Android the pull gesture never fires, and on both
-                         platforms IsRefreshing was bound OneWay to IsBusy, so the control could write true
-                         but nothing wrote the false that stopped the spinner (dotnet/maui#12469). A
-                         RefreshView here is therefore decorative — it cannot be made to work over a grid of
-                         four independently-scrolling CollectionViews, one per section, without nesting a
-                         scroll view per list and losing the recycling the layout was built around.
-                         So the refresh is a real, always-visible button instead of a gesture that silently did
-                         nothing. It is disabled while a load runs, so it cannot be double-fired. -->
-
                     <!-- ── PRODUCTS ── -->
-                    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" IsVisible="{Binding IsProductsSectionVisible}">
-                        <!-- Search + count in one row: the count label used to be a separate row below the
-                             toggle row, adding ~20dp of chrome. It now trails the SearchBar. -->
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                            <SearchBar Placeholder="Поиск..." Text="{Binding ProductSearchText}"
-                                       CancelButtonColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}" />
-                            <Label Grid.Column="1" Text="{Binding ProductsCountText}" Style="{StaticResource CountLabel}"
-                                   VerticalOptions="Center" />
-                        </Grid>
+                    <!-- Four rows, and they are all that is left: the count, the category chips, the
+                         deleted-products toggle, and the list itself.
+
+                         THREE THINGS CAME OUT OF THIS SECTION and the layout is the record of why.
+                           · «Обновить» — the owner's decision, page-wide.
+                           · «Выбрать» and the whole bulk-percentage-price mode with it. It was a real
+                             feature (multi-select → BulkPriceAdjustAsync), not decoration, and it is
+                             gone deliberately. What it bought was a percentage field permanently
+                             armed a few millimetres from every product's price; what it cost was a
+                             row of chrome and a mode where a tap stopped meaning "open this
+                             product". Prices are now changed one product at a time, where the old
+                             price is on screen next to the new one.
+                           · The SearchBar. The owner considers it unnecessary on a list the
+                             catalogue is expected to be small enough to scan, and the category
+                             chips below already narrow the list. Removing it is what lets the count
+                             and the chips share one row.
+
+                         The count was previously trailing the SearchBar in a two-column Grid;
+                         with the search gone it stands alone, so it is a plain label on its own
+                         row rather than a leftover column that happens to have one child left in
+                         it. It is not colour-only state — it is the count itself in words. -->
+                    <Grid RowDefinitions="Auto,Auto,Auto,*" IsVisible="{Binding IsProductsSectionVisible}">
+                        <Label Text="{Binding ProductsCountText}" Style="{StaticResource CountLabel}"
+                               VerticalOptions="Center" Margin="4,0" />
 
                         <!-- The category filter. It replaces a fixed 120dp Picker: on Android that opens a
                              blocking modal, swallows the system Back key (dotnet/maui#30430), and cannot show
@@ -183,8 +192,13 @@
                              touch target under the 48dp minimum, and the adjacent Label was not clickable —
                              so the label read as a label and the switch was barely tappable. MAUI has no
                              IsHitTestVisible: InputTransparent is the equivalent, and it is what lets the
-                             row's own tap reach the GestureRecognizer below. -->
-                        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8"
+                             row's own tap reach the GestureRecognizer below.
+
+                             Two columns now, because «Выбрать» and «CSV» no longer share it. Both were
+                             ToolbarButton — the same chrome as the page's refresh — which put a data-
+                             rewriting import two taps from a screen full of prices; the CSV round-trip
+                             now lives in Settings beside backup and restore. -->
+                        <Grid Grid.Row="2" ColumnDefinitions="Auto,*" ColumnSpacing="8"
                               MinimumHeightRequest="48" Margin="0,2,0,0">
                             <Grid.GestureRecognizers>
                                 <TapGestureRecognizer
@@ -194,49 +208,16 @@
                                     InputTransparent="True"
                                     SemanticProperties.Description="Показывать удалённые" />
                             <Label Grid.Column="1" Text="Показывать удалённые" VerticalOptions="Center" Style="{StaticResource Caption}" />
-                            <Button Grid.Column="2" Text="{Binding SelectionModeText}" Style="{StaticResource ToolbarButton}"
-                                    SemanticProperties.Description="Выбрать товары для массовой корректировки цен"
-                                    Command="{Binding ToggleSelectionModeCommand}" />
-                            <!-- CSV used to be two permanently visible buttons plus a bulk-% entry and an
-                                 apply button, all sitting under the list. That put a destructive, always-armed
-                                 percentage field one mis-tap away from every product's price. The round-trips
-                                 are rare, so they collapse into one overflow.
-                                 It cannot be a <MenuFlyout>: MAUI's Button has no Flyout property (only
-                                 FlyoutPage does), and a property element naming a property the type does
-                                 not have is rejected by the runtime XAML parser — a Debug-build process
-                                 abort, exactly as it was here. The sheet is the mechanism the row overflow
-                                 on this same page already uses. -->
-                            <Button Grid.Column="3" Text="CSV" Style="{StaticResource ToolbarButton}"
-                                    SemanticProperties.Description="Экспорт и импорт каталога в формате CSV"
-                                    Command="{Binding CsvActionsCommand}" />
                         </Grid>
 
-                        <!-- The bulk bar only exists while selecting, so the dangerous price change is a
-                             deliberate two-step rather than a permanently visible input under the list. It
-                             names its target, because with nothing ticked it still hits the whole list. -->
-                        <Border Grid.Row="3" Style="{StaticResource CardBorderCompact}"
-                                IsVisible="{Binding IsSelectionMode}" Margin="0,4,0,0">
-                            <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
-                                <Label Text="{Binding BulkPriceTargetText}" Style="{StaticResource Caption}"
-                                       LineBreakMode="WordWrap" />
-                                <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
-                                    <Button Text="Выбрать все" Style="{StaticResource SecondaryButton}"
-                                            Command="{Binding SelectAllVisibleCommand}" />
-                                    <Entry Grid.Column="1" Style="{StaticResource FormField}"
-                                           Placeholder="% корректировки (напр. +10 или -5)"
-                                           Text="{Binding BulkPricePercentText}" Keyboard="Numeric" />
-                                    <Button Grid.Column="2" Text="Применить" Style="{StaticResource WarningToolbarButton}"
-                                            SemanticProperties.Description="Применить корректировку цен"
-                                            Command="{Binding BulkPriceAdjustCommand}" />
-                                </Grid>
-                            </Grid>
-                        </Border>
-
-                        <!-- SelectionMode is bound, not fixed. In edit mode a tap selects the row and the
-                             page reads that selection as "open the edit form"; in selection mode the same
-                             tap ticks the row. A permanent Multiple would have eaten the tap-to-edit. -->
-                        <CollectionView x:Name="ProductsList" Grid.Row="4" ItemsSource="{Binding FilteredProducts}"
-                                        SelectionMode="{Binding IsSelectionMode, Converter={StaticResource BoolToSelectionMode}}">
+                        <!-- SelectionMode is Single, fixed and literal. It used to be bound to
+                             IsSelectionMode through BoolToSelectionMode, because selection mode also
+                             owned the row tap: Multiple there meant a tick, Single here meant "open
+                             the edit form". With the mode gone, the bound value could only ever be
+                             Single, so the binding was indirection around a constant. It is spelled out
+                             here and the converter is not referenced from any page again. -->
+                        <CollectionView x:Name="ProductsList" Grid.Row="3" ItemsSource="{Binding FilteredProducts}"
+                                        SelectionMode="Single">
                             <CollectionView.ItemsLayout>
                                 <!-- The span is set from code (see CatalogManagementPage.PublishAvailableWidth),
                                      not bound. Two reasons, both measured: ItemsLayout is a BindableObject
@@ -392,12 +373,18 @@
                     <!-- ── INGREDIENTS ── -->
                     <Grid RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsIngredientsSectionVisible}">
                         <Border Grid.Row="0" Style="{StaticResource Tag}" Padding="8,6" StrokeShape="RoundRectangle 6"
-                                BackgroundColor="{AppThemeBinding Light={StaticResource WarningLight}, Dark={StaticResource Gray700}}"
+                                BackgroundColor="{AppThemeBinding Light={StaticResource WarningLight}, Dark={StaticResource Gray800}}"
                                 IsVisible="{Binding HasLowStock}">
-                            <!-- The AppThemeBinding used to declare Warning for both branches, i.e. a theme
-                                 binding that changed nothing. -->
+                            <!-- Warning in BOTH branches, over a fill that flipped to grey — the signature
+                                 of a missing dark token rather than an intentional constant. This is the
+                                 fourth instance of that pairing in the app and the one the palette pass
+                                 left behind: it sat at 1.99:1 against the old Gray700, because the light
+                                 Warning token cannot carry a dark tonal fill. The fill is now Gray800 (the
+                                 dark tonal fill every other label-on-fill pair in Styles.xaml uses) and
+                                 the label takes WarningDark, 5.81:1 there. The state is still carried by
+                                 the wording and the leading "!", never by the tint. -->
                             <Label FontSize="12" FontAttributes="Bold" LineBreakMode="WordWrap"
-                                   TextColor="{StaticResource Warning}"
+                                   TextColor="{AppThemeBinding Light={StaticResource Warning}, Dark={StaticResource WarningDark}}"
                                    Text="{Binding LowStockText}" />
                         </Border>
 

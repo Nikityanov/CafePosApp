@@ -15,6 +15,12 @@
 
     <!-- ═══════════════════════════════════════════ -->
     <!--  SEMANTIC / STATUS COLORS                   -->
+    <!--  WCAG AA wants 4.5:1 on body text and 3:1 -->
+    <!--  on text at/over 18pt (or 14pt bold). Every -->
+    <!--  ratio in the comments below was computed   -->
+    <!--  with the WCAG 2.1 relative-luminance       -->
+    <!--  formula, so the next reader can re-check   -->
+    <!--  it rather than take it on trust.           -->
     <!-- ═══════════════════════════════════════════ -->
     <Color x:Key="Success">#2E7D32</Color>
     <Color x:Key="SuccessLight">#E8F5E9</Color>
@@ -24,6 +30,44 @@
     <Color x:Key="DangerLight">#FFEBEE</Color>
     <Color x:Key="Info">#1976D2</Color>
     <Color x:Key="InfoLight">#E3F2FD</Color>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!--  SEMANTIC FOREGROUNDS — DARK THEME                        -->
+    <!--                                                            -->
+    <!--  These did not exist. Every dark-theme pairing was        -->
+    <!--  improvised at the call site, and four of them kept the   -->
+    <!--  LIGHT tone in the dark branch while the fill underneath  -->
+    <!--  flipped to Gray700 — so the pair stopped being a pair and -->
+    <!--  "Восстановить из копии…" rendered Danger #D32F2F on      -->
+    <!--  Gray700 #616161, 1.24:1. Same-value theme bindings are    -->
+    <!--  the signature of a missing dark token, not of an         -->
+    <!--  intentional constant.                                    -->
+    <!--                                                            -->
+    <!--  Rule for picking one: same hue as the light token, and   -->
+    <!--  the lightest tone of it that still clears 4.5:1 on       -->
+    <!--  Gray800 #424242 — the dark tonal fill the danger, warning -->
+    <!--  and info controls use (see Styles.xaml). Gray700 #616161  -->
+    <!--  cannot carry ANY of these hues: the most saturated red   -->
+    <!--  that reaches 4.5:1 on it is #FFD1D1 and the most         -->
+    <!--  saturated green is #00FF08, a pale pink and a neon. That -->
+    <!--  is why the fill moved rather than the value being        -->
+    <!--  shipped low-contrast.                                    -->
+    <!--                                                            -->
+    <!--  Measured:                    Gray800  SurfaceDark  SurfVarDark -->
+    <!--  DangerDark  #FF9E8E            5.04:1     8.36:1       6.91:1 -->
+    <!--  WarningDark #FFB74D            5.81:1     9.63:1       7.96:1 -->
+    <!--  SuccessDark #81C784            4.99:1     8.28:1       6.84:1 -->
+    <!--  InfoDark    #90CAF9            5.74:1     9.53:1       7.87:1 -->
+    <!--                                                            -->
+    <!--  For reference, the light tokens on the fill they sit on   -->
+    <!--  in DARK mode (Gray700, the old fill) were all hopeless:   -->
+    <!--  Danger 1.24:1, Warning 1.99:1, Success 1.21:1, Info      -->
+    <!--  1.35:1 — no dark pairing in the app cleared 4.5:1.       -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Color x:Key="DangerDark">#FF9E8E</Color>
+    <Color x:Key="WarningDark">#FFB74D</Color>
+    <Color x:Key="SuccessDark">#81C784</Color>
+    <Color x:Key="InfoDark">#90CAF9</Color>
 
     <!-- ═══════════════════════════════════════════ -->
     <!--  SURFACE / BACKGROUND                       -->

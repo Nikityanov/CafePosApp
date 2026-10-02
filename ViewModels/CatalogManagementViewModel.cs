@@ -12,22 +12,47 @@ using Microsoft.Maui.ApplicationModel;
 namespace CafePosApp.ViewModels;
 
 /// <summary>
-/// Catalogue management list: sections, search/filter, availability toggles, CSV, bulk pricing.
+/// Catalogue management list: sections, category filtering, availability toggles and the row
+/// overflow menus.
 /// Create/edit forms live in ViewModels/Catalog/* and open through <see cref="ShowFormRequested"/>;
 /// the page shows <see cref="Views.CatalogFormsPage"/> modally and reloads on save.
 /// </summary>
+/// <remarks>
+/// What used to be here and is not, by the owner's decision: the product SearchBar, the
+/// «Выбрать» selection mode and the bulk percentage-price adjustment it fed, and the CSV
+/// export/import. The last of those moved to <see cref="SettingsViewModel"/> — see
+/// <c>SettingsViewModel.Catalog.cs</c> for why, and for the confirmation the import gained on the
+/// way. Nothing else moved with them, and this ViewModel no longer takes an <c>IFileService</c>.
+/// </remarks>
 public partial class CatalogManagementViewModel : ObservableObject
 {
     private readonly ICatalogService catalog;
     private readonly IDialogService dialogs;
-    private readonly IFileService files;
     private readonly IHapticService haptics;
     private readonly ICatalogActionSheet actionSheet;
     private readonly ILogger<CatalogManagementViewModel> logger;
 
     private readonly List<Product> allProducts = [];
 
-    /// <summary>How long the catalogue search waits after the last keystroke before filtering.</summary>
+    /// <summary>
+    /// How long a filter change waits before re-filtering.
+    /// </summary>
+    /// <remarks>
+    /// This timer used to serve two things — the product SearchBar and the category chips — and the
+    /// SearchBar is gone from this page by the owner's decision. The timer therefore has one caller
+    /// left, <see cref="SelectedProductCategory"/>, and it is still worth having there, which is
+    /// what the previous note got wrong when it described the debounce as having gone with the
+    /// search box. The chip is a single discrete tap with nothing to debounce on its own account;
+    /// what it needs the delay for is <see cref="RebuildCategoryFilters"/>, which reassigns
+    /// <see cref="SelectedProductCategory"/> on every load. Without the delay each load scheduled a
+    /// filter pass that raced the load that scheduled it.
+    /// <para>
+    /// <see cref="ProductSearchText"/> is the second caller and it stays too. Nothing binds it any
+    /// more — that is the whole point of the search's removal — but the in-memory filter and its
+    /// debounce are the property's behaviour, not the control's, so they were left intact rather
+    /// than made conditional on a SearchBar that is not coming back.
+    /// </para>
+    /// </remarks>
     private static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(250);
 
     private CancellationTokenSource? filterCancellation;
@@ -42,14 +67,12 @@ public partial class CatalogManagementViewModel : ObservableObject
     public CatalogManagementViewModel(
         ICatalogService catalog,
         IDialogService dialogs,
-        IFileService files,
         IHapticService haptics,
         ICatalogActionSheet actionSheet,
         ILogger<CatalogManagementViewModel> logger)
     {
         this.catalog = catalog;
         this.dialogs = dialogs;
-        this.files = files;
         this.haptics = haptics;
         this.actionSheet = actionSheet;
         this.logger = logger;
@@ -62,8 +85,6 @@ public partial class CatalogManagementViewModel : ObservableObject
         ShowAddFormCommand = new RelayCommand(ShowAddForm);
         SelectCategoryFilterCommand = new RelayCommand<CategoryFilterChip>(SelectCategoryFilter);
         ToggleShowDeletedCommand = new RelayCommand(() => ShowDeleted = !ShowDeleted);
-        SelectAllVisibleCommand = new RelayCommand(SelectAllVisible);
-        ToggleSelectionModeCommand = new RelayCommand(() => IsSelectionMode = !IsSelectionMode);
         EditProductCommand = new RelayCommand<Product>(product => RequestForm(CatalogFormKind.Product, product?.Id));
         CopyProductCommand = new AsyncRelayCommand<Product>(CopyProductAsync);
         DeleteProductCommand = new AsyncRelayCommand<Product>(DeleteProductAsync);
@@ -78,10 +99,6 @@ public partial class CatalogManagementViewModel : ObservableObject
         EditIngredientCommand = new RelayCommand<Ingredient>(ingredient => RequestForm(CatalogFormKind.Ingredient, ingredient?.Id));
         DeleteIngredientCommand = new AsyncRelayCommand<Ingredient>(DeleteIngredientAsync);
         ToggleIngredientAvailabilityCommand = new AsyncRelayCommand<Ingredient>(ToggleIngredientAvailabilityAsync);
-        BulkPriceAdjustCommand = new AsyncRelayCommand(BulkPriceAdjustAsync);
-        ExportCsvCommand = new AsyncRelayCommand(ExportCsvAsync);
-        ImportCsvCommand = new AsyncRelayCommand(ImportCsvAsync);
-        CsvActionsCommand = new AsyncRelayCommand(ShowCsvActionsAsync);
         ProductActionsCommand = new AsyncRelayCommand<Product>(ShowProductActionsAsync);
         CategoryActionsCommand = new AsyncRelayCommand<Category>(ShowCategoryActionsAsync);
         ModifierGroupActionsCommand = new AsyncRelayCommand<ModifierOptionGroup>(ShowModifierGroupActionsAsync);
@@ -229,9 +246,9 @@ public partial class CatalogManagementViewModel : ObservableObject
         {
             if (SetProperty(ref selectedProductCategory, value))
             {
-                // Same debounce as the search box: the chip strip and the search box are the two
-                // in-memory filters, so they share one latency instead of the chip being instant
-                // and the search lagging 250ms behind it.
+                // Debounced for the reason recorded on SearchDebounce: RebuildCategoryFilters
+                // reassigns this on every load, so an immediate refresh would run a filter pass
+                // against a half-populated Categories collection.
                 ScheduleFilterRefresh();
                 SyncCategoryFilterChips();
             }
@@ -270,14 +287,6 @@ public partial class CatalogManagementViewModel : ObservableObject
     public string IngredientsCountText => $"{Ingredients.Count} {Plural(Ingredients.Count, "ингредиент", "ингредиента", "ингредиентов")}";
 
     public string LowStockText => $"! {LowStockCount} {Plural(LowStockCount, "ингредиент заканчивается", "ингредиента заканчивается", "ингредиентов заканчивается")}";
-
-    /// <summary>
-    /// Says plainly what the bulk price change will hit, so the destructive step is never a
-    /// surprise. With nothing selected the target is the whole (filtered) list.
-    /// </summary>
-    public string BulkPriceTargetText => HasSelection
-        ? $"Выбрано {SelectedProductsCount} {Plural(SelectedProductsCount, "товар", "товара", "товаров")}"
-        : "Ничего не выбрано — цена изменится у всех товаров в списке";
 
     /// <summary>Russian plural selection: one / few / many.</summary>
     private static string Plural(int count, string one, string few, string many)
@@ -341,12 +350,6 @@ public partial class CatalogManagementViewModel : ObservableObject
     public IRelayCommand<Ingredient> EditIngredientCommand { get; }
     public IAsyncRelayCommand<Ingredient> DeleteIngredientCommand { get; }
     public IAsyncRelayCommand<Ingredient> ToggleIngredientAvailabilityCommand { get; }
-    public IAsyncRelayCommand BulkPriceAdjustCommand { get; }
-    public IAsyncRelayCommand ExportCsvCommand { get; }
-    public IAsyncRelayCommand ImportCsvCommand { get; }
-
-    /// <summary>Opens the sheet behind the single "CSV" button. See <c>CatalogActions.ForCsv</c>.</summary>
-    public IAsyncRelayCommand CsvActionsCommand { get; }
 
     // Row overflow menus. MAUI has no context menu, so each row opens an action sheet and the
     // chosen key is dispatched to the command that was already there.
@@ -355,64 +358,6 @@ public partial class CatalogManagementViewModel : ObservableObject
     public IAsyncRelayCommand<ModifierOptionGroup> ModifierGroupActionsCommand { get; }
     public IAsyncRelayCommand<ModifierOption> ModifierOptionActionsCommand { get; }
     public IAsyncRelayCommand<Ingredient> IngredientActionsCommand { get; }
-
-    private string bulkPricePercentText = string.Empty;
-    public string BulkPricePercentText { get => bulkPricePercentText; set => SetProperty(ref bulkPricePercentText, value); }
-
-    // ─── Selection (bulk pricing acts on this, not on the whole filtered list) ───
-
-    /// <summary>
-    /// While off, a tap on a product row opens the edit form. While on, the same tap ticks the
-    /// row and the bulk bar appears. A permanent SelectionMode="Multiple" would have eaten the
-    /// tap-to-edit gesture on every row, so the two modes are mutually exclusive.
-    /// </summary>
-    private bool isSelectionMode;
-    public bool IsSelectionMode
-    {
-        get => isSelectionMode;
-        set
-        {
-            if (!SetProperty(ref isSelectionMode, value)) return;
-            OnPropertyChanged(nameof(SelectionModeText));
-            if (!value) ClearSelection();
-        }
-    }
-
-    public string SelectionModeText => IsSelectionMode ? "Готово" : "Выбрать";
-
-    public IRelayCommand ToggleSelectionModeCommand { get; }
-
-    /// <summary>Products the operator ticked. A reload rebuilds the list, so the selection is
-    /// dropped on every load: the entity instances are replaced and would be stale.</summary>
-    public ObservableCollection<Product> SelectedProducts { get; } = new();
-
-    public int SelectedProductsCount => SelectedProducts.Count;
-    public bool HasSelection => SelectedProducts.Count > 0;
-
-    public IRelayCommand SelectAllVisibleCommand { get; }
-
-    private void ClearSelection() => ApplySelection([]);
-
-    private void SelectAllVisible() => ApplySelection(FilteredProducts);
-
-    /// <summary>
-    /// Replaces the ticked rows. Called from the page's CollectionView selection handler, so it
-    /// takes a plain list rather than reading the control.
-    /// </summary>
-    public void ApplySelection(IEnumerable<Product> products)
-    {
-        var next = products.ToList();
-        if (next.Count == SelectedProducts.Count && next.All(SelectedProducts.Contains))
-        {
-            return;
-        }
-
-        SelectedProducts.Clear();
-        foreach (var product in next) SelectedProducts.Add(product);
-        OnPropertyChanged(nameof(SelectedProductsCount));
-        OnPropertyChanged(nameof(HasSelection));
-        OnPropertyChanged(nameof(BulkPriceTargetText));
-    }
 
     // ─── Load ───
 
@@ -504,19 +449,13 @@ public partial class CatalogManagementViewModel : ObservableObject
 
         FilteredProducts.SyncWith(query, product => product.Id);
 
-        // SyncWith replaces the entity instances for anything the query returned, so any
-        // selection made against the previous instances now points at detached objects.
-        // Dropping it is the honest thing: a bulk price change must not act on a row the
-        // operator can no longer see.
-        if (SelectedProducts.Count > 0) ApplySelection([]);
-
         OnPropertyChanged(nameof(ProductsCountText));
     }
 
     /// <summary>
-    /// Restarts the debounce timer on every keystroke, so the filter runs once typing pauses.
-    /// It used to re-scan the whole catalogue and re-diff the list on each keystroke, which
-    /// stutters on a long catalogue.
+    /// Restarts the debounce timer on every filter change, so the filter runs once the operator
+    /// stops acting. It used to fire per keystroke, which re-scanned the whole catalogue and
+    /// re-diffed the list on each character and stutters on a long catalogue.
     /// </summary>
     private void ScheduleFilterRefresh()
     {
@@ -537,7 +476,7 @@ public partial class CatalogManagementViewModel : ObservableObject
             }
             catch (OperationCanceledException)
             {
-                // Superseded by a newer keystroke — the newest one does the work.
+                // Superseded by a newer filter change — the newest one does the work.
             }
         }, token);
     }

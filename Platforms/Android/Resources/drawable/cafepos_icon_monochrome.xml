@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MONOCHROME (themed-icon) LAYER, Android 13+ / API 33 and up.
+
+  Still a genuinely separate vector, not the full-colour raster. Resizetizer 10.0.101
+  hard-codes <monochrome android:drawable="@mipmap/appicon_foreground"/> into the
+  adaptive icon it generates, and MonochromeFile is a .NET MAUI 11 property that does not
+  exist in 10.0.101, so this layer is a project resource. Resolved through
+  mipmap-anydpi-v26/cafepos_icon.xml, which the manifest points android:icon at.
+
+  The pathData below is byte-identical to drawable/cafepos_mark.xml: same numbers, same
+  order, only the colour differs. That invariant is deliberate and worth keeping. The
+  colour mark carries no interior detail, so one geometry serves both jobs, and having
+  two files rather than one is what lets a reviewer diff them. If the colour layer ever
+  grows a feature the tint cannot carry, this file has to be redrawn, not recoloured.
+
+  HOW IT SURVIVES FLATTENING
+  ==========================
+  The system uses only this drawable's alpha channel and paints every opaque pixel with
+  the theme tint, so the colour below is irrelevant (it is the conventional #FF000000).
+  Every recognisable feature therefore has to be carried by shape:
+    - no disc behind the mark, so the space around it is the feature;
+    - the handle is a STROKED RING, not a filled outline, so its 8.0-unit counter is
+      real empty space that stays empty when everything opaque becomes one colour;
+    - the saucer is 2.0 clear of the cup base and the steam is 2.5 clear of the rim, so
+      the three parts read as three parts;
+    - the two steam curls are 4.0 apart, so they do not merge into a bar;
+    - the steam is 11.0 tall on a 3.0 stroke, so each wisp still reads as a wisp when
+      the theme flattens it, instead of filling in into a tick mark.
+
+  Mark is 60.75 across (max radius 30.373 from the 108 canvas centre); geometry, the
+  handle's two clearances and every floor are documented in drawable/cafepos_mark.xml.
+
+  Intrinsic size 108x108dp on a 108 viewport: the conventional adaptive-icon canvas.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- cup body -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M34,42 L60,42 L56.5,64 C55.4,68.7 51.6,71 47,71 C42.4,71 38.6,68.7 37.5,64 Z" />
+
+    <!-- handle ring: fill none, so the 8.0-unit counter is real negative space -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="3.5"
+        android:pathData="M64.65,45.75 C67.83,45.75 70.4,48.32 70.4,51.5 C70.4,54.68 67.83,57.25 64.65,57.25 C61.47,57.25 58.9,54.68 58.9,51.5 C58.9,48.32 61.47,45.75 64.65,45.75 Z" />
+
+    <!-- steam: two curls, 11.0 tall on a 3.0 stroke -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M43,38 C40.8,33.5 45.2,31.5 45,27" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M52,38 C49.8,33.5 54.2,31.5 54,27" />
+
+    <!-- saucer -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M39,73 L68,73 C69.66,73 71,74.34 71,76 C71,77.66 69.66,79 68,79 L39,79 C37.34,79 36,77.66 36,76 C36,74.34 37.34,73 39,73 Z" />
+</vector>

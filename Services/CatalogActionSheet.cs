@@ -26,11 +26,15 @@ public sealed class CatalogActionSheet : ICatalogActionSheet
 
         // A dimmed, tappable backdrop and rounded top corners so the sheet reads as a bottom
         // sheet rather than a centred dialog. The shape drives the border's StrokeShape.
+        //
+        // The dim has to come from PageOverlayColor rather than from a backdrop element inside the
+        // popup: the toolkit insets a popup's content by 15dp on each side (measured: popup 411dp
+        // wide, its content 381dp), so an in-popup backdrop left the page undimmed down both edges.
         var options = new PopupOptions
         {
             PageOverlayColor = Color.FromRgba(0, 0, 0, 0.5),
             CanBeDismissedByTappingOutsideOfPopup = true,
-            Shape = new RoundRectangle { CornerRadius = new CornerRadius(16, 16, 0, 0) }
+            Shape = new RoundRectangle { CornerRadius = new CornerRadius(18, 18, 0, 0) }
         };
 
         var result = await PopupExtensions.ShowPopupAsync<string?>(page, popup, options, cancellationToken);

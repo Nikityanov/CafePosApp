@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  BACKGROUND LAYER of the adaptive icon. Flat fill, nothing else.
+
+  Measured: Resizetizer scales this 456-unit viewBox by 108/456 = 0.2368 onto the
+  108dp adaptive-icon canvas, so 1 unit = 0.2368dp and 1dp = 4.2222 units. Android
+  hands the background layer NO mask inset, so a full-bleed fill is both correct and
+  the only job this file has.
+
+  This file used to carry the whole logo as well, which meant the mark was drawn
+  twice - twice, at two scales, in two colour schemes - stacked on top of each other.
+  The foreground copy was invisible against the background copy, and the navy saucer
+  stroke sat navy-on-navy. The mark now lives only in appiconfg.svg.
+-->
 <svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
     <rect width="456" height="456" fill="#143D59" />
-    <circle cx="228" cy="228" r="142" fill="#F2C14E" />
-    <path d="M145 190h136v62c0 42-30 76-68 76s-68-34-68-76v-62z" fill="#FFF8ED" />
-    <path d="M281 207h24c28 0 50 21 50 47s-22 47-50 47h-26" fill="none" stroke="#FFF8ED" stroke-width="18" stroke-linecap="round" />
-    <path d="M175 161c-10-20 13-27 3-47M222 161c-10-20 13-27 3-47M269 161c-10-20 13-27 3-47" fill="none" stroke="#FFF8ED" stroke-width="12" stroke-linecap="round" />
-    <path d="M132 190h162" stroke="#143D59" stroke-width="12" stroke-linecap="round" />
 </svg>

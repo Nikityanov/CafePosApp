@@ -1,8 +1,104 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FOREGROUND LAYER of the icon: the CafePos mark, gold on the navy background.
+
+  Canvas is 108x108dp. This file is a 456-unit viewBox that Resizetizer scales by
+  108/456 = 0.2368 to fill it 1:1, so 1 SVG unit = 0.2368dp and 1dp = 4.2222 units.
+  Every coordinate below is the dp value times 4.2222. The vector twin of this file,
+  Platforms/Android/Resources/drawable/cafepos_mark.xml, holds the same geometry in dp
+  and is the easier place to read it; this file is that geometry x 4.2222 and nothing
+  else. Measured deviation between the two is 0.001dp, i.e. 2dp rounding of this grid.
+
+  THE MARK, MEASURED AGAINST THE MASKABLE ZONES
+  ==============================================
+  Android's adaptive-icon canvas is 108x108dp with an 18dp bleed on each side, and the
+  mark is designed to the 72dp MASKABLE zone (centred 72dp circle, the guaranteed-visible
+  area once the launcher has masked it), not the 66dp guaranteed-visible-UNMASKED zone.
+
+  Measured extremes, as radius from the canvas centre (54,54):
+
+    steam A top-cap LEFT corner   (43.5, 25.5)   r = 30.373   <- BINDING
+    steam A top-cap top           (45, 25.5)     r = 29.89
+    steam B top-cap left corner   (52.5, 25.5)   r = 28.54
+    saucer left cap               (36, 76)       r = 28.43
+    saucer right cap              (71, 76)       r = 27.80
+    cup rim left                  (34, 42)       r = 23.32
+    cup base                      (47, 71)       r = 18.39
+    handle outer right            (72.15, 51.5)  r = 18.32
+    handle outer top              (64.65, 44)    r = 14.61
+
+  MAX RADIUS = 30.373, so the mark is 60.75dp across:
+    - 2.63 units inside the 33.0 guaranteed-visible-unmasked zone, and
+    - 5.63 units inside the 36.0 maskable hard limit.
+
+  That is SMALLER than the previous revision's 30.373-vs-31.83 max radius, even though
+  the steam got much taller, because narrowing the saucer handed back the room the
+  steam needed. The saucer's left cap used to be the binding constraint at (32,77) r
+  31.83; it is now (36,76) r 28.43, and the binding constraint has moved to the top of
+  the left steam curl.
+
+  WHAT CHANGED IN THIS REVISION, AND WHY
+  =====================================
+  1. Steam. Each curl was 5.0 tall on a 5.0 stroke, a 1:1 ratio, so the stroke filled
+     its own path and the render was an 8x10 rounded lozenge, reading as two tick marks
+     rather than vapour. Now 11.0 tall on a 3.0 stroke, a 3.67:1 ratio, so the stroke is
+     27% of the curl height and the wisp survives its own line weight.
+
+  2. Handle. The ring was r 8.5 stroke 5, i.e. 22.0 across against a 26.0-wide cup:
+     85% of the cup, which read as a cup with a bagel strapped to it. Now r 5.75 stroke
+     3.5, 15.0 across = 57.7% of the cup, with an 8.0 counter that is still obviously
+     open and still real negative space. Its top is now y 44.0, 2.0 units BELOW the cup
+     rim at y 42; it used to be y 41, 1.0 unit ABOVE the rim, and peeking over the rim
+     was a large part of the bagel look.
+
+     The two clearances, both recomputed against the cup's right wall (the line through
+     (60,42) and (56.5,64)):
+       perpendicular distance ring centre to that wall   d = 6.085
+       MERGE     ring's left arc sits INSIDE the wall    7.500 - 6.085 = 1.415
+       CLEARANCE counter stays clear of the wall         6.085 - 4.000 = 2.085
+     These are not independent and must not be treated as such: a wall crossing a ring
+     band splits the band, so merge + clearance == stroke width (1.415 + 2.085 == 3.5)
+     exactly. Holding the clearance at the 2-unit floor caps the merge at 1.5 whatever
+     the ring position, so the clearance was set to 2.085 to give the rest of the band
+     to the merge. 1.415 is not a hairline: the buried arc is +/-35.8 degrees, 9.37
+     units of circumference, because the wall is near-vertical and crosses square-on.
+
+  3. Saucer. Was x 32..74, 42.0 wide, overhanging 2 left and 14 right, so it reached
+     out under the handle rather than under the cup, and a 3.0 gap left it reading as a
+     separate bar. Now x 36..71, 35.0 wide, y 73..79, overhanging 2.0 left and 11.0
+     right, centred at x 53.5 against a cup+handle mass of x 34..72.15 centred at
+     53.08, with a 2.0 gap so the cup sits on it.
+
+  FLOORS AND RULES
+  ================
+  - Nothing is below the 2-unit (2dp) floor: steam stroke 3.0, handle stroke 3.5,
+    saucer thickness 6.0, counter diameter 8.0, counter-to-cup-wall 2.085, steam-to-rim
+    2.5, curl-to-curl 4.0, cup-to-saucer 2.0. The single number under 2 is the 1.415
+    handle merge, and that is a connection, not a stroke and not a gap.
+  - No disc behind the mark. Under Android 13+ theming every opaque pixel becomes one
+    tint, so a mark drawn ON an opaque disc has no negative space left and collapses to
+    a featureless filled circle. Here the negative space IS the mark. The same geometry
+    is redrawn single-colour in
+    Platforms/Android/Resources/drawable/cafepos_icon_monochrome.xml, with byte-identical
+    pathData to the dp vector.
+  - The handle is a stroked ring, not a filled outline, for the same reason: its counter
+    has to stay empty when everything opaque becomes one colour.
+  - No baked-in mask, no drop shadow. Masks are per-OEM and convex (circle, squircle,
+    rounded square); the launcher supplies its own shadow and a baked one reads as a
+    double shadow.
+  - Contrast: gold #F2C14E on navy #143D59 is 6.8:1 (WCAG), above the 3:1 needed for a
+    graphical object. Nothing is conveyed by colour alone.
+  - The saucer's semicircular caps and the handle circle are drawn as cubics rather than
+    arcs so the Android vector twin needs no arc support below API 24.
+-->
 <svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
-	<circle cx="228" cy="228" r="142" fill="#F2C14E" />
-	<path d="M145 190h136v62c0 42-30 76-68 76s-68-34-68-76v-62z" fill="#143D59" />
-	<path d="M281 207h24c28 0 50 21 50 47s-22 47-50 47h-26" fill="none" stroke="#143D59" stroke-width="18" stroke-linecap="round" />
-	<path d="M175 161c-10-20 13-27 3-47M222 161c-10-20 13-27 3-47M269 161c-10-20 13-27 3-47" fill="none" stroke="#143D59" stroke-width="12" stroke-linecap="round" />
-	<path d="M132 190h162" stroke="#F2C14E" stroke-width="12" stroke-linecap="round" />
+	<!-- cup body: 26.0dp wide, dp y 42..71. Unchanged in this revision. -->
+	<path d="M143.56,177.33 L253.33,177.33 L238.56,270.22 C233.91,290.07 217.87,299.78 198.44,299.78 C179.02,299.78 162.98,290.07 158.33,270.22 Z" fill="#F2C14E" />
+	<!-- handle: stroked circle, dp centre (64.65,51.5) r 5.75, stroke 3.5 -->
+	<circle cx="272.97" cy="217.44" r="24.28" fill="none" stroke="#F2C14E" stroke-width="14.78" />
+	<!-- steam: two curls, dp 11.0 tall on a 3.0 stroke, 4.0 apart -->
+	<path d="M181.56,160.44 C172.27,141.44 190.84,133 190,114" fill="none" stroke="#F2C14E" stroke-width="12.67" stroke-linecap="round" />
+	<path d="M219.56,160.44 C210.27,141.44 228.84,133 228,114" fill="none" stroke="#F2C14E" stroke-width="12.67" stroke-linecap="round" />
+	<!-- saucer: rounded bar, dp x 36..71 y 73..79, caps 3dp -->
+	<path d="M164.67,308.22 L287.11,308.22 C294.12,308.22 299.78,313.88 299.78,320.89 C299.78,327.9 294.12,333.56 287.11,333.56 L164.67,333.56 C157.66,333.56 152,327.9 152,320.89 C152,313.88 157.66,308.22 164.67,308.22 Z" fill="#F2C14E" />
 </svg>

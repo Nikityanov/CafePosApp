@@ -2,7 +2,6 @@ using CafePos.Core.Common;
 using CafePos.Core.Errors;
 using CafePos.Core.Models;
 using Microsoft.Extensions.Logging;
-using Microsoft.Maui.ApplicationModel;
 
 namespace CafePosApp.ViewModels;
 
@@ -25,48 +24,20 @@ public partial class MenuViewModel
     }
 
     /// <summary>
-    /// Runs the filter straight away. Every keystroke used to re-scan every product and re-diff
-    /// the whole list, which stutters on a long menu, so the search box goes through
-    /// <see cref="ScheduleFilterRefresh"/> instead.
+    /// Rebuilds <see cref="FilteredProducts"/> from the selected category and the time window.
+    /// Called by <see cref="SelectCategory"/> and by <see cref="LoadAsync"/>. There is no search
+    /// on this page — the owner's call, see the row-structure comment in Views/MenuPage.xaml —
+    /// so nothing else feeds it.
     /// </summary>
     private void ApplyFilters()
     {
         var localHour = timeProvider.GetLocalNow().Hour;
         var query = Products.Where(product =>
             (SelectedCategory is null || product.CategoryId == SelectedCategory.Id)
-            && (string.IsNullOrWhiteSpace(SearchText) || product.Name.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase))
             && ProductAvailability.IsInTimeWindow(product.AvailableFromHour, product.AvailableToHour, localHour));
 
         // Diff based filtering: no Clear(), so the list does not flicker or lose its scroll.
         FilteredProducts.SyncWith(query, product => product.Id);
-    }
-
-    /// <summary>
-    /// Restarts the debounce timer on every keystroke, so the filter runs once typing pauses.
-    /// A section switch still calls <see cref="ApplyFilters"/> directly.
-    /// </summary>
-    private void ScheduleFilterRefresh()
-    {
-        // Cancel the pending run. Not disposing the source is deliberate: Task.Delay registers a
-        // timer rather than a wait handle, so there is no OS resource to release.
-        Interlocked.Exchange(ref filterCancellation, new CancellationTokenSource())?.Cancel();
-
-        var token = filterCancellation.Token;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(SearchDebounce, token);
-                if (token.IsCancellationRequested) return;
-
-                // The timer thread must not touch the bound collections.
-                MainThread.BeginInvokeOnMainThread(ApplyFilters);
-            }
-            catch (OperationCanceledException)
-            {
-                // Superseded by a newer keystroke — the newest one does the work.
-            }
-        }, token);
     }
 
     public async Task LoadAsync()

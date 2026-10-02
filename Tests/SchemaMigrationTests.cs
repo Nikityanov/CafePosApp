@@ -10,7 +10,7 @@ namespace CafePosApp.Tests;
 public class SchemaMigrationTests
 {
     // Simulate the very first release: money as TEXT, local timestamps, no audit tables.
-    private const string LegacyV1Schema = """
+    internal const string LegacyV1Schema = """
         CREATE TABLE [Products] ([Id] TEXT NOT NULL PRIMARY KEY, [Name] TEXT NOT NULL, [Price] TEXT NOT NULL);
         CREATE TABLE [ModifierGroups] ([Id] TEXT NOT NULL PRIMARY KEY, [Name] TEXT NOT NULL);
         CREATE TABLE [ModifierOptions] ([Id] TEXT NOT NULL PRIMARY KEY, [Name] TEXT NOT NULL, [ModifierGroupId] TEXT NOT NULL);
@@ -31,7 +31,9 @@ public class SchemaMigrationTests
 
         Assert.True(result.FreshDatabase);
         Assert.Equal(migrator.LatestVersion, result.FinalVersion);
-        Assert.Equal(5, result.FinalVersion);
+        // Pinned on purpose: when the next migration lands this line is the reminder that the
+        // expectations above it are no longer enough.
+        Assert.Equal(8, result.FinalVersion);
     }
 
     [Fact]
@@ -45,7 +47,7 @@ public class SchemaMigrationTests
 
         Assert.False(second.FreshDatabase);
         Assert.Empty(second.AppliedMigrations);
-        Assert.Equal(5, second.FinalVersion);
+        Assert.Equal(migrator.LatestVersion, second.FinalVersion);
     }
 
     [Fact]
@@ -83,8 +85,8 @@ public class SchemaMigrationTests
         var result = await migrator.MigrateAsync();
 
         Assert.False(result.FreshDatabase);
-        Assert.Equal(5, result.FinalVersion);
-        Assert.Equal(4, result.AppliedMigrations.Count); // 2, 3, 4, 5
+        Assert.Equal(migrator.LatestVersion, result.FinalVersion);
+        Assert.Equal(7, result.AppliedMigrations.Count); // 2, 3, 4, 5, 6, 7, 8
 
         // Money became integer kopecks; totals were recalculated from the order items.
         await using var connection = new SqliteConnection($"Data Source={host.DatabasePath}");
@@ -122,6 +124,14 @@ public class SchemaMigrationTests
         Assert.Contains("OrderNumber", await GetColumnsAsync(connection, "Orders"));
         Assert.Contains("IsDeleted", await GetColumnsAsync(connection, "Products"));
         Assert.Contains("NextOrderNumber", await GetColumnsAsync(connection, "Shifts"));
+        Assert.Contains("PaidKopecks", await GetColumnsAsync(connection, "Orders"));
+        Assert.Contains("AmountKopecks", await GetColumnsAsync(connection, "OrderPayments"));
+        Assert.Contains("IsRefund", await GetColumnsAsync(connection, "OrderPayments"));
+        Assert.Contains("Note", await GetColumnsAsync(connection, "OrderPayments"));
+        Assert.Contains("CountedCashKopecks", await GetColumnsAsync(connection, "Shifts"));
+        Assert.Contains("ExpectedCashKopecks", await GetColumnsAsync(connection, "Shifts"));
+        Assert.Contains("ReconciledAt", await GetColumnsAsync(connection, "Shifts"));
+        Assert.Contains("CashDiscrepancyReason", await GetColumnsAsync(connection, "Shifts"));
     }
 
     private static async Task<HashSet<string>> GetColumnsAsync(SqliteConnection connection, string table)
@@ -155,12 +165,13 @@ public class SchemaMigrationTests
         await using (var db = await factory.CreateDbContextAsync())
             await SqliteSchemaHelper.ExecuteAsync(db, LegacyV1Schema, CancellationToken.None);
 
-        var result = await host.Get<SchemaMigrator>().MigrateAsync();
+        var migrator = host.Get<SchemaMigrator>();
+        var result = await migrator.MigrateAsync();
 
         // На пустой базе мигратор вызвал бы EnsureCreated, и обе стороны сравнения гарантированно
         // совпали бы — тест ничего бы не проверял. Такая база обязана идти по ветке апгрейда.
         Assert.False(result.FreshDatabase);
-        Assert.Equal(5, result.FinalVersion);
+        Assert.Equal(migrator.LatestVersion, result.FinalVersion);
 
         int entityTypeCount;
         Dictionary<string, HashSet<string>> modelColumns;
