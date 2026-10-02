@@ -66,6 +66,17 @@ public partial class MenuViewModel
             HighlightSelectedChip();
             ApplyFilters();
             await RestoreDraftAsync();
+
+            // The formatted amounts depend on Currencies.Default, which the operator can change on
+            // the Settings tab while this page's ViewModel instance is still alive — Shell keeps one
+            // page per tab, so coming back here re-runs LoadAsync on the SAME instance rather than
+            // building a new one.
+            //
+            // This refresh cannot be left to Recalculate. An empty cart totals 0 before and after a
+            // load, so SetProperty sees no change, raises nothing, and «Итого» would keep printing the
+            // old sign — measured on the emulator: tiles in ₿, cart total still in ₽. Hence the
+            // explicit re-raise of both the total and every cart row.
+            RefreshMoneyText();
         }
         catch (Exception exception)
         {
@@ -181,4 +192,20 @@ public partial class MenuViewModel
     }
 
     private void Recalculate() => Total = Cart.Sum(item => item.LineTotal);
+
+    /// <summary>
+    /// Re-raises every formatted amount on this screen — the cart total and each row's line total —
+    /// after the selected currency may have changed.
+    /// </summary>
+    /// <remarks>
+    /// Called at the end of <see cref="LoadAsync"/>, which Shell drives on every return to the tab.
+    /// The per-item properties are raised through <see cref="CartItemViewModel"/>'s own
+    /// notification rather than by rebuilding the rows, so the cart does not flicker or lose its
+    /// scroll position when nothing about the money itself actually changed.
+    /// </remarks>
+    private void RefreshMoneyText()
+    {
+        OnPropertyChanged(nameof(TotalText));
+        foreach (var item in Cart) item.RefreshMoneyText();
+    }
 }

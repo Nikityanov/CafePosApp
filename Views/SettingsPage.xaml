@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:backup="clr-namespace:CafePos.Core.Services;assembly=CafePos.Core" x:Class="CafePosApp.Views.SettingsPage" x:DataType="vm:SettingsViewModel" Title="Настройки">
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:backup="clr-namespace:CafePos.Core.Services;assembly=CafePos.Core" x:Class="CafePosApp.Views.SettingsPage" x:DataType="vm:SettingsViewModel" Title="Настройки"
+             Shell.NavBarIsVisible="False">
     <ScrollView>
         <VerticalStackLayout Padding="16" Spacing="12">
-            <!-- No PageTitle label: the Shell nav bar already reads "Настройки", and the page
-                 repeated it as "Настройки приложения" directly underneath — the same word twice,
-                 in two different sizes, before any content. The section headings below carry
-                 the structure instead. -->
+            <!-- No PageTitle label. It was first dropped because the Shell nav bar already read
+                 "Настройки" and the page repeated it as "Настройки приложения" underneath — the
+                 same word twice, in two sizes, before any content. The nav bar is now hidden on
+                 this page too (Shell.NavBarIsVisible on the root), because it duplicated the
+                 "Настройки" tab label; the tab bar is what names the section. So the section
+                 headings below carry the structure, exactly as before. -->
+
             <Border Style="{StaticResource CardBorder}">
                 <VerticalStackLayout Spacing="10">
                     <Label Text="Внешний вид и поведение" Style="{StaticResource SectionTitle}" />
@@ -28,6 +32,21 @@
                     <VerticalStackLayout Spacing="2">
                         <Label Text="Тема оформления" Style="{StaticResource FieldLabel}" />
                         <Picker Style="{StaticResource FormFieldPicker}" Title="Тема оформления" ItemsSource="{Binding Themes}" SelectedItem="{Binding ThemeText}" />
+                    </VerticalStackLayout>
+                    <!-- The currency, with its own worked example underneath. That summary line is
+                         not decoration: CNY and JPY share the ¥ sign and differ ONLY in decimal
+                         places, so a title-only picker would leave the operator unable to tell the
+                         two apart — see SettingsViewModel.CurrencySummary.
+                         Bound by CODE, not by Title, so the saved value survives a translation pass.
+                         The digit count after the comma comes from the currency itself and is not a
+                         separate setting: every preset carries its own correct minor unit. -->
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Валюта" Style="{StaticResource FieldLabel}" />
+                        <Picker Style="{StaticResource FormFieldPicker}" Title="Валюта"
+                                ItemsSource="{Binding CurrencyList}"
+                                ItemDisplayBinding="{Binding Title}"
+                                SelectedItem="{Binding SelectedCurrency}" />
+                        <Label Text="{Binding CurrencySummary}" Style="{StaticResource SecondaryLabel}" FontSize="12" />
                     </VerticalStackLayout>
                     <Label Text="Настройки сохраняются только на этом устройстве." Style="{StaticResource SecondaryLabel}" />
                     <Button Text="Сохранить настройки" Command="{Binding SaveCommand}" />

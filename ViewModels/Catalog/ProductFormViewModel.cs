@@ -83,6 +83,20 @@ public partial class ProductFormViewModel : ObservableObject, IFormFooterSource
     private string productName = string.Empty;
     public string ProductName { get => productName; set => SetProperty(ref productName, value); }
 
+    /// <summary>
+    /// The price field's placeholder, naming the selected currency's unit.
+    /// </summary>
+    /// <remarks>
+    /// A bound placeholder rather than a literal "Цена, ₽", because this form is the one place an
+    /// operator types an amount and the symbol tells them which money the till is in. It goes
+    /// through the currency's own minor-unit name, so it reads "Цена, капеек" for the Belarusian
+    /// ruble and needs no separate string per currency.
+    /// </remarks>
+    public string PricePlaceholder => $"Цена, {Currencies.Default.MinorUnitName}";
+
+    /// <summary>The cost-per-unit placeholder, worded to match <see cref="PricePlaceholder"/>.</summary>
+    public string CostPlaceholder => $"Себестоимость за единицу, {Currencies.Default.MinorUnitName}";
+
     private string productPriceText = string.Empty;
     public string ProductPriceText
     {

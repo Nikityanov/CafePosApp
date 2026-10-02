@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using CafePos.Core.Common;
 using CafePos.Core.Services;
 // ThemeColors lives in the Converters namespace only because Controls/ResourceStyles.cs was out of
 // the change that added it; it belongs beside ResourceStyles.TryGetColor. See its own remarks.
@@ -52,6 +53,7 @@ public partial class SettingsViewModel : ObservableObject
         AutoRefreshSecondsText = settings.AutoRefreshSeconds.ToString();
         OrderPrefix = settings.OrderPrefix;
         ThemeText = settings.Theme switch { AppTheme.Light => "Светлая", AppTheme.Dark => "Темная", _ => "Системная" };
+        SelectedCurrency = settings.CurrencyCode;
 
         SaveCommand = new RelayCommand(Save);
         CreateBackupCommand = new AsyncRelayCommand(CreateBackupAsync);
@@ -79,6 +81,65 @@ public partial class SettingsViewModel : ObservableObject
     public string ThemeText { get => themeText; set => SetProperty(ref themeText, value); }
 
     public IReadOnlyList<string> Themes { get; } = ["Системная", "Светлая", "Темная"];
+
+    // ── Currency ───────────────────────────────────────────────────────────────────────────────
+    // A Picker over the preset list. It is bound to a Currency OBJECT rather than to the ISO code
+    // string, because ItemDisplayBinding renders the title while SelectedItem needs the item
+    // itself — binding SelectedItem to a string would have to match titles, and the titles are
+    // Russian text a future translation pass could change. The code, not the title, is what gets
+    // persisted; see Save().
+    //
+    // The property is named SelectedCurrency, not Currency, on purpose: a property called Currency
+    // would shadow the type of the same name inside this class, which is the sort of collision that
+    // compiles until someone adds a second member and then does not.
+
+    private Currency selectedCurrency = Currencies.Ruble;
+
+    /// <summary>The currency the picker has selected. Raises <see cref="CurrencySummary"/>.</summary>
+    /// <remarks>
+    /// The assigned value is re-resolved through <see cref="Currencies.FromCode"/> rather than
+    /// stored as given. That guarantees the selection is always one of the instances in
+    /// <see cref="CurrencyList"/>, which is what the Picker's SelectedItem match needs, and it
+    /// means a null or unrecognised value degrades to the ruble rather than leaving the picker
+    /// pointing at nothing.
+    /// </remarks>
+    public Currency SelectedCurrency
+    {
+        get => selectedCurrency;
+        set
+        {
+            var resolved = Currencies.FromCode(value?.Code);
+            if (!SetProperty(ref selectedCurrency, resolved)) return;
+            OnPropertyChanged(nameof(CurrencySummary));
+        }
+    }
+
+    /// <summary>Every preset, for the picker.</summary>
+    public IReadOnlyList<Currency> CurrencyList { get; } = Currencies.All;
+
+    /// <summary>
+    /// What the selected currency will actually look like: its name, a worked example, and its
+    /// minor unit.
+    /// </summary>
+    /// <remarks>
+    /// The worked example is the point. An operator cannot tell from the title alone whether the
+    /// sign they picked is the one they wanted, and the two currencies that share a sign — CNY ¥
+    /// and JPY ¥ — are told apart ONLY by their decimal places. So the example is rendered through
+    /// the real formatter at a value with a non-zero fraction, which makes "1235 ¥" (yen, no minor
+    /// unit) visibly different from "1234,50 ¥" (yuan). The minor-unit name is spelled out for the
+    /// same reason: "капеек" is what tells a Belarusian operator the fraction really is kopecks.
+    /// </remarks>
+    public string CurrencySummary
+    {
+        get
+        {
+            var example = TextFormat.Money(1234.5m, selectedCurrency);
+            var minor = selectedCurrency.MinorUnitDigits == 0
+                ? "без дробной части"
+                : $"дробная часть — {selectedCurrency.MinorUnitName}";
+            return $"{selectedCurrency.Title} · {example} · {minor}";
+        }
+    }
 
     /// <summary>Local backups, newest first (created automatically, on shift close and manually).</summary>
     public ObservableCollection<BackupInfo> Backups { get; } = [];
@@ -159,6 +220,13 @@ public partial class SettingsViewModel : ObservableObject
         settings.OrderPrefix = OrderPrefix;
         settings.Theme = ThemeText switch { "Светлая" => AppTheme.Light, "Темная" => AppTheme.Dark, _ => AppTheme.Unspecified };
         settings.ApplyTheme();
+
+        // Persisted BY CODE, not by title: the titles are Russian strings that a future translation
+        // pass could change, and the stored value has to survive that. CurrencySelection also
+        // publishes the new value as Currencies.Default, which is what every formatter in the app
+        // reads from here on.
+        settings.CurrencyCode = SelectedCurrency;
+
         SetMessage("Настройки сохранены.", MessageLevel.Success);
     }
 }

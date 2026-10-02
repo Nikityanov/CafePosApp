@@ -1,3 +1,5 @@
+using System.Globalization;
+using CafePos.Core.Common;
 using CafePos.Core.Models;
 using CommunityToolkit.Maui.Views;
 
@@ -13,7 +15,10 @@ public partial class VariantPickerPopup : Popup<string?>
         {
             var button = new Button
             {
-                Text = $"{variant.Name} — {variant.Price:F0} ₽",
+                // Whole units as before, but the sign comes from the selected currency instead of
+                // being written into the format string. F0 rather than the currency's own digit
+                // count: this is a compact one-line option in a popup, not a printed total.
+                Text = $"{variant.Name} — {Money.Round(variant.Price).ToString("F0", CultureInfo.CurrentCulture)} {Currencies.Default.Symbol}",
                 HorizontalOptions = LayoutOptions.Fill,
             };
             var name = variant.Name;

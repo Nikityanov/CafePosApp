@@ -29,12 +29,24 @@ namespace CafePosApp.ViewModels;
 /// list, and it must not depend on the surrounding prose to be noticed.
 /// </para>
 /// </remarks>
-public sealed record PaymentLine(string Text, string AmountText, bool IsRefund)
+public sealed class PaymentLine : ObservableObject
 {
-    /// <summary>
-    /// The ink for <c>AmountText</c>: the danger tone on a refund, the label's own default ink on
-    /// a collection.
-    /// </summary>
+    private string text = string.Empty;
+    private string amountText = string.Empty;
+
+    /// <summary>The sentence: the method, the moment and any note. Never contains money.</summary>
+    public string Text { get => text; set => SetProperty(ref text, value); }
+
+    /// <summary>The amount in the active currency, signed for a refund. Bound by the row.</summary>
+    /// <remarks>
+    /// Stored as text rather than as a formatted-at-construction string so it can be re-derived when
+    /// the operator switches currency — see <see cref="RefreshMoneyText"/>.
+    /// </remarks>
+    public string AmountText { get => amountText; set => SetProperty(ref amountText, value); }
+
+    public bool IsRefund { get; init; }
+
+    /// <summary>The ink for <see cref="AmountText"/>.</summary>
     /// <remarks>
     /// This tint has been through two wrong answers, both worth recording. It was plain
     /// <c>{StaticResource Danger}</c> inside a <c>DataTrigger</c> Setter, which a trigger resolves
@@ -71,6 +83,9 @@ public sealed record PaymentLine(string Text, string AmountText, bool IsRefund)
     /// <summary>Money leaving the till is the app's one negative-number case, so it is named once here.</summary>
     public static string SignedAmount(decimal amount, bool isRefund) =>
         isRefund ? $"−{TextFormat.Money(amount)}" : TextFormat.Money(amount);
+
+    /// <summary>Re-raises <see cref="AmountText"/> after the currency setting changed.</summary>
+    public void RefreshMoneyText() => OnPropertyChanged(nameof(AmountText));
 }
 
 public partial class OrderEditItemViewModel : ObservableObject
@@ -82,9 +97,26 @@ public partial class OrderEditItemViewModel : ObservableObject
     public string? SelectedVariantName { get; init; }
 
     private int quantity;
-    public int Quantity { get => quantity; set { if (SetProperty(ref quantity, value)) OnPropertyChanged(nameof(LineTotal)); } }
+    public int Quantity
+    {
+        get => quantity;
+        set
+        {
+            if (!SetProperty(ref quantity, value)) return;
+            OnPropertyChanged(nameof(LineTotal));
+            // LineTotalText is what the row actually binds, so raising it here is what keeps the
+            // printed amount in step with the stepper.
+            OnPropertyChanged(nameof(LineTotalText));
+        }
+    }
 
     public decimal LineTotal => Price * Quantity;
+
+    /// <summary>The line total in the active currency, e.g. "320,00 ₿". Bound by the row.</summary>
+    public string LineTotalText => TextFormat.Money(LineTotal);
+
+    /// <summary>Re-raises <see cref="LineTotalText"/> after the currency setting changed.</summary>
+    public void RefreshMoneyText() => OnPropertyChanged(nameof(LineTotalText));
 
     public OrderItem ToOrderItem() => new()
     {
@@ -170,6 +202,17 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
 
     public bool CanEdit => order?.Status == OrderStatus.InProgress;
     public decimal Total => Items.Sum(item => item.LineTotal);
+
+    /// <summary>The order total in the active currency, e.g. "740,00 ₿".</summary>
+    /// <remarks>
+    /// The total is a sum over <see cref="Items"/>, so it changes whenever a line is added, removed
+    /// or re-quantitied — none of which touch this ViewModel's own properties. Every mutation site
+    /// therefore calls the private NotifyTotal(); the per-item quantities raise only their
+    /// own LineTotalText, because the footer is this property's job.
+    /// </remarks>
+    public string TotalText => TextFormat.Money(Total);
+
+    /// <summary>Re-raises <see cref="TotalText"/> after the item collection has changed.</summary>
 
     // ── Payment state ──────────────────────────────────────────────────────────────────────────
     // The order's own payment figures (PaidKopecks / BalanceKopecks / PaymentState) are the

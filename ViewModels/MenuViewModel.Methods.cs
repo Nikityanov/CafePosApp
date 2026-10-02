@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using CafePos.Core.Common;
 using CafePos.Core.Errors;
 using CafePos.Core.Models;
 using CafePos.Core.Services;
@@ -165,7 +166,22 @@ public partial class MenuViewModel : ObservableObject
     }
 
     private decimal total;
-    public decimal Total { get => total; private set => SetProperty(ref total, value); }
+
+    /// <summary>
+    /// The cart total. Setting it raises <see cref="TotalText"/> as well, because the cart footer
+    /// binds the formatted amount rather than the decimal.
+    /// </summary>
+    public decimal Total
+    {
+        get => total;
+        private set
+        {
+            if (SetProperty(ref total, value)) OnPropertyChanged(nameof(TotalText));
+        }
+    }
+
+    /// <summary>The cart total in the active currency, e.g. "740,00 ₿".</summary>
+    public string TotalText => TextFormat.Money(Total);
 
     private bool isBusy;
     public bool IsBusy { get => isBusy; private set { if (SetProperty(ref isBusy, value)) OnPropertyChanged(nameof(CanCreateOrder)); } }

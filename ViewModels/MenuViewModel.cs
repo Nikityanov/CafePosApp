@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using CafePos.Core.Common;
 using CafePos.Core.Models;
 using CafePos.Core.Services;
 using CafePosApp.Controls;
@@ -27,10 +28,29 @@ public partial class CartItemViewModel : ObservableObject
     public int Quantity
     {
         get => quantity;
-        set { if (SetProperty(ref quantity, value)) OnPropertyChanged(nameof(LineTotal)); }
+        set
+        {
+            if (!SetProperty(ref quantity, value)) return;
+            OnPropertyChanged(nameof(LineTotal));
+            // The cart row binds the formatted amount, so it has to be raised with the decimal.
+            OnPropertyChanged(nameof(LineTotalText));
+        }
     }
 
     public decimal LineTotal => Price * Quantity;
+
+    /// <summary>The line total in the active currency, e.g. "220,00 ₿". Bound by the cart row.</summary>
+    public string LineTotalText => TextFormat.Money(LineTotal);
+
+    /// <summary>
+    /// Re-raises <see cref="LineTotalText"/> without touching <see cref="Quantity"/>.
+    /// </summary>
+    /// <remarks>
+    /// Needed because the formatted amount depends on the operator's currency setting, which can
+    /// change while this row is still on screen — the cart is not rebuilt when it does, so the row
+    /// would otherwise keep printing the previous sign. See MenuViewModel.RefreshMoneyText.
+    /// </remarks>
+    public void RefreshMoneyText() => OnPropertyChanged(nameof(LineTotalText));
 
     public CheckoutLine ToCheckoutLine() => new(ProductId, ProductName, Price, Quantity, SelectedModifierName, SelectedVariantName);
 

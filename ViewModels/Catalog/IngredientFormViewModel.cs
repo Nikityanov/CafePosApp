@@ -40,6 +40,15 @@ public class IngredientFormViewModel : ObservableObject, IFormFooterSource
     private string costText = string.Empty;
     public string CostText { get => costText; set => SetProperty(ref costText, value); }
 
+    /// <summary>
+    /// The cost field's placeholder, naming the selected currency's unit.
+    /// </summary>
+    /// <remarks>
+    /// Bound for the same reason as <c>ProductFormViewModel.PricePlaceholder</c>: this is where an
+    /// operator types an amount, and the unit name tells them which money the till is in.
+    /// </remarks>
+    public string CostPlaceholder => $"Себестоимость за единицу, {Currencies.Default.MinorUnitName}";
+
     private string stockText = string.Empty;
     public string StockText { get => stockText; set => SetProperty(ref stockText, value); }
 

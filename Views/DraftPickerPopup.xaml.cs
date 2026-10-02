@@ -1,3 +1,5 @@
+using System.Globalization;
+using CafePos.Core.Common;
 using CafePos.Core.Models;
 using CommunityToolkit.Maui.Views;
 
@@ -15,7 +17,10 @@ public partial class DraftPickerPopup : Popup<string?>
             var name = string.IsNullOrWhiteSpace(draft.Name) ? "Без названия" : draft.Name;
             var button = new Button
             {
-                Text = $"{name} — {draft.TotalQuantity} поз., {draft.Total:F0} ₽ ({draft.UpdatedAt.ToLocalTime():HH:mm})",
+                // Whole units as before; the sign follows the selected currency.
+                Text = $"{name} — {draft.TotalQuantity} поз., " +
+                       $"{Money.Round(draft.Total).ToString("F0", CultureInfo.CurrentCulture)} {Currencies.Default.Symbol} " +
+                       $"({draft.UpdatedAt.ToLocalTime():HH:mm})",
                 HorizontalOptions = LayoutOptions.Fill
             };
             var id = draft.Id.ToString();

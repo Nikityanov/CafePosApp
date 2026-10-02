@@ -7,12 +7,23 @@
              x:Class="CafePosApp.Views.CatalogFormsPage"
              x:DataType="vm:CatalogFormViewModel"
              x:Name="FormsPage"
-             Title="{Binding Title}">
+             Title="{Binding Title}"
+             Shell.NavBarIsVisible="True">
 
     <ContentPage.ToolbarItems>
         <!-- A real header, so Cancel is reachable from the top on every form instead of only from
              the bottom of a scrolling page. The form is pushed as a modal, which on Android means the
-             system back gesture is the other obvious exit — the page code-behind confirms that one. -->
+             system back gesture is the other obvious exit — the page code-behind confirms that one.
+
+             Shell.NavBarIsVisible="True" is stated here rather than left to inheritance, and the
+             reason is NOT a regression that was observed: measured against a clean baseline on
+             the emulator, this modal renders no toolbar item either way — a Shell modal pushed
+             with PushModalAsync draws no nav bar on Android, so «Отмена» above never appeared
+             before the nav-bar work and Cancel has always lived in the footer. What the property
+             WOULD do if inherited is the real hazard: NavBarIsVisible inherits, this modal is
+             pushed from CatalogManagementPage, and that page now sets it False. Pinning it True
+             keeps this page independent of the caller's chrome, so the title and the toolbar item
+             both come up the moment either is made to render. -->
         <ToolbarItem Text="Отмена" Priority="1" Order="Primary"
                      Command="{Binding CancelCommand}" />
     </ContentPage.ToolbarItems>
@@ -50,7 +61,7 @@
                         <VerticalStackLayout Spacing="8">
                             <Label Text="Основное" Style="{StaticResource SectionTitle}" />
                             <Entry Style="{StaticResource FormField}" Placeholder="Название блюда" Text="{Binding Product.ProductName}" ClearButtonVisibility="WhileEditing" />
-                            <Entry Style="{StaticResource FormField}" Placeholder="Цена, ₽" Text="{Binding Product.ProductPriceText}" Keyboard="Numeric"
+                            <Entry Style="{StaticResource FormField}" Placeholder="{Binding Product.PricePlaceholder}" Text="{Binding Product.ProductPriceText}" Keyboard="Numeric"
                                    IsEnabled="{Binding Product.IsPriceEnabled}" />
                             <Label Text="Общая цена не нужна: у каждого варианта своя. Заполните список вариантов ниже."
                                    IsVisible="{Binding Product.HasVariants}" Style="{StaticResource Caption}" />
@@ -80,7 +91,11 @@
                                     <DataTemplate x:DataType="models:ProductVariant">
                                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="0,2">
                                             <Label Text="{Binding Name}" VerticalOptions="Center" />
-                                            <Label Grid.Column="1" Text="{Binding Price, StringFormat='{0:F0} ₽'}"
+                                            <!-- Whole units here, as before, but through the currency
+                                                 converter so the sign follows the setting. The
+                                                 placeholder above is a fixed "Цена, ₽" and needs the
+                                                 same treatment; see CatalogFormsPage.xaml.cs. -->
+                                            <Label Grid.Column="1" Text="{Binding Price, Converter={StaticResource MoneyText}, ConverterParameter=F0}"
                                                    VerticalOptions="Center" Style="{StaticResource Caption}" />
                                             <Button Grid.Column="2" Text="Убрать" Style="{StaticResource RowActionDanger}"
                                                     SemanticProperties.Description="Убрать вариант"
@@ -234,7 +249,7 @@
                         <VerticalStackLayout Spacing="8">
                             <Entry Style="{StaticResource FormField}" Placeholder="Название ингредиента" Text="{Binding Ingredient.Name}" ClearButtonVisibility="WhileEditing" />
                             <Entry Style="{StaticResource FormField}" Placeholder="Единица измерения (г, мл, шт)" Text="{Binding Ingredient.Unit}" />
-                            <Entry Style="{StaticResource FormField}" Placeholder="Себестоимость за единицу, ₽" Text="{Binding Ingredient.CostText}" Keyboard="Numeric" />
+                            <Entry Style="{StaticResource FormField}" Placeholder="{Binding Ingredient.CostPlaceholder}" Text="{Binding Ingredient.CostText}" Keyboard="Numeric" />
                             <Entry Style="{StaticResource FormField}" Placeholder="Остаток на складе" Text="{Binding Ingredient.StockText}" Keyboard="Numeric" />
                             <Entry Style="{StaticResource FormField}" Placeholder="Минимальный запас (для предупреждений)" Text="{Binding Ingredient.MinStockText}" Keyboard="Numeric" />
                             <Entry Style="{StaticResource FormField}" Placeholder="Поставщик (необязательно)" Text="{Binding Ingredient.Supplier}" />

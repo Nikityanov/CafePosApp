@@ -1,3 +1,4 @@
+using CafePos.Core.Common;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Storage;
 
@@ -17,6 +18,17 @@ public sealed class AppSettings
         set => Preferences.Set(RefreshIntervalKey, Math.Clamp(value, 5, 300));
     }
     public string OrderPrefix { get => Preferences.Get(OrderPrefixKey, "Заказ"); set => Preferences.Set(OrderPrefixKey, value.Trim()); }
+
+    /// <summary>
+    /// The currency shown across the app. Reads and writes through <see cref="CurrencySelection"/>,
+    /// which owns the single preferences key and cache — this property deliberately does NOT
+    /// persist a second copy, so the setting has one home.
+    /// </summary>
+    public Currency CurrencyCode
+    {
+        get => CurrencySelection.Current;
+        set => CurrencySelection.Set(value);
+    }
     public AppTheme Theme
     {
         get => Preferences.Get(ThemeKey, "System") switch

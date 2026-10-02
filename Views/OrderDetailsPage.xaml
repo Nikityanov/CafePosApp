@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.OrderDetailsPage" x:DataType="vm:OrderDetailsViewModel" Title="Детали заказа">
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.OrderDetailsPage" x:DataType="vm:OrderDetailsViewModel" Title="Детали заказа"
+             Shell.NavBarIsVisible="True"><!-- Explicit, not inherited: this page is pushed from
+             OrdersPage, which sets the property False to drop its duplicate tab title, and the
+             back arrow on this page depends on the bar being there. Verified on the emulator. -->
     <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16" RowSpacing="10">
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout>
@@ -28,7 +31,9 @@
                             <Label Text="{Binding ProductName}" FontAttributes="Bold" />
                             <Label Text="{Binding SelectedModifierName, StringFormat='Модификатор: {0}'}" Style="{StaticResource SecondaryLabel}" IsVisible="{Binding SelectedModifierName, Converter={StaticResource IsPresent}}" />
                             <Label Text="{Binding SelectedVariantName, StringFormat='Вариант: {0}'}" Style="{StaticResource SecondaryLabel}" IsVisible="{Binding SelectedVariantName, Converter={StaticResource IsPresent}}" />
-                            <Label Text="{Binding LineTotal, StringFormat='{0:F2} ₽'}" Style="{StaticResource SecondaryLabel}" />
+                            <!-- LineTotalText, not StringFormat='{0:F2} ₽': see
+                                 OrderEditItemViewModel.LineTotalText. -->
+                            <Label Text="{Binding LineTotalText}" Style="{StaticResource SecondaryLabel}" />
                         </VerticalStackLayout>
                         <!-- The steppers and the delete button were 36dp, below the 44dp touch
                              minimum every other control in the app honours. -->
@@ -48,7 +53,7 @@
                  tab bar — the most important number on an order-editing screen was the last thing
                  on it and the easiest to miss. It now heads the action block, above the
                  "Добавить блюдо" field, where the cart already puts it. -->
-            <Label Text="{Binding Total, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" FontSize="20" HorizontalTextAlignment="End" />
+            <Label Text="{Binding TotalText, StringFormat='Итого: {0}'}" FontAttributes="Bold" FontSize="20" HorizontalTextAlignment="End" />
             <!-- Payment area: what was paid, what came back and what is left. The total is right
                  above, so this line carries the figures; the wording (not just the colour) carries
                  the state, and a refunded order says it was refunded rather than reading as unpaid.

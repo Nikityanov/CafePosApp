@@ -8,7 +8,8 @@
              x:Class="CafePosApp.Views.CatalogManagementPage"
              x:DataType="vm:CatalogManagementViewModel"
              x:Name="CatalogPage"
-             Title="Каталог">
+             Title="Каталог"
+             Shell.NavBarIsVisible="False">
 
     <ContentPage.Resources>
         <!-- One chip template for the whole entity switcher, replacing four hand-placed buttons

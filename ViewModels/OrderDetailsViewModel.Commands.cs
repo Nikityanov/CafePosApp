@@ -59,6 +59,15 @@ public partial class OrderDetailsViewModel
             }
 
             NotifyOrderState();
+
+            // The formatted amounts follow the operator's currency setting, which can be changed
+            // while this page is still alive. Re-raised here rather than left to the setters above:
+            // an unchanged total raises nothing, so a page opened on «0,00 ₽» and left open across a
+            // switch to ₿ would keep printing the old sign. See MenuViewModel.RefreshMoneyText for
+            // the same argument on the cart.
+            NotifyTotal();
+            foreach (var item in Items) item.RefreshMoneyText();
+            foreach (var line in Payments) line.RefreshMoneyText();
         }
         catch (Exception exception)
         {
@@ -350,12 +359,28 @@ public partial class OrderDetailsViewModel
         var method = PaymentText.Method(payment.Method);
         var note = string.IsNullOrWhiteSpace(payment.Note) ? string.Empty : " · " + payment.Note;
 
-        return payment.IsRefund
-            ? new PaymentLine($"Возврат {method} · {when}{note}", PaymentLine.SignedAmount(payment.Amount, true), true)
-            : new PaymentLine($"Принято {method} · {when}", PaymentLine.SignedAmount(payment.Amount, false), false);
+        return new PaymentLine
+        {
+            Text = payment.IsRefund
+                ? $"Возврат {method} · {when}{note}"
+                : $"Принято {method} · {when}",
+            AmountText = PaymentLine.SignedAmount(payment.Amount, payment.IsRefund),
+            IsRefund = payment.IsRefund
+        };
     }
 
-    private void NotifyTotal() => OnPropertyChanged(nameof(Total));
+    /// <summary>Re-raises the order total after an item was added, removed or re-quantitied.</summary>
+    /// <remarks>
+    /// <c>Total</c> is the decimal sum and <c>TotalText</c> is what the footer actually binds — the
+    /// formatted amount in the operator's currency. Both are raised together: the decimal one for
+    /// anything still reading the raw figure, the text one because a bound Label is never told about
+    /// a dependency's change on its own.
+    /// </remarks>
+    private void NotifyTotal()
+    {
+        OnPropertyChanged(nameof(Total));
+        OnPropertyChanged(nameof(TotalText));
+    }
 
     private void NotifyOrderState()
     {

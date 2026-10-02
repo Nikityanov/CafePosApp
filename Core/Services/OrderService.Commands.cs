@@ -143,7 +143,7 @@ public sealed partial class OrderService
     {
         var parts = new List<string>(4);
         if (operatorReason is not null) parts.Add(operatorReason);
-        if (refundedKopecks > 0) parts.Add($"возвращено {Money.FromKopecks(refundedKopecks):F2} ₽");
+        if (refundedKopecks > 0) parts.Add($"возвращено {TextFormat.Money(Money.FromKopecks(refundedKopecks))}");
         if (stock == StockDisposition.ReturnToStock)
         {
             if (irreversible.Count == 0)

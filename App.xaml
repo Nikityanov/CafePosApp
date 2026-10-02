@@ -13,6 +13,7 @@
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter" />
             <converters:IsPresentConverter x:Key="IsPresent" />
             <converters:ProductPriceTextConverter x:Key="ProductPriceText" />
+            <converters:MoneyTextConverter x:Key="MoneyText" />
             <converters:NoticeSeverityToColorConverter x:Key="NoticeSeverityToColor" />
             <converters:NoticeSeverityToIconConverter x:Key="NoticeSeverityToIcon" />
             <converters:BoolToSelectionModeConverter x:Key="BoolToSelectionMode" />

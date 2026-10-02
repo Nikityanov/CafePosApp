@@ -79,6 +79,13 @@ public partial class OrdersViewModel
             SyncSectionFilters();
             ApplyFilter();
 
+            // Each card's total is formatted in the operator's currency, which can be changed on the
+            // Settings tab while this board is alive — Shell keeps one instance per tab, so returning
+            // here re-runs this method rather than rebuilding the ViewModel. Re-raise so a board left
+            // open across a switch stops printing the previous sign. See
+            // MenuViewModel.RefreshMoneyText for the same argument on the cart.
+            foreach (var row in ActiveOrders) row.RefreshMoneyText();
+
             if (clearMessage) Message = string.Empty;
         }
         catch (Exception exception)

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.ShiftReportPage" x:DataType="vm:ShiftReportViewModel" Title="Смена">
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.ShiftReportPage" x:DataType="vm:ShiftReportViewModel" Title="Смена"
+             Shell.NavBarIsVisible="False">
     <!-- ═══════════════════════════════════════════════════════════════════════════════════════
          THE WHOLE PAGE SCROLLS. The owner's decision, and it is settled — read this before
          "fixing" the missing ScrollView.
@@ -28,11 +29,12 @@
     <ScrollView>
         <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
             <!-- No toolbar row. «Обновить» is gone by the owner's decision, and it was the only
-             thing this row held — the Shell nav bar already reads "Смена", so the row existed
-             purely to park a refresh button that duplicated leaving and re-entering the page.
-             Nothing is lost by removing it: this page has no polling, and OnAppearing reloads,
-             so navigating away and back is a complete manual reload. The row indices below
-             shift up by one and the summary card becomes the first row. -->
+             thing this row held — it duplicated leaving and re-entering the page. Nothing is
+             lost by removing it: this page has no polling, and OnAppearing reloads, so
+             navigating away and back is a complete manual reload. The row indices below shift
+             up by one and the summary card becomes the first row. The Shell nav bar is hidden
+             here too (Shell.NavBarIsVisible on this page): it repeated the "Смена" tab label,
+             and the tab bar is what names the section. -->
         <!-- Static value, so an AppThemeBinding on the attribute is the whole fix and needs no ViewModel
                  change. A bare {StaticResource Danger} declared the light token in both themes: this
                  label sits on the page fill (#FAFAFA / #121212), where that is 4.77:1 in light and
@@ -43,10 +45,10 @@
                 LineBreakMode="WordWrap" />
                 <Border Grid.Row="1" Style="{StaticResource CardBorder}">
                     <VerticalStackLayout Spacing="6">
-                        <Label Text="{Binding Revenue, StringFormat='Выручка: {0:F2} ₽'}" FontAttributes="Bold" />
+                        <Label Text="{Binding RevenueText, StringFormat='Выручка: {0}'}" FontAttributes="Bold" />
                         <Label Text="{Binding ClosedOrdersCount, StringFormat='Чеков: {0}'}" />
                         <Label Text="{Binding CancelledOrdersCount, StringFormat='Отменено: {0}'}" />
-                        <Label Text="{Binding AverageCheck, StringFormat='Средний чек: {0:F2} ₽'}" />
+                        <Label Text="{Binding AverageCheckText, StringFormat='Средний чек: {0}'}" />
     
                         <!-- ═══════════════════════════════════════════════════════════════════════
                              MONEY THROUGH THE TILL.
@@ -67,17 +69,17 @@
                              ═══════════════════════════════════════════════════════════════════════ -->
                         <BoxView HeightRequest="1" Margin="0,4,0,2" Color="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray700}}" />
                         <Label Text="Деньги" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
-                        <Label Text="{Binding PaymentsCash, StringFormat='Принято наличными: {0:F2} ₽'}" />
-                        <Label Text="{Binding PaymentsCard, StringFormat='Принято картой: {0:F2} ₽'}" />
-                        <Label Text="{Binding RefundsCash, StringFormat='Возвращено наличными: {0:F2} ₽'}" />
-                        <Label Text="{Binding RefundsCard, StringFormat='Возвращено картой: {0:F2} ₽'}" />
+                        <Label Text="{Binding PaymentsCashText, StringFormat='Принято наличными: {0}'}" />
+                        <Label Text="{Binding PaymentsCardText, StringFormat='Принято картой: {0}'}" />
+                        <Label Text="{Binding RefundsCashText, StringFormat='Возвращено наличными: {0}'}" />
+                        <Label Text="{Binding RefundsCardText, StringFormat='Возвращено картой: {0}'}" />
     
                         <!-- The drawer total. 20pt bold against the 14pt components above, because this
                              is the number somebody physically counts and everything else on the card is
                              a component of it. Not coloured: the emphasis is size and weight, and the
                              label already says what the number is, so nothing here depends on colour to
                              be read. -->
-                        <Label Text="{Binding CashInDrawer, StringFormat='Итого наличными в кассе: {0:F2} ₽'}"
+                        <Label Text="{Binding CashInDrawerText, StringFormat='Итого наличными в кассе: {0}'}"
                                FontSize="20" FontAttributes="Bold" Margin="0,4,0,0"
                                SemanticProperties.Description="Итого наличными в кассе: принято наличными минус возвращено наличными" />
                     </VerticalStackLayout>
@@ -139,7 +141,7 @@
                                             </DataTemplate>
                                         </BindableLayout.ItemTemplate>
                                     </VerticalStackLayout>
-                                    <Label Text="{Binding TotalPrice, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" />
+                                    <Label Text="{Binding TotalPriceText, StringFormat='Итого: {0}'}" FontAttributes="Bold" />
                                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
                                         <!-- "Подробнее" exists because the void flow and the payment
                                              ledger both live on the details page, and a history row that

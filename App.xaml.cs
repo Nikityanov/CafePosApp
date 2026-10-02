@@ -15,6 +15,10 @@ namespace CafePosApp
             AppLog.Info("App constructor started");
             InitializeComponent();
             settings.ApplyTheme();
+
+            // Before the shell is built, so the very first frame already prices in the stored
+            // currency instead of painting ₽ and correcting itself a moment later.
+            CurrencySelection.Reload();
             shell = services.GetRequiredService<AppShell>();
             this.bootstrapper = bootstrapper;
             AppLog.Info("AppShell resolved successfully");
@@ -33,8 +37,43 @@ namespace CafePosApp
             // collapses concurrent callers onto a single run.
             BeginDatabaseInitialization();
 
-            return new Window(shell);
+            var window = new Window(shell);
+
+            // Status bar icon appearance. MAUI derives it from the Material theme colour and
+            // gets this app wrong — see Services/SystemBars for the measurement and for why
+            // Android resources cannot express the fix.
+            //
+            // HandlerChanged, not the constructor: the platform view does not exist yet when
+            // Window is constructed, so a call here would be a no-op. This fires once the
+            // window is realised, which is the first moment the setting can actually stick.
+            window.HandlerChanged += OnWindowHandlerChanged;
+
+            // Reload the currency HERE as well as in the constructor. CreateWindow is not
+            // guaranteed to run before the first page is realised in every launch path, and a
+            // stale cache would paint the wrong symbol until something else refreshed it.
+            CurrencySelection.Reload();
+
+            // The app has an in-app theme picker, so the status bar has to follow the APP's
+            // theme, not the system's. RequestedThemeChanged covers all three choices the
+            // Picker offers — «Системная» included, since RequestedTheme already resolves
+            // Unspecified through to the system value.
+            //
+            // The -= before the += is what keeps this idempotent across repeated
+            // CreateWindow calls, and it is also why nothing detaches this on OnSleep: an
+            // earlier version did, which silently killed the subscription the first time the
+            // till was backgrounded and restored — the status bar then stopped following the
+            // theme at all. Measured on the emulator: after a Home-and-return, switching back
+            // to «Светлая» left white icons on a light page. Application is a singleton, so
+            // there is exactly one handler for the process lifetime and no leak to avoid.
+            RequestedThemeChanged -= OnRequestedThemeChanged;
+            RequestedThemeChanged += OnRequestedThemeChanged;
+
+            return window;
         }
+
+        private void OnWindowHandlerChanged(object? sender, EventArgs e) => SystemBars.Apply();
+
+        private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) => SystemBars.Apply();
 
         private void BeginDatabaseInitialization()
         {

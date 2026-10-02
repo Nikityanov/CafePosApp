@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls" x:Class="CafePosApp.Views.OrdersPage" x:DataType="vm:OrdersViewModel" Title="Заказы">
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls" x:Class="CafePosApp.Views.OrdersPage" x:DataType="vm:OrdersViewModel" Title="Заказы"
+             Shell.NavBarIsVisible="False">
     <ContentPage.Resources>
         <DataTemplate x:Key="OrderCardTemplate" x:DataType="vm:OrderRowViewModel">
             <!-- The template root is a stack, not the card, so the section heading can sit
@@ -46,7 +47,11 @@
                          button. Tapping it opens the payment sheet on a not-fully-paid card; on a
                          paid card the button is hidden, so the mark does not look tappable. -->
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                        <Label Text="{Binding TotalPrice, StringFormat='Итого: {0:F2} ₽'}" FontAttributes="Bold" VerticalOptions="Center" />
+                        <!-- TotalPriceText, not StringFormat="Итого: {0:F2} ₽": a StringFormat is
+                             fixed at parse time, so it could only ever print ₽ with two decimals.
+                             The ViewModel formats it in the selected currency — see
+                             OrderRowViewModel.TotalPriceText. -->
+                        <Label Text="{Binding TotalPriceText, StringFormat='Итого: {0}'}" FontAttributes="Bold" VerticalOptions="Center" />
                         <Grid Grid.Column="1" WidthRequest="48" HeightRequest="48" VerticalOptions="Center">
                             <shapes:Path Aspect="Uniform" WidthRequest="24" HeightRequest="24"
                                         HorizontalOptions="Center" VerticalOptions="Center"
@@ -113,9 +118,11 @@
     </ContentPage.Resources>
     <!-- Three rows, not four. The header row existed only to carry «Обновить»: the board
          already polls on the interval from Settings, so the button was a second way to do
-         something the page does on its own, and the Shell nav bar already reads "Заказы" over
-         the page that repeated it as "Активные заказы". Removing the button means removing the
-         row, and the chip strip takes its place with no chrome lost. -->
+         something the page does on its own, and the page repeated the section as "Активные
+         заказы" under a nav bar already reading "Заказы". The nav bar is gone now
+         (Shell.NavBarIsVisible on this page — it duplicated the "Заказы" tab), so the tab bar
+         is what names the section. Removing the button means removing the row, and the chip
+         strip takes its place with no chrome lost. -->
     <Grid RowDefinitions="Auto,Auto,*" Padding="12" RowSpacing="8">
         <!-- Static value, so an AppThemeBinding on the attribute is the whole fix and needs no ViewModel
              change. A bare {StaticResource Danger} declared the light token in both themes: this
