@@ -156,7 +156,7 @@ public sealed partial class OrderService(
             var unpaidKopecks = unpaid.Sum(order => order.TotalKopecks - order.PaidKopecks);
             var unpaidSummary = unpaid.Count == 0
                 ? string.Empty
-                : $", из них не оплачено {unpaid.Count} на {Money.FromKopecks(unpaidKopecks):F2} ₽";
+                : $", из них не оплачено {unpaid.Count} на {TextFormat.Money(Money.FromKopecks(unpaidKopecks))}";
 
             throw new ConflictException($"Нельзя закрыть смену: осталось незакрытых заказов — {openOrders.Count}{unpaidSummary}.");
         }
@@ -193,8 +193,8 @@ public sealed partial class OrderService(
         // field. A reason on a match is accepted and stored.
         if (discrepancyKopecks != 0 && reason is null)
             throw new ValidationFailureException(
-                $"Пересчёт кассы не сходится с учётными данными: {Money.FromKopecks(expectedCashKopecks):F2} ₽ в кассе, " +
-                $"пересчитано {Money.FromKopecks(countedCashKopecks):F2} ₽. Укажите причину расхождения.");
+                $"Пересчёт кассы не сходится с учётными данными: {TextFormat.Money(Money.FromKopecks(expectedCashKopecks))} в кассе, " +
+                $"пересчитано {TextFormat.Money(Money.FromKopecks(countedCashKopecks))}. Укажите причину расхождения.");
 
         // DELIBERATE INCONSISTENCY with PaymentRecorder.TruncateNote, which silently shortens a
         // refund reason instead. That one may be cut because the refunded money and the order it
@@ -242,8 +242,8 @@ public sealed partial class OrderService(
             discrepancyKopecks switch
             {
                 0 => "без расхождения",
-                < 0 => $"не хватает {Money.FromKopecks(-discrepancyKopecks):F2} ₽",
-                _ => $"излишек {Money.FromKopecks(discrepancyKopecks):F2} ₽"
+                < 0 => $"не хватает {TextFormat.Money(Money.FromKopecks(-discrepancyKopecks))}",
+                _ => $"излишек {TextFormat.Money(Money.FromKopecks(discrepancyKopecks))}"
             },
             reason ?? "—",
             next.Id);

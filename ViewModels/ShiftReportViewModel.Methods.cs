@@ -43,6 +43,11 @@ public partial class ShiftReportViewModel
             // of it, and the shift close now compares a stored count against this number.
             CashInDrawer = stats.ExpectedCashNow;
 
+            // Every figure above is assigned in this one pass, so the seven formatted amounts the
+            // page actually binds are re-raised together here. Setting a decimal raises only that
+            // decimal; the *Text properties it feeds are a second binding and are told once.
+            NotifyMoneyTexts();
+
             // GetShiftOrderHistoryAsync (Completed AND Cancelled), not GetCompletedOrdersAsync.
             // Cancelling a paid order flips it to Cancelled, so under the old query the one sale a
             // manager most needs to see after a bad void vanished from the only list they read.

@@ -98,6 +98,52 @@ public partial class ShiftReportViewModel : ObservableObject
     private decimal revenue;
     public decimal Revenue { get => revenue; private set => SetProperty(ref revenue, value); }
 
+    // ── Formatted money ───────────────────────────────────────────────────────────────────────
+    // These six are the report's headline figures, and each was bound as
+    // StringFormat="Выручка: {0:F2} ₽" — a format string fixed at XAML parse time, so it could
+    // only ever print a ruble sign with two decimals. Formatting moves into the ViewModel so it
+    // can read the operator's selected currency; the Russian label stays in the markup as a plain
+    // {0} substitution.
+    //
+    // One NotifyMoneyTexts() re-raises all of them rather than six separate pairs: every figure is
+    // set in the same LoadAsync pass, so there is no case where one is fresh and another stale.
+
+    /// <summary>Revenue in the active currency, e.g. "12 480,00 ₿".</summary>
+    public string RevenueText => TextFormat.Money(Revenue);
+
+    /// <summary>Average check in the active currency.</summary>
+    public string AverageCheckText => TextFormat.Money(AverageCheck);
+
+    /// <summary>Cash taken in the shift, in the active currency.</summary>
+    public string PaymentsCashText => TextFormat.Money(PaymentsCash);
+
+    /// <summary>Card payments taken in the shift, in the active currency.</summary>
+    public string PaymentsCardText => TextFormat.Money(PaymentsCard);
+
+    /// <summary>Cash refunded in the shift, in the active currency.</summary>
+    public string RefundsCashText => TextFormat.Money(RefundsCash);
+
+    /// <summary>Card refunds in the shift, in the active currency.</summary>
+    public string RefundsCardText => TextFormat.Money(RefundsCard);
+
+    /// <summary>What is physically in the drawer, in the active currency.</summary>
+    public string CashInDrawerText => TextFormat.Money(CashInDrawer);
+
+    /// <summary>
+    /// Re-raises every formatted money figure. Called once at the end of a load, after all six
+    /// decimals have been assigned.
+    /// </summary>
+    public void NotifyMoneyTexts()
+    {
+        OnPropertyChanged(nameof(RevenueText));
+        OnPropertyChanged(nameof(AverageCheckText));
+        OnPropertyChanged(nameof(PaymentsCashText));
+        OnPropertyChanged(nameof(PaymentsCardText));
+        OnPropertyChanged(nameof(RefundsCashText));
+        OnPropertyChanged(nameof(RefundsCardText));
+        OnPropertyChanged(nameof(CashInDrawerText));
+    }
+
     // ── Money through the till ────────────────────────────────────────────────────────────────
     // Gross in, gross out, and the net that is physically countable. The four Payments* figures
     // on ShiftStats have existed since the payments feature and were consumed ONLY by the CSV

@@ -55,7 +55,12 @@ public class Ingredient
     [NotMapped]
     public string StockText => TextFormat.Quantity(StockQuantity, Unit);
 
-    /// <summary>Unit cost with its unit, e.g. "12 ₽/г".</summary>
+    /// <summary>Unit cost with its unit, e.g. "12 ₽/г" or "12,50 ₿/г".</summary>
+    /// <remarks>
+    /// Goes through <see cref="TextFormat.CostPerUnit(decimal, string?)"/>, which resolves
+    /// <see cref="Currencies.Default"/>, so the symbol follows the operator's setting with no
+    /// parameter to thread through a model that is bound straight from XAML.
+    /// </remarks>
     [NotMapped]
     public string CostPerUnitText => TextFormat.CostPerUnit(CostPerUnit, Unit);
 

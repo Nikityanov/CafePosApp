@@ -23,7 +23,21 @@ namespace CafePosApp.ViewModels;
 /// </param>
 public sealed record ShiftChoice(Guid Id, string DisplayName, bool IsClosed);
 
-public sealed record ProductAnalyticsRow(string ProductName, string ModifierName, int Quantity, decimal Revenue);
+/// <summary>One line of «Продажи по блюдам и модификаторам».</summary>
+/// <param name="Revenue">The line's revenue in major units.</param>
+/// <param name="RevenueText">
+/// The same figure already formatted in the operator's selected currency. Carried as data because
+/// the row binds a Label directly and this is a record, not an ObservableObject — a computed
+/// property would work here only by reading the ambient <c>Currencies.Default</c>, which is fine,
+/// but the value is resolved once when the row is built and the whole row is rebuilt on every load
+/// anyway, so there is nothing to keep in step.
+/// </param>
+public sealed record ProductAnalyticsRow(
+    string ProductName,
+    string ModifierName,
+    int Quantity,
+    decimal Revenue,
+    string RevenueText);
 
 public class ShiftAnalyticsViewModel : ObservableObject
 {
@@ -104,7 +118,13 @@ public class ShiftAnalyticsViewModel : ObservableObject
         get => cardTotal;
         private set
         {
-            if (SetProperty(ref cardTotal, value)) NotifyCardComposition();
+            if (SetProperty(ref cardTotal, value))
+            {
+                NotifyCardComposition();
+                // The card showing this figure binds CardTotalText, and NotifyCardComposition only
+                // refreshes the caption sentence, so the amount itself needs its own raise.
+                OnPropertyChanged(nameof(CardTotalText));
+            }
         }
     }
 
@@ -268,6 +288,38 @@ public class ShiftAnalyticsViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(StaleText));
         OnPropertyChanged(nameof(StaleHint));
+        // StaleText and StaleHint quote CashInDrawer in words, so the card that shows that same
+        // figure as an amount has to be republished with it — otherwise the sentence updates and
+        // the number beside it stays on the previous load's value.
+        OnPropertyChanged(nameof(CashInDrawerText));
+    }
+
+    // ── Formatted money ───────────────────────────────────────────────────────────────────────
+    // The four headline cards were bound as StringFormat="{0:F2} ₽", fixed at XAML parse time and
+    // therefore locked to a ruble sign with two decimals. Formatting moves here so it can read the
+    // operator's selected currency; the cards keep their own Russian captions.
+
+    /// <summary>Revenue in the active currency, e.g. "12 480,00 ₿".</summary>
+    public string RevenueText => TextFormat.Money(Revenue);
+
+    /// <summary>Average check in the active currency.</summary>
+    public string AverageCheckText => TextFormat.Money(AverageCheck);
+
+    /// <summary>Cash in the drawer in the active currency, e.g. "3 200,00 ₿".</summary>
+    /// <remarks>
+    /// Re-raised from <see cref="NotifyStale"/> rather than from its own setter, because the
+    /// staleness note quotes this same figure in words — see that method.
+    /// </remarks>
+    public string CashInDrawerText => TextFormat.Money(CashInDrawer);
+
+    /// <summary>Card money net of refunds, in the active currency.</summary>
+    public string CardTotalText => TextFormat.Money(CardTotal);
+
+    /// <summary>Re-raises the revenue and average-check figures, which have no dependent sentence.</summary>
+    private void NotifyRevenueTexts()
+    {
+        OnPropertyChanged(nameof(RevenueText));
+        OnPropertyChanged(nameof(AverageCheckText));
     }
 
     /// <summary>
@@ -350,6 +402,8 @@ public class ShiftAnalyticsViewModel : ObservableObject
             Revenue = stats.Revenue;
             OrdersCount = stats.CompletedCount;
             AverageCheck = stats.AverageCheck;
+            // Both are assigned above in the same pass; their formatted twins are separate bindings.
+            NotifyRevenueTexts();
             ItemsCount = stats.ItemsCount;
             averagePreparationMinutes = stats.AveragePreparationMinutes;
             averageCompletionMinutes = stats.AverageCompletionMinutes;
@@ -382,7 +436,12 @@ public class ShiftAnalyticsViewModel : ObservableObject
 
             var rows = await orders.GetProductAnalyticsAsync(SelectedShift.Id);
             ProductRows.SyncWith(
-                rows.Select(row => new ProductAnalyticsRow(row.ProductName, row.ModifierName, row.Quantity, row.Revenue)),
+                rows.Select(row => new ProductAnalyticsRow(
+                    row.ProductName,
+                    row.ModifierName,
+                    row.Quantity,
+                    row.Revenue,
+                    TextFormat.Money(row.Revenue))),
                 row => $"{row.ProductName}|{row.ModifierName}");
             // BindableLayout has no EmptyView, so the empty state is a label bound to this flag. It
             // is derived from the count and notifies itself when it has to — but only when something

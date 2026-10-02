@@ -4,6 +4,15 @@
 <dict>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Required for Services/SystemBars to work on iOS. While this key is true (the
+	     default), UIKit asks each UIViewController to decide its own status bar style,
+	     and a ContentPage never does — so the toolkit's StatusBar.SetStyle call is
+	     silently ignored and the clock/battery stay whatever the system default was,
+	     which is the same unreadable-on-a-light-page problem this app has on Android.
+	     Setting it false hands style control back to UIApplication, which is what
+	     StatusBar.SetStyle drives. Safe on Android and Windows: this file is iOS-only. -->
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>

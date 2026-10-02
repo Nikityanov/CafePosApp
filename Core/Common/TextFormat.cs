@@ -16,7 +16,20 @@ public static class TextFormat
     }
 
     /// <summary>Formats a money value as "220,00 ₽".</summary>
-    public static string Money(decimal value) => $"{Common.Money.Round(value).ToString("F2", CultureInfo.CurrentCulture)} ₽";
+    /// <remarks>
+    /// The currency overload takes the currency explicitly; this one resolves
+    /// <see cref="Currencies.Default"/>, which the app sets from the operator's setting at
+    /// startup. "220,00 ₽" therefore becomes "220,00 ₿" for the Belarusian ruble and "220 ¥"
+    /// for the yen with no change at any of the call sites.
+    /// </remarks>
+    public static string Money(decimal value) => Money(value, Currencies.Default);
+
+    /// <summary>Formats a money value in the given currency, e.g. "220,00 ₿" or "220 ¥".</summary>
+    public static string Money(decimal value, Currency currency)
+    {
+        ArgumentNullException.ThrowIfNull(currency);
+        return $"{Common.Money.Round(value).ToString(currency.NumericFormat, CultureInfo.CurrentCulture)} {currency.Symbol}";
+    }
 
     /// <summary>
     /// Formats a stock/recipe quantity with its unit as "250 г" / "0,5 л". Trailing zeros are
@@ -28,10 +41,21 @@ public static class TextFormat
             : $"{value.ToString("0.###", CultureInfo.CurrentCulture)} {unit.Trim()}";
 
     /// <summary>Formats a unit cost with its unit as "12 ₽/г".</summary>
-    public static string CostPerUnit(decimal value, string? unit) =>
-        string.IsNullOrWhiteSpace(unit)
-            ? Money(value)
-            : $"{value.ToString("0.##", CultureInfo.CurrentCulture)} ₽/{unit.Trim()}";
+    public static string CostPerUnit(decimal value, string? unit) => CostPerUnit(value, unit, Currencies.Default);
+
+    /// <summary>
+    /// Formats a unit cost in the given currency as "12,50 ₿/г". Note the trailing zeros are
+    /// dropped for the fraction ("0.##") while <see cref="Money"/> pads to the currency's digit
+    /// count: a per-gram cost is a derived figure where "12,5 ₿/г" reads better than "12,50", and
+    /// a unit price never needs to reconcile against a printed total the way a total does.
+    /// </summary>
+    public static string CostPerUnit(decimal value, string? unit, Currency currency)
+    {
+        ArgumentNullException.ThrowIfNull(currency);
+        return string.IsNullOrWhiteSpace(unit)
+            ? Money(value, currency)
+            : $"{value.ToString("0.##", CultureInfo.CurrentCulture)} {currency.Symbol}/{unit.Trim()}";
+    }
 
     /// <summary>Parses user input in both the current and the invariant culture.</summary>
     public static bool TryParseDecimal(string? text, out decimal value) =>

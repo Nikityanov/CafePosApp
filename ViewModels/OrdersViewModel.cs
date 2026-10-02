@@ -277,6 +277,33 @@ public partial class OrderRowViewModel : ObservableObject
     public bool CanCancel => Model.Status is not OrderStatus.Cancelled;
     public decimal TotalPrice => Model.TotalPrice;
 
+    /// <summary>
+    /// The total already carrying the active currency, e.g. "740,00 ₽" or "740,00 ₿".
+    /// </summary>
+    /// <remarks>
+    /// This exists because the order card used to format its total with a
+    /// <c>StringFormat="Итого: {0:F2} ₽"</c> in XAML, and that hard-codes both the symbol and the
+    /// digit count — neither of which can be bound. Formatting moves here so it can read the
+    /// selected currency; the label keeps the "Итого:" prefix so the wording stays in the view.
+    /// </remarks>
+    public string TotalPriceText => TextFormat.Money(TotalPrice);
+
+    /// <summary>
+    /// Re-raises <see cref="TotalPriceText"/> after the currency setting changed.
+    /// </summary>
+    /// <remarks>
+    /// The card also renders a payment-state sentence that quotes money
+    /// (<see cref="PaymentHint"/>, <see cref="PaymentLine"/>), so those are re-raised with it — a
+    /// card where the headline total moved to ₿ while the line under it still read ₽ would be worse
+    /// than one that had not updated at all.
+    /// </remarks>
+    public void RefreshMoneyText()
+    {
+        OnPropertyChanged(nameof(TotalPriceText));
+        OnPropertyChanged(nameof(PaymentHint));
+        OnPropertyChanged(nameof(PaymentLine));
+    }
+
     /// <summary>Timestamps are stored in UTC and rendered in the local time zone.</summary>
     public string CreatedAtText => Model.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
 
