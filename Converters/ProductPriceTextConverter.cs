@@ -11,7 +11,7 @@ namespace CafePosApp.Converters;
 /// of a meaningless "0 ₽".
 /// </summary>
 /// <remarks>
-/// A single amount is rendered by <see cref="TextFormat.Money"/>, so a price reads the same
+/// A single amount is rendered by <c>TextFormat.Money</c>, so a price reads the same
 /// whether it came through a ViewModel or through this converter. The converter used to format
 /// the decimal itself and skipped <see cref="Money.Round"/>, so the same price could be
 /// displayed differently depending on the path it took to the screen.

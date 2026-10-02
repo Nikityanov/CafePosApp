@@ -69,6 +69,19 @@ public static class SystemBars
         // leaves those two versions on the platform default, which is the pre-existing
         // behaviour — Android 5 never had per-icon tinting to set in the first place.
         if (!OperatingSystem.IsAndroidVersionAtLeast(23)) return;
+#elif IOS
+        // No guard here, deliberately, and the warning is switched off for this one line rather
+        // than left in the log.
+        //
+        // The toolkit attributes SetStyle to iOS 15 (StatusBar.ios.cs), and this project targets
+        // iOS 15 minimum, so the API is always available on every device this app can install on.
+        // CA1416 reports it anyway because its reachability analysis works on the preprocessor
+        // shape and cannot see that the project's minimum already excludes the unsupported range.
+        // A runtime guard on IsIOSVersionAtLeast(15) does not silence it either: the analyzer
+        // treats the call as still reachable. The only alternatives were a NoWarn, which would
+        // hide every future CA1416 in this file too, or a preprocessor split per target version,
+        // which cannot be expressed. So the check is stated here and suppressed narrowly.
+#pragma warning disable CA1416 // iOS 15 minimum == the version the toolkit attributes this API to
 #endif
 
 #if ANDROID || IOS
@@ -78,6 +91,7 @@ public static class SystemBars
         // bar. Default is deliberately NOT used: it defers to the system theme, which is
         // precisely the mismatch this method exists to correct.
         StatusBar.SetStyle(isDark ? StatusBarStyle.LightContent : StatusBarStyle.DarkContent);
+#pragma warning restore CA1416
 #endif
     }
 }

@@ -17,16 +17,22 @@ namespace CafePosApp.ViewModels;
 /// One recorded payment, rendered as a single line on the details page.
 /// </summary>
 /// <remarks>
-/// <paramref name="IsRefund"/> is a separate field rather than something the wording implies,
+/// <see cref="IsRefund"/> is a separate field rather than something the wording implies,
 /// because the two rows are the same shape in every other respect and a preformatted
-/// <c>PaymentLine(string Text)</c> made a refund line indistinguishable from a collection at the
-/// template level. <paramref name="IsRefund"/> is what <see cref="AmountColor"/> reads, and the
-/// template cannot parse the text to find out the direction.
+/// single-string line made a refund line indistinguishable from a collection at the
+/// template level. It is what <see cref="AmountColor"/> reads, and the template cannot
+/// parse the text to find out the direction.
 /// <para>
-/// <paramref name="AmountText"/> is the signed, formatted figure on its own and <paramref name="Text"/>
+/// <see cref="AmountText"/> is the signed, formatted figure on its own and <see cref="Text"/>
 /// is the composed sentence, split so the template can put the amount in its own column. The minus
-/// sign is part of <paramref name="AmountText"/>: the sign is the fastest thing to read on a row
+/// sign is part of <see cref="AmountText"/>: the sign is the fastest thing to read on a row
 /// list, and it must not depend on the surrounding prose to be noticed.
+/// </para>
+/// <para>
+/// This was a positional record and became an ObservableObject, because <see cref="AmountText"/>
+/// is now a re-derivable binding rather than a value frozen at construction: the operator can
+/// change the currency while this line is on screen, and a string built once cannot follow. See
+/// <see cref="RefreshMoneyText"/>.
 /// </para>
 /// </remarks>
 public sealed class PaymentLine : ObservableObject
@@ -38,10 +44,6 @@ public sealed class PaymentLine : ObservableObject
     public string Text { get => text; set => SetProperty(ref text, value); }
 
     /// <summary>The amount in the active currency, signed for a refund. Bound by the row.</summary>
-    /// <remarks>
-    /// Stored as text rather than as a formatted-at-construction string so it can be re-derived when
-    /// the operator switches currency — see <see cref="RefreshMoneyText"/>.
-    /// </remarks>
     public string AmountText { get => amountText; set => SetProperty(ref amountText, value); }
 
     public bool IsRefund { get; init; }
@@ -211,8 +213,6 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
     /// own LineTotalText, because the footer is this property's job.
     /// </remarks>
     public string TotalText => TextFormat.Money(Total);
-
-    /// <summary>Re-raises <see cref="TotalText"/> after the item collection has changed.</summary>
 
     // ── Payment state ──────────────────────────────────────────────────────────────────────────
     // The order's own payment figures (PaidKopecks / BalanceKopecks / PaymentState) are the
