@@ -27,12 +27,12 @@ public partial class SettingsViewModel
         {
             var backup = await backups.CreateBackupAsync("Вручную");
             await LoadBackupsAsync();
-            Message = $"Резервная копия создана: {backup.FileName} ({backup.SizeText}).";
+            SetMessage($"Резервная копия создана: {backup.FileName} ({backup.SizeText}).", MessageLevel.Success);
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to create a backup");
-            Message = UserMessages.Describe(exception, "Не удалось создать резервную копию");
+            SetMessage(UserMessages.Describe(exception, "Не удалось создать резервную копию"), MessageLevel.Error);
         }
         finally
         {
@@ -47,14 +47,14 @@ public partial class SettingsViewModel
         {
             var path = await backups.ExportArchiveAsync();
             await LoadBackupsAsync();
-            Message = await files.ShareFileAsync(path, "Экспорт CafePOS")
+            SetMessage(await files.ShareFileAsync(path, "Экспорт CafePOS")
                 ? "Архив сформирован и открыт для отправки."
-                : $"Архив сохранён: {path}";
+                : $"Архив сохранён: {path}", MessageLevel.Success);
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to export data");
-            Message = UserMessages.Describe(exception, "Не удалось экспортировать данные");
+            SetMessage(UserMessages.Describe(exception, "Не удалось экспортировать данные"), MessageLevel.Error);
         }
         finally
         {
@@ -72,7 +72,7 @@ public partial class SettingsViewModel
             var validation = await backups.ValidateAsync(filePath);
             if (!validation.IsValid)
             {
-                Message = $"Файл не подходит: {validation.Message}.";
+                SetMessage($"Файл не подходит: {validation.Message}.", MessageLevel.Error);
                 return;
             }
 
@@ -84,13 +84,13 @@ public partial class SettingsViewModel
             }
 
             await backups.RestoreAsync(filePath);
-            Message = "База восстановлена. Перезапустите приложение.";
+            SetMessage("База восстановлена. Перезапустите приложение.", MessageLevel.Success);
             await dialogs.AlertAsync("Готово", "База данных восстановлена. Закройте и снова откройте приложение.");
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to restore a backup");
-            Message = UserMessages.Describe(exception, "Не удалось восстановить базу");
+            SetMessage(UserMessages.Describe(exception, "Не удалось восстановить базу"), MessageLevel.Error);
         }
     }
 
@@ -101,7 +101,9 @@ public partial class SettingsViewModel
             var path = CafePosApp.Diagnostics.AppLog.LogPath;
             if (!File.Exists(path))
             {
-                Message = "Журнал пока пуст.";
+                // Not a failure: the log is simply empty, so the label stays green rather than
+                // telling the operator something went wrong.
+                SetMessage("Журнал пока пуст.", MessageLevel.Success);
                 return;
             }
 
@@ -110,7 +112,7 @@ public partial class SettingsViewModel
         catch (Exception exception)
         {
             logger.LogWarning(exception, "Failed to share the log file");
-            Message = UserMessages.Describe(exception, "Не удалось отправить журнал");
+            SetMessage(UserMessages.Describe(exception, "Не удалось отправить журнал"), MessageLevel.Error);
         }
     }
 }

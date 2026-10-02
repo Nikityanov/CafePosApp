@@ -1,6 +1,37 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true"></application>
+	<!--
+	  android:icon and android:roundIcon point at @mipmap/cafepos_icon rather than at
+	  Resizetizer's @mipmap/appicon.
+
+	  This is the one existing file the icon redesign had to touch, and here is why it was
+	  unavoidable. Resizetizer 10.0.101 hard-codes the themed-icon layer to the full-colour
+	  foreground raster:
+
+	    <monochrome android:drawable="@mipmap/appicon_foreground" />
+
+	  MonochromeFile is a .NET MAUI 11 property and does not exist in 10.0.101, so a real
+	  monochrome layer has to come from a project resource. That resource cannot be named
+	  "appicon": the generated file of that name is emitted by Resizetizer from the MauiIcon
+	  Include's basename, and the pairing between a project res file and a generated one is
+	  resolved as an aapt2 overlay (app res arrives via -R, the Resizetizer output via
+	  aapt2's library-path argument), which is correct today but silently depends on that
+	  precedence and on the Include keeping its name.
+
+	  @mipmap/cafepos_icon is a name Resizetizer cannot produce - it is derived from the
+	  MauiIcon basename, never from a project file name - so there is nothing for it to
+	  collide with under any rule. The cost of that safety is this two-attribute edit.
+
+	  Resolved resource: mipmap-anydpi-v26/cafepos_icon.xml on API 26+ (background +
+	  colour foreground + monochrome), mipmap-anydpi/cafepos_icon.xml on API 21-25 (rounded
+	  navy plate + mark). Both are new files under Platforms/Android/Resources/.
+
+	  roundIcon now shares the same adaptive icon. That is correct rather than a shortcut:
+	  the launcher applies its own circular crop, which is exactly what roundIcon is for, and
+	  the generated mipmap/appicon_round.png is a byte-for-byte copy of mipmap/appicon.png so
+	  it was never carrying anything round about it.
+	-->
+	<application android:allowBackup="true" android:icon="@mipmap/cafepos_icon" android:roundIcon="@mipmap/cafepos_icon" android:supportsRtl="true"></application>
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
 	<!-- HapticFeedback.Default.Perform throws PermissionException without this, and the

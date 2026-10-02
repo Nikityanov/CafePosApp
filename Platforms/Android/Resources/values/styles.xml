@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Redefinition of MAUI's Maui.SplashTheme. One item differs from the library's version;
+  everything else is reproduced verbatim, including the parent chain.
+
+  WHY THIS FILE HAS TO EXIST
+  =========================
+  .NET MAUI 10.0.101 has no way to change how the Android 12+ splash icon is sized. Its
+  library Maui.SplashTheme (Microsoft.Maui.Controls, res/values/styles.xml) reads:
+
+    <style name="Maui.SplashTheme" parent="Maui.MainTheme.NoActionBar">
+        <item name="maui_splash">true</item>
+        <item name="android:windowBackground">@drawable/maui_splash</item>
+        <item name="android:windowSplashScreenBackground">@color/maui_splash_color</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/maui_splash</item>
+    </style>
+
+  and the library's own res/drawable/maui_splash.xml is a LAYER-LIST with
+  android:opacity="opaque" whose first item is a solid @color/maui_splash_color fill. So
+  windowSplashScreenAnimatedIcon points at the whole layer-list, background fill included,
+  and the system treats all of it as icon content and masks it into the icon shape. That is
+  the reported "tiny logo on an oddly shaped navy patch": the fill becomes a navy disc and
+  the logo is whatever is left of it inside the mask.
+
+  Compounding it, the Resizetizer-generated drawable-v31/maui_splash_image.xml hard-codes
+  the bitmap into a 108dp box:
+
+    <item android:width="108dp" android:height="108dp" android:gravity="center">
+
+  Android's spec for that area is 240x240dp (160dp visible circle) with an icon background,
+  or 288x288dp (192dp visible circle) without. 108dp of 240dp is 45% of the intended size.
+  MAUI 10.0.101 exposes no attribute, metadata or property to change that box, has no
+  windowSplashScreenIconBackgroundColor, no postSplashScreenTheme, no day/night variant,
+  and generates no values-v31 at all. A project-level resource is the documented extension
+  point, so the theme is redefined here.
+
+  THE PARENT CHAIN, WHICH IS THE PART THAT IS EASY TO BREAK
+  ========================================================
+  Redeclaring a style does not merge it with the library's, so every item the app's chrome
+  depends on has to come from somewhere. The chain is reproduced exactly:
+
+    Maui.SplashTheme
+      -> Maui.MainTheme.NoActionBar      (windowActionBar=false, windowNoTitle=true,
+                                          windowActionModeOverlay=true, actionMode*)
+        -> Maui.MainTheme                (empty in MAUI 10; the v35+ edge-to-edge hook)
+          -> Maui.MainTheme.Base         (Theme.MaterialComponents.DayNight, colorPrimary,
+            |                             colorPrimaryDark, colorAccent, appBarLayoutStyle,
+            |                             bottomNavigationViewStyle, materialButtonStyle,
+            |                             checkboxStyle, alertDialogTheme,
+            |                             materialAlertDialogTheme, maui_edgetoedge_optout)
+            -> Theme.MaterialComponents.DayNight
+
+  These are the library's own styles, referenced by name, not copies - only Maui.SplashTheme
+  itself is replaced. Nothing in the app's chrome is redefined, so the app's windows, dialogs,
+  buttons and checkboxes keep the exact attributes they had.
+
+  The only change is windowSplashScreenAnimatedIcon, which now points at an icon-only vector
+  with no background fill and an intrinsic size of 288dp instead of a 108dp layer-list box.
+  See drawable/cafepos_splash_icon.xml for the arithmetic and the expected result.
+
+  WHY THIS IS IN values/ AND NOT values-v31/
+  ===========================================
+  Because that is where MAUI puts these attributes itself - the shipped Maui.SplashTheme above
+  is in res/values/, not res/values-v31/ - and it builds. AAPT2 compiles against
+  targetSdkVersion=36, so windowSplashScreenBackground and windowSplashScreenAnimatedIcon
+  resolve; on API 21-30 the platform simply ignores the two attributes it does not know, and
+  the pre-31 path is carried entirely by android:windowBackground, which is unchanged.
+
+  API 21-30, unchanged from before: @drawable/maui_splash is a layer-list of the navy
+  @color/maui_splash_color with the splash bitmap centred over it. The bitmap is now the
+  redesigned mark on a transparent background (the old artwork had a navy disc on a navy
+  background, so only the gold cup ever read), 89dp across on the 128dp BaseSize raster.
+-->
+<resources>
+    <style name="Maui.SplashTheme" parent="Maui.MainTheme.NoActionBar">
+        <item name="maui_splash">true</item>
+        <item name="android:windowBackground">@drawable/maui_splash</item>
+        <item name="android:windowSplashScreenBackground">@color/maui_splash_color</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/cafepos_splash_icon</item>
+    </style>
+</resources>

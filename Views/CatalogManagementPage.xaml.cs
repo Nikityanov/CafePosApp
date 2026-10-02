@@ -203,26 +203,19 @@ public partial class CatalogManagementPage : ContentPage
     private void OnWindowSizeChanged(object? sender, EventArgs e) => PublishAvailableWidth();
 
     /// <summary>
-    /// One CollectionView selection event drives both of the product list's tap behaviours.
-    /// <list type="bullet">
-    ///   <item>Edit mode: SelectionMode is Single, so a tap selects one row. The selection is read
-    ///   as "open this product's form" and immediately cleared, so tapping the same row twice in a
-    ///   row still works.</item>
-    ///   <item>Select mode: SelectionMode is Multiple, and the selection becomes the bulk-price
-    ///   target.</item>
-    /// </list>
-    /// A tap gesture recognizer inside the row template was tried first and dropped: it competed
-    /// with the list's own selection handling and, in select mode, opened the form on every tick.
+    /// A tap on a product row opens its form. The list's SelectionMode is Single, so the selection
+    /// is read as "open this product's form" and immediately cleared, which is what lets the same
+    /// row be tapped twice in a row.
+    ///
+    /// This handler used to branch on a bulk-price select mode as well, with SelectionMode
+    /// switching to Multiple. That mode is gone by the owner's decision, and with it
+    /// IsSelectionMode and ApplySelection; the branch is removed rather than left to throw.
+    /// A tap gesture recognizer inside the row template was tried before any of this and dropped:
+    /// it competed with the list's own selection handling.
     /// </summary>
     private void OnProductsSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (sender is not CollectionView list) return;
-
-        if (viewModel.IsSelectionMode)
-        {
-            viewModel.ApplySelection(list.SelectedItems.OfType<Product>());
-            return;
-        }
 
         if (e.CurrentSelection.Count == 0) return;
 

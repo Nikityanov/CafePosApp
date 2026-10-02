@@ -26,15 +26,22 @@
          Do not remove this ScrollView a third time without knowing the verdict above.
          ═══════════════════════════════════════════════════════════════════════════════════════ -->
     <ScrollView>
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <!-- No PageTitle label. The Shell nav bar already reads "Смена", and the page put
-                     "Смена / Отчёт" straight under it — the same word twice at two sizes before any
-                     content. "Отчёт" adds nothing the report's own section headings do not say. -->
-                <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить отчёт" />
-            </Grid>
-            <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
-                <Border Grid.Row="2" Style="{StaticResource CardBorder}">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
+            <!-- No toolbar row. «Обновить» is gone by the owner's decision, and it was the only
+             thing this row held — the Shell nav bar already reads "Смена", so the row existed
+             purely to park a refresh button that duplicated leaving and re-entering the page.
+             Nothing is lost by removing it: this page has no polling, and OnAppearing reloads,
+             so navigating away and back is a complete manual reload. The row indices below
+             shift up by one and the summary card becomes the first row. -->
+        <!-- Static value, so an AppThemeBinding on the attribute is the whole fix and needs no ViewModel
+                 change. A bare {StaticResource Danger} declared the light token in both themes: this
+                 label sits on the page fill (#FAFAFA / #121212), where that is 4.77:1 in light and
+                 3.76:1 in dark against the 4.5:1 owed at 14pt. DangerDark #FF9E8E on #121212 is
+                 9.40:1. -->
+        <Label Text="{Binding Message}" IsVisible="{Binding HasMessage}"
+                TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
+                LineBreakMode="WordWrap" />
+                <Border Grid.Row="1" Style="{StaticResource CardBorder}">
                     <VerticalStackLayout Spacing="6">
                         <Label Text="{Binding Revenue, StringFormat='Выручка: {0:F2} ₽'}" FontAttributes="Bold" />
                         <Label Text="{Binding ClosedOrdersCount, StringFormat='Чеков: {0}'}" />
@@ -75,8 +82,8 @@
                                SemanticProperties.Description="Итого наличными в кассе: принято наличными минус возвращено наличными" />
                     </VerticalStackLayout>
                 </Border>
-                <Button Grid.Row="3" Text="Анализировать смену" Command="{Binding OpenAnalyticsCommand}" />
-                <Label Grid.Row="4" Text="История заказов смены" Style="{StaticResource SectionTitle}" />
+                <Button Grid.Row="2" Text="Анализировать смену" Command="{Binding OpenAnalyticsCommand}" />
+                <Label Grid.Row="3" Text="История заказов смены" Style="{StaticResource SectionTitle}" />
                 <!-- ShiftHistory, not CompletedOrders: it is GetShiftOrderHistoryAsync's Completed AND
                      Cancelled, so a voided sale shows up AS voided instead of disappearing from the
                      only list a manager reads after the fact.
@@ -87,7 +94,7 @@
                      Spacing 0 because the 4dp between cards is already on each Border.
                      SelectionMode="None" went with it — a BindableLayout has no selection
                      to disable, and it was already the default for these rows. -->
-                <VerticalStackLayout Grid.Row="5" BindableLayout.ItemsSource="{Binding ShiftHistory}" Spacing="0">
+                <VerticalStackLayout Grid.Row="4" BindableLayout.ItemsSource="{Binding ShiftHistory}" Spacing="0">
                     <BindableLayout.ItemTemplate>
                         <DataTemplate x:DataType="vm:OrderRowViewModel">
                             <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
@@ -166,7 +173,7 @@
                      gets its own row so it costs nothing while the list has content — and while
                      it does, the collapsed row costs only the 10dp RowSpacing, which on a page
                      that scrolls is not a measurement that matters. -->
-                <Label Grid.Row="6" Text="Закрытых заказов пока нет." Style="{StaticResource EmptyLabel}"
+                <Label Grid.Row="5" Text="Закрытых заказов пока нет." Style="{StaticResource EmptyLabel}"
                        IsVisible="{Binding HasNoShiftHistory}" />
                 <!-- No reconciliation block on THIS page, and that is a decision rather than an
                      omission: the page rebinds to the newly created shift after a close and its route
@@ -175,7 +182,7 @@
                      the analytics page is the one screen that can read a closed shift.
                      The description carries the one thing the operator must know before pressing it:
                      the count is asked for and the shift does not close without one. -->
-                <Button Grid.Row="7" Text="Закрыть смену и открыть новую" Style="{StaticResource DangerButton}"
+                <Button Grid.Row="6" Text="Закрыть смену и открыть новую" Style="{StaticResource DangerButton}"
                         Command="{Binding CloseShiftCommand}"
                         SemanticProperties.Description="Закрыть смену и открыть новую. Будет запрошен пересчёт наличных в кассе; без него смена не закроется." />
         </Grid>

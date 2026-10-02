@@ -1,4 +1,5 @@
 using CafePosApp.Controls;
+using CafePosApp.Converters;
 using CafePosApp.Services;
 using CafePosApp.ViewModels;
 
@@ -132,7 +133,12 @@ public partial class CatalogFormsPage : ContentPage
         {
             FontSize = 12,
             LineBreakMode = LineBreakMode.WordWrap,
-            TextColor = ResourceStyles.TryGetColor("Danger") ?? Colors.Red,
+            // ThemeColors.Resolve, not a bare TryGetColor("Danger"): this footer is built in code,
+            // so it never participates in AppThemeBinding, and the light token alone left every
+            // validation message light-red in dark mode. Danger reads 4.53:1 on the form's light
+            // surface and DangerDark 8.36:1 on the dark one. ThemeColors falls back to the other
+            // token if one is ever renamed, so this cannot throw.
+            TextColor = ThemeColors.Resolve("Danger", "DangerDark"),
         };
         message.SetBinding(Label.TextProperty, static (IFormFooterSource f) => f.ValidationMessage);
         message.SetBinding(Label.IsVisibleProperty, static (IFormFooterSource f) => f.HasValidationMessage);

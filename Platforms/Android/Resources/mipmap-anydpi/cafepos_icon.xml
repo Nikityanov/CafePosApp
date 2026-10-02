@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Legacy icon, API 21-25 (minSdkVersion=21), where no adaptive icon exists.
+
+  This is the "anydpi" - no version qualifier - half of the pair, so the resource
+  mipmap/cafepos_icon resolves on every API level: API 21-25 pick this layer-list, API 26+
+  pick mipmap-anydpi-v26/cafepos_icon.xml. Two configurations of one resource name is the
+  ordinary pattern (the same one Resizetizer's own mipmap-anydpi-v26/appicon.xml relies on
+  against the density-specific PNGs) and is not a duplicate.
+
+  It has to exist. Repointing the manifest at mipmap/cafepos_icon without it would leave
+  API 21-25 with no matching resource configuration at all, and a launcher resolving the
+  icon would get nothing back.
+
+  Two items, both filling the layer bounds: a rounded navy plate, then the mark. A legacy
+  icon is not masked by the platform, so the plate supplies the shape that the adaptive
+  mask would otherwise supply. The plate and the mark are the same two elements, at the
+  same 108-canvas geometry, as the adaptive icon.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/cafepos_legacy_plate" />
+    <item android:drawable="@drawable/cafepos_mark" />
+</layer-list>

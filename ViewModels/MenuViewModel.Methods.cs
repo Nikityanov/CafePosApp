@@ -2,10 +2,14 @@ using System.Collections.ObjectModel;
 using CafePos.Core.Errors;
 using CafePos.Core.Models;
 using CafePos.Core.Services;
+// ThemeColors lives in the Converters namespace only because Controls/ResourceStyles.cs was out of
+// the change that added it; it belongs beside ResourceStyles.TryGetColor. See its own remarks.
+using CafePosApp.Converters;
 using CafePosApp.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using Microsoft.Maui.Graphics;
 
 namespace CafePosApp.ViewModels;
 
@@ -16,9 +20,6 @@ namespace CafePosApp.ViewModels;
 public partial class MenuViewModel : ObservableObject
 {
     private static readonly TimeSpan AutoSaveDelay = TimeSpan.FromMilliseconds(400);
-
-    /// <summary>How long the search box waits after the last keystroke before filtering.</summary>
-    private static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(250);
 
     private readonly ICatalogService catalog;
     private readonly ICheckoutService checkout;
@@ -40,7 +41,6 @@ public partial class MenuViewModel : ObservableObject
     // silently not persisted at all and a killed app lost the customer's cart.
     private readonly SemaphoreSlim autoSaveGate = new(1, 1);
     private CancellationTokenSource? autoSaveCancellation;
-    private CancellationTokenSource? filterCancellation;
 
     public MenuViewModel(
         ICatalogService catalog,
@@ -194,14 +194,46 @@ public partial class MenuViewModel : ObservableObject
     /// order and a failed add looked alike — and the confirmation sat last on the screen,
     /// under the button, in the flow where it matters most. Set via <see cref="SetError"/>.
     /// </summary>
-    public bool IsErrorMessage { get => isErrorMessage; private set => SetProperty(ref isErrorMessage, value); }
+    public bool IsErrorMessage
+    {
+        get => isErrorMessage;
+        private set
+        {
+            if (!SetProperty(ref isErrorMessage, value)) return;
+            // The colour is derived from this flag, so it has to be announced with it.
+            OnPropertyChanged(nameof(MessageColor));
+        }
+    }
+
+    /// <summary>
+    /// The ink for <see cref="Message"/>: red on a failure, green otherwise.
+    /// </summary>
+    /// <remarks>
+    /// This label was MEASURED wrong on a Pixel 7 in dark theme: it painted
+    /// <c>Success #2E7D32</c> on <c>#1E1E1E</c>, 3.28:1, because the colour arrived as a
+    /// <c>Setter</c> inside a <c>DataTrigger</c> holding a bare <c>{StaticResource Success}</c> —
+    /// and a trigger Setter takes a VALUE, not a binding expression, so the token is resolved
+    /// once at parse time against the light theme and no later theme change can re-resolve it.
+    /// Two triggers, one per outcome, so both branches were latched.
+    /// <para>
+    /// The fix is to stop using a trigger for a colour at all and resolve it here, against the
+    /// live theme — <c>SuccessDark</c> measures 8.28:1 on <c>SurfaceDark</c>, which is the figure
+    /// the measured 3.28:1 should have been.
+    /// </para>
+    /// <para>
+    /// Both outcomes carry their own token, so unlike the untinted case elsewhere there is no
+    /// "leave it to the implicit style" branch to reproduce. The text always says which one it is
+    /// ("Заказ #1 создан…", "Добавьте товары в заказ."), so the colour reinforces the sentence and
+    /// never carries the meaning alone.
+    /// </para>
+    /// </remarks>
+    public Color MessageColor => IsErrorMessage
+        ? ThemeColors.Resolve("Danger", "DangerDark")
+        : ThemeColors.Resolve("Success", "SuccessDark");
 
     /// <summary>Sets a failure message and flags it as one.</summary>
     private void SetError(Exception exception, string prefix) =>
         (Message, IsErrorMessage) = (UserMessages.Describe(exception, prefix), true);
-
-    private string searchText = string.Empty;
-    public string SearchText { get => searchText; set { if (SetProperty(ref searchText, value)) ScheduleFilterRefresh(); } }
 
     private Category? selectedCategory;
     public Category? SelectedCategory { get => selectedCategory; private set => SetProperty(ref selectedCategory, value); }

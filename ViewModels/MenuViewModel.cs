@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using CafePos.Core.Models;
 using CafePos.Core.Services;
+using CafePosApp.Controls;
+using CafePosApp.Converters;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
@@ -50,32 +52,78 @@ public partial class CartItemViewModel : ObservableObject
 /// </summary>
 public sealed class CategoryMenuItemViewModel : ObservableObject
 {
-    private static readonly Color[] Palette =
-    [
-        Color.FromArgb("#E3F2FD"),
-        Color.FromArgb("#E8F5E9"),
-        Color.FromArgb("#FFF3E0"),
-        Color.FromArgb("#F3E5F5"),
-        Color.FromArgb("#FFEBEE"),
-        Color.FromArgb("#E0F7FA"),
-        Color.FromArgb("#FFF8E1"),
-        Color.FromArgb("#E8EAF6"),
-    ];
-
-    /// <summary>Neutral background of the "Все" chip — no category colour, so grey.</summary>
-    private static readonly Color AllChipColor = Color.FromArgb("#E4E4E4");
+    /// <summary>
+    /// Keys of the per-category pastel fills, in Resources/Styles/Colors.xaml.
+    /// </summary>
+    /// <remarks>
+    /// This used to be an inline <c>Color[]</c> of eight <c>Color.FromArgb</c> literals — a private
+    /// copy of the Category1..Category8 tokens. That is the defect a colour produced in C# always
+    /// has: <c>AppThemeBinding</c> governs values that come from XAML, so a literal here is
+    /// permanently light-themed, and the palette could be retuned in Colors.xaml with this file
+    /// silently keeping the old values. Reading the same tokens by key means there is one source
+    /// of truth. <see cref="ThemeColors.Resolve"/> is not needed here on purpose: a category tint is
+    /// a light pastel by design in BOTH themes, so there is no dark variant to switch to and no
+    /// lookup of a second key that does not exist.
+    /// <para>
+    /// ThemeColors lives in the Converters namespace only because Controls/ResourceStyles.cs was out
+    /// of the write scope of the change that added it; it is a general theming helper, not a
+    /// converter. ResourceStyles itself is the narrower dependency and is what is used below.
+    /// </para>
+    /// </remarks>
+    private static readonly string[] CategoryColorKeys =
+        ["Category1", "Category2", "Category3", "Category4", "Category5", "Category6", "Category7", "Category8"];
 
     /// <summary>
+    /// The pastel fills, read from the palette. A key that is missing falls back to
+    /// <see cref="Gray100"/> so a palette rename degrades to a neutral chip rather than throwing
+    /// from a constructor.
+    /// </summary>
+    private static readonly Color[] Palette = ReadPalette();
+
+    private static Color[] ReadPalette() =>
+    [
+        ..CategoryColorKeys.Select(key => ResourceStyles.TryGetColor(key) ?? ResourceStyles.TryGetColor("Gray100") ?? Colors.LightGray)
+    ];
+
+    /// <summary>
+    /// Neutral background of the "Все" chip — no category colour, so grey.
+    /// </summary>
+    /// <remarks>
+    /// This was a literal <c>#E4E4E4</c>, a grey that exists in NO token in Colors.xaml: it sits
+    /// between Gray100 #F5F5F5 and Gray200 #EEEEEE and matches neither, so it could not be moved
+    /// into the palette without inventing a value. Gray100 #F5F5F5 is used here instead — it is a
+    /// real tonal step, one notch lighter than Gray200 which is the fill the neutral
+    /// <c>Tag</c> pills use, so the "no filter" chip reads as a very slightly darker neutral than
+    /// the chrome around it and cannot be mistaken for a category tint.
+    /// <para>
+    /// It stays the SAME tone in dark mode. The chip carries a dark label on every unselected
+    /// state (see <see cref="ChipForeground"/>), and darkening the fill would only shrink that
+    /// contrast; the selected fill is what signals dark mode.
+    /// </para>
+    /// </remarks>
+    private static Color AllChipColor =>
+        ResourceStyles.TryGetColor("Gray100") ?? Colors.LightGray;
+
+    /// <summary>
+    /// The label on an unselected chip.
+    /// </summary>
+    /// <remarks>
     /// The palette is pastel, so an unselected label stays dark in both themes. Relying on the
     /// implicit Button TextColor (white in the light theme) rendered white text on a near-white
-    /// chip, i.e. an unreadable category strip.
-    /// </summary>
-    private static readonly Color ChipForeground = Color.FromArgb("#1A1A1A");
+    /// chip, i.e. an unreadable category strip. The value was <c>#1A1A1A</c>, which is also in no
+    /// token — Gray900 is #212121 and Black is #000000, and the chip label needs to clear 4.5:1
+    /// against the darkest pastel in the strip (#E8F5E9), which both clear comfortably. Gray900 is
+    /// used here so the label is a real tonal step rather than an unregistered near-black.
+    /// </remarks>
+    private static Color ChipForeground =>
+        ResourceStyles.TryGetColor("Gray900") ?? Colors.Black;
 
-    private static readonly Color SelectedForeground = Colors.White;
+    private static Color SelectedForeground =>
+        ThemeColors.Resolve("White", "PrimaryDarkText");
 
-    /// <summary>Selected chip fill. Mirrors the Primary token in Resources/Styles/Colors.xaml.</summary>
-    private static readonly Color SelectedBackground = Color.FromArgb("#512BD4");
+    /// <summary>Selected chip fill — the Primary pair, so the selection follows the theme.</summary>
+    private static Color SelectedBackground =>
+        ThemeColors.Resolve("Primary", "PrimaryDark");
 
     /// <summary>Sort key of the "Все" chip. Real category ids are generated Guids.</summary>
     public static readonly Guid AllKey = Guid.Empty;

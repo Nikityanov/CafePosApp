@@ -8,7 +8,15 @@
             </VerticalStackLayout>
             <ActivityIndicator Grid.Column="1" IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
         </Grid>
-        <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
+        <!-- The value here is static — every message this ViewModel raises is a failure — so an
+             AppThemeBinding on the attribute is the whole fix and needs no ViewModel change. A bare
+             {StaticResource Danger} declared the light token in both themes: on the page fill
+             (#FAFAFA / #121212, this page has no CardBorder) that is 4.77:1 in light and 3.76:1 in
+             dark, and at 14pt regular 3.76:1 fails the 4.5:1 it owes. DangerDark #FF9E8E on #121212
+             is 9.40:1. -->
+        <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}"
+               TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
+               LineBreakMode="WordWrap" />
         <CollectionView Grid.Row="2" ItemsSource="{Binding Items}" SelectionMode="None">
             <CollectionView.EmptyView>
                 <Label Text="В заказе нет блюд." Style="{StaticResource EmptyLabel}" />
@@ -68,21 +76,20 @@
                  tinted. The tint is the THIRD signal and never the only one: colour alone is refused
                  throughout this app, and a screen reader is given the word, not the colour.
 
-                 The tint comes from a DataTrigger rather than a bound Color property so the template
-                 holds no Color value of its own: these rows were always theme-neutral, and a
-                 hard-coded one would have been unreadable on a dark theme. -->
+                 The tint comes from PaymentLine.AmountColor rather than from the template, because a
+                 DataTrigger's Setter takes a VALUE and not a binding expression: every token put in
+                 one — plain {StaticResource Danger}, and then an AppThemeBinding inside the very
+                 same Setter — resolved once at parse time and stayed light-themed in dark mode. It
+                 went through both, and at 12pt bold this label owes 4.5:1, where it was getting
+                 3.76:1. A bound property resolves against the theme that is actually running; see
+                 its remarks for the numbers and for the one coupling it introduces. -->
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Payments}" Spacing="2">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="vm:PaymentLine">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                             <Label Text="{Binding Text}" FontSize="12" Style="{StaticResource SecondaryLabel}" />
-                            <Label Grid.Column="1" Text="{Binding AmountText}" FontSize="12" FontAttributes="Bold" VerticalTextAlignment="Start">
-                                <Label.Triggers>
-                                    <DataTrigger TargetType="Label" Binding="{Binding IsRefund}" Value="True">
-                                        <Setter Property="TextColor" Value="{StaticResource Danger}" />
-                                    </DataTrigger>
-                                </Label.Triggers>
-                            </Label>
+                            <Label Grid.Column="1" Text="{Binding AmountText}" FontSize="12" FontAttributes="Bold"
+                                   VerticalTextAlignment="Start" TextColor="{Binding AmountColor}" />
                         </Grid>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>

@@ -21,8 +21,6 @@ public static class CatalogActionKeys
     public const string Restore = "restore";
     public const string ToggleAvailability = "toggle-availability";
     public const string RemoveFromGroup = "remove-from-group";
-    public const string ExportCsv = "export-csv";
-    public const string ImportCsv = "import-csv";
 }
 
 /// <summary>
@@ -78,21 +76,6 @@ public static class CatalogActions
         new(CatalogActionKeys.Edit, "Редактировать"),
         Availability(ingredient.IsAvailable),
         new(CatalogActionKeys.Delete, "Удалить ингредиент", IsDestructive: true)
-    ];
-
-    /// <summary>
-    /// The CSV round-trips. They are one entry point rather than two permanent buttons because the
-    /// markup that wanted a per-button <c>MenuFlyout</c> cannot work: MAUI's <c>Button</c> has no
-    /// <c>Flyout</c> property at all (only <c>FlyoutPage</c> has one), so a bad attribute name in a
-    /// Debug build was rejected by the runtime XAML parser and aborted the process. This sheet is
-    /// the same mechanism the row overflow already uses.
-    /// </summary>
-    public static IReadOnlyList<CatalogAction> ForCsv() =>
-    [
-        new(CatalogActionKeys.ExportCsv, "Экспорт CSV"),
-        // Import overwrites catalogue rows from a picked file, so it is marked destructive and gets
-        // the danger colour even though the confirmation below is what really guards it.
-        new(CatalogActionKeys.ImportCsv, "Импорт CSV", IsDestructive: true)
     ];
 
     /// <summary>Reads as the next thing you would do, not as the current state.</summary>

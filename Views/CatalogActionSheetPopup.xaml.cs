@@ -1,5 +1,6 @@
 using CafePos.Core.Services;
 using CafePosApp.Controls;
+using CafePosApp.Converters;
 using CafePosApp.Diagnostics;
 using CommunityToolkit.Maui.Views;
 using Microsoft.Maui.Controls.Xaml;
@@ -54,12 +55,21 @@ public partial class CatalogActionSheetPopup : Popup<string?>
             if (action.IsDestructive && !dividerAdded)
             {
                 dividerAdded = true;
+
+                // Palette lookup, not literals. This used to branch on RequestedTheme itself
+                // and hardcode Color.FromRgb(97,97,97) / (224,224,224), which is a private copy of
+                // two Colors.xaml entries (Gray700 / Gray300) that can drift from the palette
+                // without anything noticing. The TOKENS are deliberately unchanged — Gray300 in the
+                // light theme and Gray700 in the dark one is the divider pairing this file has
+                // always shipped, and the palette pass moved tonal button fills to Gray800, not
+                // dividers: a 1dp separator wants to recede, and Gray800 on SurfaceDark is 1.66:1,
+                // which is a hairline the eye loses entirely. What changed is only how the value is
+                // obtained. ThemeColors picks the key for the running theme and falls back to the
+                // other token if one is renamed, so this cannot throw.
                 OptionsLayout.Add(new BoxView
                 {
                     HeightRequest = 1,
-                    Color = Application.Current?.RequestedTheme == AppTheme.Dark
-                        ? Color.FromRgb(97, 97, 97)     // Gray700
-                        : Color.FromRgb(224, 224, 224),  // Gray300
+                    Color = ThemeColors.Resolve("Gray300", "Gray700"),
                     Margin = new Thickness(0, 4, 0, 4)
                 });
             }

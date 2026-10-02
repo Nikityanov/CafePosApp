@@ -2,6 +2,9 @@ using System.Collections.ObjectModel;
 using CafePos.Core.Common;
 using CafePos.Core.Models;
 using CafePos.Core.Services;
+// ThemeColors lives in the Converters namespace only because Controls/ResourceStyles.cs was out of
+// this change's write scope; it belongs beside ResourceStyles.TryGetColor. See its own remarks.
+using CafePosApp.Converters;
 using CafePosApp.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -17,7 +20,8 @@ namespace CafePosApp.ViewModels;
 /// <paramref name="IsRefund"/> is a separate field rather than something the wording implies,
 /// because the two rows are the same shape in every other respect and a preformatted
 /// <c>PaymentLine(string Text)</c> made a refund line indistinguishable from a collection at the
-/// template level. The template needs it to pick a colour, and the template cannot parse the text.
+/// template level. <paramref name="IsRefund"/> is what <see cref="AmountColor"/> reads, and the
+/// template cannot parse the text to find out the direction.
 /// <para>
 /// <paramref name="AmountText"/> is the signed, formatted figure on its own and <paramref name="Text"/>
 /// is the composed sentence, split so the template can put the amount in its own column. The minus
@@ -27,6 +31,43 @@ namespace CafePosApp.ViewModels;
 /// </remarks>
 public sealed record PaymentLine(string Text, string AmountText, bool IsRefund)
 {
+    /// <summary>
+    /// The ink for <c>AmountText</c>: the danger tone on a refund, the label's own default ink on
+    /// a collection.
+    /// </summary>
+    /// <remarks>
+    /// This tint has been through two wrong answers, both worth recording. It was plain
+    /// <c>{StaticResource Danger}</c> inside a <c>DataTrigger</c> Setter, which a trigger resolves
+    /// once at parse time — a trigger's Setter takes a VALUE, not a binding expression — so the
+    /// light token stayed in dark theme. It was then "fixed" by putting an
+    /// <c>AppThemeBinding</c> in that same Setter, which is no better: an AppThemeBinding needs an
+    /// <c>IProvideValueTarget</c> to register its theme-change callback against, and a trigger
+    /// setter is not one, so it too collapses to a single parse-time value. Only a bound property
+    /// resolves against the live theme. See MenuViewModel.MessageColor, which is the same story.
+    /// <para>
+    /// Numbers: this label is 12pt bold, which is UNDER the 14pt-bold large-text threshold, so it
+    /// owes 4.5:1 as body text. The page has no CardBorder behind these rows, so the backdrop is
+    /// the ContentPage fill — Danger <c>#D32F2F</c> on <c>BackgroundDark #121212</c> is 3.76:1 and
+    /// fails; DangerDark <c>#FF9E8E</c> on the same surface is 9.40:1. Light theme is unchanged at
+    /// Danger on <c>#FAFAFA</c>, 4.77:1, which passes.
+    /// </para>
+    /// <para>
+    /// The untinted branch has to NAME a colour rather than defer to the implicit
+    /// <c>Style TargetType="Label"</c>, because a local binding suppresses that style's own setter.
+    /// <c>Resolve("Black", "White")</c> reproduces exactly what it declares
+    /// (<c>AppThemeBinding Light=Black, Dark=White</c>, Resources/Styles/Styles.xaml). If that
+    /// implicit style changes, this has to change with it.
+    /// </para>
+    /// <para>
+    /// The tint is the THIRD signal and never the only one: the row text says «возврат» and the
+    /// amount carries a minus sign, and <c>SemanticProperties</c> hands a screen reader the word,
+    /// not the colour.
+    /// </para>
+    /// </remarks>
+    public Color AmountColor => IsRefund
+        ? ThemeColors.Resolve("Danger", "DangerDark")
+        : ThemeColors.Resolve("Black", "White");
+
     /// <summary>Money leaving the till is the app's one negative-number case, so it is named once here.</summary>
     public static string SignedAmount(decimal amount, bool isRefund) =>
         isRefund ? $"−{TextFormat.Money(amount)}" : TextFormat.Money(amount);
@@ -255,15 +296,29 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
     /// The line's colour. Grey for money that has gone back: it is neither a debt nor a success, and
     /// green beside a refund row would tell the operator the opposite of what happened.
     /// </summary>
+    /// <remarks>
+    /// Was <c>Microsoft.Maui.Graphics.Colors.*</c> literals, which cannot follow the theme — see
+    /// <c>ThemeColors</c>. Concretely: <c>Colors.Gray #808080</c> is 4.22:1 on a
+    /// <c>SurfaceDark #1E1E1E</c> card and 3.49:1 on a <c>SurfaceVariantDark #2D2D2D</c> one, and
+    /// this is a 13pt bold line carrying the whole payment story of a closed order. The palette's
+    /// <c>Gray600</c>/<c>Gray400</c> — already this app's secondary-text pairing — gives 4.61:1
+    /// in light and 8.87:1 in dark, with the same neutral reading. Paid, partial and unpaid move
+    /// to <c>Success</c>/<c>Warning</c>/<c>Danger</c> and their dark counterparts.
+    /// <para>
+    /// The branch structure is untouched. It was already right, and it is why colour here is never
+    /// the only cue: <see cref="PaymentSummary"/> states the same thing in words, including the
+    /// figures, and it is what a screen reader reads.
+    /// </para>
+    /// </remarks>
     public Color PaymentColor => order switch
     {
-        null => Colors.Gray,
-        { Status: OrderStatus.Cancelled } => Colors.Gray,
-        { Status: OrderStatus.Completed } when refundedTotal > 0 && order.PaidKopecks > 0 => Colors.Orange,
-        { Status: OrderStatus.Completed } when refundedTotal > 0 => Colors.Gray,
-        { PaymentState: PaymentState.Paid } => Colors.Green,
-        { PaymentState: PaymentState.PartiallyPaid } => Colors.Orange,
-        _ => Colors.Red
+        null => ThemeColors.Resolve("Gray600", "Gray400"),
+        { Status: OrderStatus.Cancelled } => ThemeColors.Resolve("Gray600", "Gray400"),
+        { Status: OrderStatus.Completed } when refundedTotal > 0 && order.PaidKopecks > 0 => ThemeColors.Resolve("Warning", "WarningDark"),
+        { Status: OrderStatus.Completed } when refundedTotal > 0 => ThemeColors.Resolve("Gray600", "Gray400"),
+        { PaymentState: PaymentState.Paid } => ThemeColors.Resolve("Success", "SuccessDark"),
+        { PaymentState: PaymentState.PartiallyPaid } => ThemeColors.Resolve("Warning", "WarningDark"),
+        _ => ThemeColors.Resolve("Danger", "DangerDark")
     };
 
     // ── Refunds ────────────────────────────────────────────────────────────────────────────────

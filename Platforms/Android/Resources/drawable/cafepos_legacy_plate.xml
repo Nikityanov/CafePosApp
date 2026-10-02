@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Legacy icon plate for API 21-25, where there is no adaptive icon and the launcher
+  draws a plain 48dp bitmap.
+
+  Android's guidance is that a legacy icon carries its own shape: the platform no longer
+  masks it, so a full-bleed square comes out as a hard navy square. Resizetizer's
+  mipmap/appicon.png is full-bleed by construction (it rasterises the MauiIcon Include at
+  zero padding), which is why the legacy path needs a plate with corners.
+
+  12dp radius on a 48dp icon is 25% - the conventional legacy rounding.
+  @color/colorPrimary is the same #143D59 as the MauiIcon Color and the splash colour;
+  values/colors.xml already overrides the library's colorPrimary, so this is the project's
+  established single source of truth for the app's chrome colours.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/colorPrimary" />
+    <corners android:radius="12dp" />
+</shape>

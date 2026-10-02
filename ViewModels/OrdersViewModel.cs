@@ -3,6 +3,9 @@ using CafePos.Core.Common;
 using CafePos.Core.Errors;
 using CafePos.Core.Models;
 using CafePos.Core.Services;
+// ThemeColors lives in the Converters namespace only because Controls/ResourceStyles.cs was out of
+// this change's write scope; it belongs beside ResourceStyles.TryGetColor. See its own remarks.
+using CafePosApp.Converters;
 using CafePosApp.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -105,12 +108,40 @@ public partial class OrderRowViewModel : ObservableObject
         _ => "Заказ закрыт"
     };
 
+    /// <summary>
+    /// The status tint: a card border, the status label and — on the shift report — the history
+    /// row's status line.
+    /// </summary>
+    /// <remarks>
+    /// Was four <c>Microsoft.Maui.Graphics.Colors.*</c> literals, which is a colour that can never
+    /// follow the theme: <c>AppThemeBinding</c> governs XAML-supplied values only, so a finished
+    /// <see cref="Color"/> from a ViewModel stays whatever it was built as. On a
+    /// <c>SurfaceDark #1E1E1E</c> card that left <c>SteelBlue #4682B4</c> (closed) at 4.06:1,
+    /// <c>Green #008000</c> (ready) at 3.25:1 and <c>Red #FF0000</c> (unpaid) at 4.17:1 — all
+    /// under the 4.5:1 a 13pt label owes, and all of them lighter on the SurfaceVariantDark fill
+    /// they also appear on. <c>ThemeColors</c> reads the palette and picks the light or dark key
+    /// for the live theme; the new dark tones measure 8.28:1, 8.36:1 and 9.63:1 there.
+    /// <para>
+    /// Two mappings are worth naming, because they are choices and not transcriptions.
+    /// <c>Colors.Gray</c> (#808080, 3.95:1 on white) became <c>Gray600</c>/<c>Gray400</c> — the
+    /// app's own secondary-text pairing from <c>SecondaryLabel</c> and <c>CountLabel</c>, which
+    /// is both more consistent and 4.61:1 in light instead of 3.95:1. And the closed order's
+    /// SteelBlue became <c>Info</c>/<c>InfoDark</c>: blue was already carrying "finished, nothing
+    /// outstanding", and it is the one semantic the four states could use without colliding with
+    /// the green/orange/grey of the other three.
+    /// </para>
+    /// <para>
+    /// Colour is never the only cue here and never was: <see cref="StatusText"/> names the state
+    /// and <see cref="StatusHint"/> is the screen-reader description, so re-tuning the tints
+    /// changes nothing about what the state is.
+    /// </para>
+    /// </remarks>
     public Color StatusColor => Model.Status switch
     {
-        OrderStatus.Ready => Colors.Green,
-        OrderStatus.Cancelled => Colors.Gray,
-        OrderStatus.InProgress => Colors.Orange,
-        _ => Colors.SteelBlue
+        OrderStatus.Ready => ThemeColors.Resolve("Success", "SuccessDark"),
+        OrderStatus.Cancelled => ThemeColors.Resolve("Gray600", "Gray400"),
+        OrderStatus.InProgress => ThemeColors.Resolve("Warning", "WarningDark"),
+        _ => ThemeColors.Resolve("Info", "InfoDark")
     };
 
     // ── Payment state ──────────────────────────────────────────────────────────────────────────
@@ -134,11 +165,27 @@ public partial class OrderRowViewModel : ObservableObject
         _ => UnpaidGlyph
     };
 
+    /// <summary>
+    /// The payment tint: the pictogram's fill and the payment line's colour.
+    /// </summary>
+    /// <remarks>
+    /// Was <c>Microsoft.Maui.Graphics.Colors.Green/Orange/Red</c>. The pictogram is a 24dp mark
+    /// with no wording of its own, and <c>Colors.Red #FF0000</c> on a <c>SurfaceVariantDark
+    /// #2D2D2D</c> card was 3.44:1 — the state an operator most needs to notice was the hardest
+    /// one to notice. From the palette it is 6.84:1, 7.96:1 and 6.91:1 for paid / partial /
+    /// unpaid respectively, with the same three hues, so nothing about the look of the light
+    /// theme changes.
+    /// <para>
+    /// As with <see cref="StatusColor"/>, the wording is what carries the state:
+    /// <see cref="PaymentText"/> spells it out and <see cref="PaymentHint"/> is the description,
+    /// with <see cref="PaymentGlyph"/> a fourth, non-colour signal.
+    /// </para>
+    /// </remarks>
     public Color PaymentColor => Model.PaymentState switch
     {
-        PaymentState.Paid => Colors.Green,
-        PaymentState.PartiallyPaid => Colors.Orange,
-        _ => Colors.Red
+        PaymentState.Paid => ThemeColors.Resolve("Success", "SuccessDark"),
+        PaymentState.PartiallyPaid => ThemeColors.Resolve("Warning", "WarningDark"),
+        _ => ThemeColors.Resolve("Danger", "DangerDark")
     };
 
     /// <summary>

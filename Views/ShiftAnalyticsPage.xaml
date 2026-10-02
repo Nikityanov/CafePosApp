@@ -35,11 +35,20 @@
          ═══════════════════════════════════════════════════════════════════════════════════════ -->
     <ScrollView>
         <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <Picker Title="Смена" ItemsSource="{Binding Shifts}" ItemDisplayBinding="{Binding DisplayName}" SelectedItem="{Binding SelectedShift}" VerticalOptions="Center" />
-                <Button Grid.Column="1" Text="Обновить" Style="{StaticResource ToolbarButton}" Command="{Binding LoadCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" SemanticProperties.Description="Обновить аналитику" />
-            </Grid>
-            <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" />
+            <!-- The shift picker, full width. It used to share a row with «Обновить», which
+                 is gone by the owner's decision: this page has no polling, so the button was
+                 its only manual reload and OnAppearing is now the way to refresh — leaving the
+                 page and coming back reloads it. «Обновить аналитику» below is NOT the same
+                 control and stays: that one re-runs the analysis for the currently selected
+                 shift without leaving the page, which is the point of the page. -->
+            <Picker Title="Смена" ItemsSource="{Binding Shifts}" ItemDisplayBinding="{Binding DisplayName}" SelectedItem="{Binding SelectedShift}" VerticalOptions="Center" />
+            <!-- Static value, so an AppThemeBinding on the attribute is the whole fix and needs no ViewModel
+                 change. A bare {StaticResource Danger} declared the light token in both themes: on
+                 the page fill (#FAFAFA / #121212) that is 4.77:1 in light and 3.76:1 in dark,
+                 against the 4.5:1 owed at 14pt. DangerDark #FF9E8E on #121212 is 9.40:1. -->
+            <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}"
+                   TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
+                   LineBreakMode="WordWrap" />
                 <Button Grid.Row="2" Text="Обновить аналитику" Command="{Binding AnalyzeCommand}" />
                 <!-- Ten cells in five rows. The two new ones are the MONEY the shift's revenue is made
                      of: a manager holding a reconciled cash figure next to an unreconcilable total
@@ -118,15 +127,19 @@
                                  with a contentDescription is announced as one node and its children are
                                  not traversed, so it would hide the two figures above. It repeats the
                                  word because a screen reader cannot see the tint and has no other way
-                                 to learn that a figure is short rather than merely different. -->
+                                 to learn that a figure is short rather than merely different.
+
+                                 The tint is a BINDING now. It was a DataTrigger Setter holding a bare
+                                 {StaticResource Danger}, and a trigger's Setter takes a value rather
+                                 than a binding expression, so that token was resolved once at parse
+                                 time and stayed the light one in dark theme: Danger #D32F2F on
+                                 BackgroundDark #121212 is 3.76:1, against 9.40:1 for DangerDark on
+                                 the same surface. ShiftAnalyticsViewModel.DifferenceColor resolves it
+                                 against the live theme, and names the label's own default ink for the
+                                 balanced case so this looks exactly as it did. -->
                             <Label Text="{Binding DifferenceText}" FontSize="18" FontAttributes="Bold"
-                                   SemanticProperties.Description="{Binding DifferenceHint}">
-                                <Label.Triggers>
-                                    <DataTrigger TargetType="Label" Binding="{Binding HasDiscrepancy}" Value="True">
-                                        <Setter Property="TextColor" Value="{StaticResource Danger}" />
-                                    </DataTrigger>
-                                </Label.Triggers>
-                            </Label>
+                                   TextColor="{Binding DifferenceColor}"
+                                   SemanticProperties.Description="{Binding DifferenceHint}" />
                             <Label Text="{Binding ReasonText, StringFormat='Причина: {0}'}" Style="{StaticResource SecondaryLabel}"
                                    IsVisible="{Binding HasReason}" LineBreakMode="WordWrap" />
                             <!-- Stale: the ledger moved AFTER the count. Shown as its own paragraph with

@@ -3,9 +3,13 @@ using CafePos.Core.Common;
 using CafePos.Core.Errors;
 using CafePos.Core.Models;
 using CafePos.Core.Services;
+// ThemeColors lives in the Converters namespace only because Controls/ResourceStyles.cs was out of
+// the change that added it; it belongs beside ResourceStyles.TryGetColor. See its own remarks.
+using CafePosApp.Converters;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using Microsoft.Maui.Graphics;
 
 namespace CafePosApp.ViewModels;
 
@@ -173,6 +177,7 @@ public class ShiftAnalyticsViewModel : ObservableObject
             OnPropertyChanged(nameof(CountedText));
             OnPropertyChanged(nameof(DifferenceText));
             OnPropertyChanged(nameof(HasDiscrepancy));
+            OnPropertyChanged(nameof(DifferenceColor));
             OnPropertyChanged(nameof(ReasonText));
             OnPropertyChanged(nameof(HasReason));
             OnPropertyChanged(nameof(DifferenceHint));
@@ -206,6 +211,34 @@ public class ShiftAnalyticsViewModel : ObservableObject
     /// only the third one, so the three states stay readable in greyscale.
     /// </summary>
     public bool HasDiscrepancy => Reconciliation is { Difference: not CashDifference.Matched };
+
+    /// <summary>
+    /// The ink for <see cref="DifferenceText"/>: the danger tone when the drawer does not agree,
+    /// and the label's own default ink otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The tint used to arrive as a <c>DataTrigger</c> Setter holding a bare
+    /// <c>{StaticResource Danger}</c>. A trigger's Setter takes a VALUE, not a binding expression,
+    /// so the token was resolved once at parse time and stayed on the light palette in every theme:
+    /// Danger <c>#D32F2F</c> on <c>BackgroundDark #121212</c> is 3.76:1, where DangerDark
+    /// <c>#FF9E8E</c> on the same surface is 9.40:1. Resolved here instead, against the live theme.
+    /// <para>
+    /// The untinted branch has to NAME a colour rather than defer to the implicit
+    /// <c>Style TargetType="Label"</c>, because a local binding suppresses the style's own setter:
+    /// <c>Resolve("Black", "White")</c> reproduces exactly what that style declares
+    /// (<c>AppThemeBinding Light=Black, Dark=White</c>, Resources/Styles/Styles.xaml), so the
+    /// balanced case looks identical to before. If that implicit style's TextColor ever changes,
+    /// this property has to change with it — that is the cost of moving a trigger into a
+    /// ViewModel, and it is recorded here rather than left to be discovered.
+    /// </para>
+    /// <para>
+    /// Nothing here is colour-only. <see cref="DifferenceText"/> spells the direction out in words
+    /// and <see cref="DifferenceHint"/> repeats it for a screen reader, which cannot see a tint.
+    /// </para>
+    /// </remarks>
+    public Color DifferenceColor => HasDiscrepancy
+        ? ThemeColors.Resolve("Danger", "DangerDark")
+        : ThemeColors.Resolve("Black", "White");
 
     public string ReasonText => Reconciliation?.Reason ?? string.Empty;
     public bool HasReason => !string.IsNullOrWhiteSpace(Reconciliation?.Reason);

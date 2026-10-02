@@ -1,8 +1,59 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPLASH ARTWORK. Gold mark on TRANSPARENT, drawn at splash scale.
+
+  This is not a 108dp adaptive-icon asset and must not be treated as one. The
+  MauiSplashScreen item rasterises it at BaseSize=128,128 and the generated
+  drawable/maui_splash_image.xml then draws the result centred and unscaled, so the
+  456-unit viewBox maps 1:1 onto 128dp: 1 unit = 128/456 = 0.2807dp.
+
+  THE EXACT FACTOR, SO THIS FILE CANNOT SILENTLY DRIFT FROM THE ICON
+  ================================================================
+  This file is Resources/AppIcon/appiconfg.svg's mark, scaled by 1.18 about the centre
+  of the 456-unit canvas. Stated as a formula so a future edit can be checked instead of
+  trusted:
+
+      svgX = 228 + (dpX - 54) x 4.98222        for POINTS   (cup, steam, saucer)
+      svgR = dpR x 4.98222                     for RADII AND STROKE WIDTHS
+      factor = 1.18 x (456/108) = 1.18 x 4.22222 = 4.98222
+
+  The 1.18 is deliberate and is the ONLY difference from the app icon. At 1:1 the mark
+  would land 67.4dp across on a 128dp splash, which is a timid logo for the one screen
+  that is entirely about the brand. At 1.18:
+
+    mark diameter          84.95dp   (max radius 30.373dp x 1.18 x 128/108)
+    bounding box          58.9 x 62.6dp
+    margins in the 128dp box   21.5dp horizontal, 25.5dp vertical
+    steam stroke 3.54dp, handle stroke 4.13dp, saucer thickness 7.08dp
+
+  Every stroke and gap scales up with the mark, so every floor in
+  Platforms/Android/Resources/drawable/cafepos_mark.xml is still comfortably met here.
+  The mark's extremes land at x 128.4..318.4, y 86.0..352.6 - comfortably inside the
+  456-unit canvas.
+
+  The cup, handle, steam and saucer geometry is the SAME as the app icon's, including the
+  three fixes in the current revision (steam 11 tall on a 3 stroke, handle r 5.75 stroke
+  3.5, saucer 35 wide with a 2 gap). If the icon mark changes and this file does not,
+  the two have drifted and the splash is showing a different logo from the launcher.
+
+  WHY THE DISC IS GONE
+  ====================
+  This file used to be the colour-inverse of appiconfg.svg: a NAVY disc with a gold cup,
+  on a navy #143D59 splash background. The disc was the same colour as the background it
+  sat on, so it was invisible, and only the gold cup ever read. There is no navy disc here
+  now. On the pre-31 path that is visually a no-op - the layer-list behind the artwork
+  paints @color/maui_splash_color, the same navy - but it means the artwork is exactly
+  the same mark as the app icon, and the same geometry is reused as the Android 12+ splash
+  animated icon (see Platforms/Android/Resources/drawable/cafepos_splash_icon.xml).
+-->
 <svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
-	<circle cx="228" cy="228" r="142" fill="#143D59" />
-	<path d="M145 190h136v62c0 42-30 76-68 76s-68-34-68-76v-62z" fill="#F2C14E" />
-	<path d="M281 207h24c28 0 50 21 50 47s-22 47-50 47h-26" fill="none" stroke="#F2C14E" stroke-width="18" stroke-linecap="round" />
-	<path d="M175 161c-10-20 13-27 3-47M222 161c-10-20 13-27 3-47M269 161c-10-20 13-27 3-47" fill="none" stroke="#F2C14E" stroke-width="12" stroke-linecap="round" />
-	<path d="M132 190h162" stroke="#143D59" stroke-width="12" stroke-linecap="round" />
+	<!-- cup body: 26.0dp wide -->
+	<path d="M128.36,168.21 L257.89,168.21 L240.46,277.82 C234.98,301.24 216.04,312.7 193.12,312.7 C170.21,312.7 151.27,301.24 145.79,277.82 Z" fill="#F2C14E" />
+	<!-- handle: stroked circle, dp centre (64.65,51.5) r 5.75, stroke 3.5, both scaled by 4.98222 -->
+	<circle cx="281.06" cy="215.54" r="28.65" fill="none" stroke="#F2C14E" stroke-width="17.44" />
+	<!-- steam: two curls, dp 11.0 tall on a 3.0 stroke -->
+	<path d="M173.2,148.28 C162.23,125.86 184.16,115.9 183.16,93.48" fill="none" stroke="#F2C14E" stroke-width="14.95" stroke-linecap="round" />
+	<path d="M218.04,148.28 C207.07,125.86 229,115.9 228,93.48" fill="none" stroke="#F2C14E" stroke-width="14.95" stroke-linecap="round" />
+	<!-- saucer: rounded bar, dp x 36..71 y 73..79 -->
+	<path d="M153.27,322.66 L297.75,322.66 C306.02,322.66 312.7,329.34 312.7,337.61 C312.7,345.88 306.02,352.56 297.75,352.56 L153.27,352.56 C145,352.56 138.32,345.88 138.32,337.61 C138.32,329.34 145,322.66 153.27,322.66 Z" fill="#F2C14E" />
 </svg>

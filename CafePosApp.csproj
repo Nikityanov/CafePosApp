@@ -70,10 +70,65 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!-- App Icon -->
+		<!--
+		  App Icon.
+
+		  Include         the BACKGROUND layer: a flat #143D59 fill, nothing else. Android
+		                  gives the background layer no mask inset, so full bleed is correct.
+		                  This used to carry the whole logo as well, which drew the mark twice
+		                  - at two scales, in two colour schemes - stacked on each other.
+		  ForegroundFile  the mark: gold on the navy background.
+		  Color           the background colour, declared here once. appicon.svg and the
+		                  generated mipmap/appicon_background are rasterised from this.
+
+		  The mark is 63.7dp across on the 108dp adaptive-icon canvas, measured from the
+		  geometry in appiconfg.svg: inside the 72dp maskable zone with 4.2dp to spare and
+		  inside the 66dp guaranteed-visible unmasked zone with 1.2dp to spare, against a
+		  48dp legibility floor. The old gold disc was 67.3dp - it filled 93.5% of the
+		  maskable diameter, which is why it read as a yellow blob. See the comment block in
+		  Resources/AppIcon/appiconfg.svg for the full measurement.
+
+		  Two Android-specific things are NOT expressible here in MAUI 10.0.101, and both are
+		  handled by project resources instead of by attributes on this item:
+
+		    - The themed (monochrome) icon. Resizetizer hard-codes
+		      <monochrome android:drawable="@mipmap/appicon_foreground"/>, so the themed layer
+		      would be the full-colour raster and collapse to a featureless filled circle when
+		      flattened to one tint. MonochromeFile is a MAUI 11 property. The real layer is
+		      Platforms/Android/Resources/drawable/cafepos_icon_monochrome.xml, wired up by
+		      Platforms/Android/Resources/mipmap-anydpi-v26/cafepos_icon.xml and pointed at by
+		      AndroidManifest.xml.
+		    - The Android 12+ splash icon size. See the MauiSplashScreen item below.
+
+		  Do NOT add ForegroundScale here to shrink the mark. It is not Android-specific: the
+		  same attribute feeds the legacy raster, the iOS asset catalogue and the Windows .ico,
+		  so shrinking the adaptive layers that way shrinks every platform. The mark is sized
+		  correctly in the SVG instead, and the layer separation above removes the other reason
+		  it was ever needed.
+		-->
 		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#143D59" />
 
-		<!-- Splash Screen -->
+		<!--
+		  Splash Screen.
+
+		  BaseSize 128,128 stays: it is the documented recommended value and it is the
+		  pre-31 path. The generated drawable/maui_splash_image.xml draws the raster centred
+		  and unscaled, so the 456-unit viewBox maps 1:1 onto 128dp. splash.svg is therefore
+		  NOT a 108-canvas asset, and its mark is drawn at 1.18x the icon's scale so it lands
+		  89dp across on that 128dp box - 63.7dp (the icon's own size, unscaled) is a timid
+		  logo for a screen that is entirely about the brand.
+
+		  The artwork no longer has a navy disc behind the gold cup. It used to, on a navy
+		  #143D59 splash background, so the disc was invisible and only the cup read.
+
+		  API 31+ cannot be fixed from here: MAUI points windowSplashScreenAnimatedIcon at
+		  @drawable/maui_splash, a layer-list that includes the opaque background fill, and
+		  hard-codes the logo into a 108dp item where Android's spec wants 240 or 288dp. MAUI
+		  10.0.101 exposes no attribute for any of it. The fix is a project-level
+		  Platforms/Android/Resources/values/styles.xml that redefines Maui.SplashTheme with
+		  the library's own parent chain, plus drawable/cafepos_splash_icon.xml as an
+		  icon-only 288dp vector. Both carry the reasoning in their own comments.
+		-->
 		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#143D59" BaseSize="128,128" />
 
 		<!-- Images -->
