@@ -55,13 +55,22 @@
                  ViewModel change. A bare {StaticResource Warning} declared the light token in both
                  themes, on this popup's own Surface fill (#FFFFFF / #1E1E1E): 3.11:1 in light and
                  5.36:1 in dark. The dark branch now reads WarningDark #FFB74D at 9.63:1.
-                 The LIGHT branch is unchanged and still 3.11:1, which clears the 3:1 that 14pt bold
-                 owes but not 4.5:1. It cannot be improved here: Warning #ED6C02 reaches only 3.11:1
-                 even on pure white, so a darker warm token would be needed and Colors.xaml is not
-                 this change's scope. «Сдача» is the word that states it; the tint is the second cue. -->
+
+                 THE LIGHT BRANCH IS NO LONGER BLOCKED, because Colors.xaml now carries
+                 WarningText #A35B00 — the light-theme text counterpart of WarningDark, which is the
+                 pair this attribute has wanted since the dark-theme pass. Warning could not be
+                 darkened from here (it is the palette's only warm token and 3.11:1 on pure white is
+                 the ceiling it can reach on ANY light background), so the fix belongs to the
+                 palette, not to this file; it does, and this label uses it:
+                   WarningText #A35B00 on Surface #FFFFFF   5.18:1  (light, was 3.11:1)
+                   WarningDark #FFB74D on SurfaceDark #1E1E1E 9.63:1 (dark, unchanged)
+                 14pt bold owes 4.5:1 as body text; 5.18:1 clears it. The hue is the same warning
+                 family (33.5deg between Warning's 27.1 and WarningDark's 35.7), so «Сдача» still
+                 reads as amber — and «Сдача» is the word that states the state, the tint is the
+                 second cue. Nothing about the message changed. -->
             <Label x:Name="ChangeLabel" FontSize="14" FontAttributes="Bold" Margin="0,0,0,6"
                    HorizontalOptions="Center" LineBreakMode="WordWrap"
-                   TextColor="{AppThemeBinding Light={StaticResource Warning}, Dark={StaticResource WarningDark}}" />
+                   TextColor="{AppThemeBinding Light={StaticResource WarningText}, Dark={StaticResource WarningDark}}" />
 
             <!-- The keypad is buttons, not an Entry: the OS keyboard covers half the screen and is
                  slow, and an Entry would bring it up on every tap. Every key is 48dp tall, the

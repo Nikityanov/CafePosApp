@@ -314,10 +314,10 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
     {
         null => ThemeColors.Resolve("Gray600", "Gray400"),
         { Status: OrderStatus.Cancelled } => ThemeColors.Resolve("Gray600", "Gray400"),
-        { Status: OrderStatus.Completed } when refundedTotal > 0 && order.PaidKopecks > 0 => ThemeColors.Resolve("Warning", "WarningDark"),
+        { Status: OrderStatus.Completed } when refundedTotal > 0 && order.PaidKopecks > 0 => ThemeColors.Resolve("WarningText", "WarningDark"),
         { Status: OrderStatus.Completed } when refundedTotal > 0 => ThemeColors.Resolve("Gray600", "Gray400"),
         { PaymentState: PaymentState.Paid } => ThemeColors.Resolve("Success", "SuccessDark"),
-        { PaymentState: PaymentState.PartiallyPaid } => ThemeColors.Resolve("Warning", "WarningDark"),
+        { PaymentState: PaymentState.PartiallyPaid } => ThemeColors.Resolve("WarningText", "WarningDark"),
         _ => ThemeColors.Resolve("Danger", "DangerDark")
     };
 

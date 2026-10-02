@@ -124,3 +124,9 @@ NDependOut/
 
 # JetBrains Rider
 *.sln.iml
+
+# Скриншоты, которые снимает app-smoke.yaml (takeScreenshot). Нужны для проверки
+# цвета — assertTrue исполняется как JavaScript и пикселей не видит — но в git
+# им не место: это меняющийся при каждом прогоне бинарный файл.
+maestro/*-ok.png
+app-smoke-ok.png

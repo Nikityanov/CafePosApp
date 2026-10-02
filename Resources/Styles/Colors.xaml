@@ -69,6 +69,101 @@
     <Color x:Key="SuccessDark">#81C784</Color>
     <Color x:Key="InfoDark">#90CAF9</Color>
 
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  SEMANTIC FOREGROUND — LIGHT THEME, WARNING                   -->
+    <!--                                                            -->
+    <!--  The light-theme counterpart of WarningDark, and the first   -->
+    <!--  warm token in this palette that can carry TEXT at all.     -->
+    <!--                                                            -->
+    <!--  WHY IT HAD TO EXIST                                        -->
+    <!--  ====================                                       -->
+    <!--  Warning #ED6C02 has relative luminance 0.2873, so on the   -->
+    <!--  lightest background the app has (Surface #FFFFFF, L=1.0)   -->
+    <!--  it reaches 3.11:1, and on BackgroundLight #FAFAFA only    -->
+    <!--  2.98:1. Every label between 11pt and 14pt owes 4.5:1, so   -->
+    <!--  Warning could never be a light-theme foreground — at best  -->
+    <!--  an 18pt+ mark, or a fill. WarningDark is not the answer:   -->
+    <!--  it is the fix for a DARK fill and reaches 1.73:1 on white.  -->
+    <!--  Three styles and one popup were written around that gap     -->
+    <!--  instead — the long comments on TagTextWarning and          -->
+    <!--  WarningToolbarButton in Styles.xaml, and on ChangeLabel in  -->
+    <!--  Views/PaymentSheetPopup.xaml.                              -->
+    <!--                                                            -->
+    <!--  Measured, on the four backgrounds a warning-toned label     -->
+    <!--  actually sits on in this app (same WCAG 2.1 relative-      -->
+    <!--  luminance formula as the table above, so it can be re-run):  -->
+    <!--                                                            -->
+    <!--                              SurfaceDark  BackgroundLight      -->
+    <!--  WarningText #A35B00           3.22:1          —                   -->
+    <!--                                                            -->
+    <!--                        Surface  SurfaceVariant  WarningLight -->
+    <!--  WarningText #A35B00         5.18:1         4.75:1        4.72:1 -->
+    <!--                                                            -->
+    <!--  NOTE THE FIRST ROW. On the dark side of the app this token -->
+    <!--  is 1.94:1 on Gray800 and 2.66:1 on SurfaceVariantDark, so  -->
+    <!--  it is NOT a dark-theme value and must never be the dark     -->
+    <!--  branch of a theme binding. Wherever this token is used, the  -->
+    <!--  dark branch of the pair stays WarningDark.                  -->
+    <!--                                                            -->
+    <!--  WHY THIS VALUE                                             -->
+    <!--  =============                                             -->
+    <!--  It has to read as amber rather than as brown, and the       -->
+    <!--  constraint is brutal: Material's amber ramp cannot reach    -->
+    <!--  4.5:1 on white at any tone — Amber 800 #FF6F00 is 2.79:1   -->
+    <!--  and Amber A700 #FFAB00 is 1.90:1 — so this token has to    -->
+    <!--  leave the ramp entirely rather than pick its darkest step.  -->
+    <!--                                                            -->
+    <!--  Hue 33.5deg, saturation 100%, lightness 32%: the hue sits   -->
+    <!--  between Warning (27.1deg) and WarningDark (35.7deg), so it -->
+    <!--  reads as the warning hue darkened rather than as a         -->
+    <!--  different colour, and at 100% saturation it cannot drift    -->
+    <!--  toward brown the way a desaturated orange does.             -->
+    <!--                                                            -->
+    <!--  Rejected, with the numbers that ruled each one out:        -->
+    <!--                                                            -->
+    <!--    #B45309 — the value everyone reaches for first            -->
+    <!--      (Tailwind amber-700). 5.02:1 on Surface, 4.81:1 on     -->
+    <!--      BackgroundLight, 4.58:1 on WarningLight. It passes, but -->
+    <!--      it clears the WarningLight fill by 0.08:1 — no room for -->
+    <!--      a rounding difference — and at hue 26.0deg with a blue  -->
+    <!--      channel of 9 it skews olive-brown.                      -->
+    <!--                                                            -->
+    <!--    #DD2C00 — Material deep-orange 900, the darkest warm tone -->
+    <!--      Material does offer. 4.74:1 / 4.54:1 / 4.32:1, so it  -->
+    <!--      fails on WarningLight, and at hue 9deg it is red, which -->
+    <!--      is Danger's job (Danger #D32F2F already owns it).       -->
+    <!--                                                            -->
+    <!--    #A0522D — "sienna". 5.62:1 / 5.38:1 / 5.12:1, which clears -->
+    <!--      everything, but its saturation is 56%. A desaturated    -->
+    <!--      orange IS brown; that is the whole reason it was       -->
+    <!--      rejected rather than credited for its contrast.         -->
+    <!--                                                            -->
+    <!--    #6E4200 — 8.60:1 on Surface. The extra contrast is not   -->
+    <!--      free: at lightness 22% this is a brown-black, and a    -->
+    <!--      warning the eye cannot tell from the body text beside   -->
+    <!--      it has stopped being a warning.                         -->
+    <!--                                                            -->
+    <!--  HOW IT IS USED                                             -->
+    <!--  =============                                             -->
+    <!--  As the LIGHT branch wherever warning-toned TEXT is wanted, -->
+    <!--  so a pair reads ThemeColors.Resolve("WarningText",          -->
+    <!--  "WarningDark") — and as {AppThemeBinding Light={StaticResource-->
+    <!--  WarningText}, Dark={StaticResource WarningDark}} on an      -->
+    <!--  attribute.                                                  -->
+    <!--                                                            -->
+    <!--  It is NOT a replacement for Warning as a FILL. TagWarning   -->
+    <!--  and WarningToolbarButton deliberately carry a saturated     -->
+    <!--  Warning fill with Gray900 #212121 on top, 5.17:1 — the only -->
+    <!--  pairing that works. WarningText on that same fill is 1.66:1 -->
+    <!--  and on the Gray800 dark fill 1.94:1, so the fills stay     -->
+    <!--  Warning and the ink on them stays Gray900 / WarningDark.    -->
+    <!--                                                            -->
+    <!--  Nothing here signals a state by colour alone: every call   -->
+    <!--  site pairs the tint with wording («Сдача», «Нет в          -->
+    <!--  наличии», «! Низкий остаток…»), which is why the token can -->
+    <!--  change without any wording changing.                        -->
+    <Color x:Key="WarningText">#A35B00</Color>
+
     <!-- ═══════════════════════════════════════════ -->
     <!--  SURFACE / BACKGROUND                       -->
     <!-- ═══════════════════════════════════════════ -->
