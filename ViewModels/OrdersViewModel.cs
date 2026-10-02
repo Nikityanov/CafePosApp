@@ -129,6 +129,13 @@ public partial class OrderRowViewModel : ObservableObject
     /// SteelBlue became <c>Info</c>/<c>InfoDark</c>: blue was already carrying "finished, nothing
     /// outstanding", and it is the one semantic the four states could use without colliding with
     /// the green/orange/grey of the other three.
+    /// <para>
+    /// In-progress takes <c>WarningText</c>/<c>WarningDark</c> rather than
+    /// <c>Warning</c>/<c>WarningDark</c>, for the same reason the payment line does: the
+    /// palette's only warm tone reached 3.11:1 on the light card, so the light branch of a
+    /// warning-coloured <em>label</em> needs a token dark enough to be text. 5.18:1 against
+    /// #FFFFFF, 4.96:1 against #FAFAFA, dark branch unchanged at 9.63:1.
+    /// </para>
     /// </para>
     /// <para>
     /// Colour is never the only cue here and never was: <see cref="StatusText"/> names the state
@@ -140,7 +147,7 @@ public partial class OrderRowViewModel : ObservableObject
     {
         OrderStatus.Ready => ThemeColors.Resolve("Success", "SuccessDark"),
         OrderStatus.Cancelled => ThemeColors.Resolve("Gray600", "Gray400"),
-        OrderStatus.InProgress => ThemeColors.Resolve("Warning", "WarningDark"),
+        OrderStatus.InProgress => ThemeColors.Resolve("WarningText", "WarningDark"),
         _ => ThemeColors.Resolve("Info", "InfoDark")
     };
 
@@ -173,8 +180,16 @@ public partial class OrderRowViewModel : ObservableObject
     /// with no wording of its own, and <c>Colors.Red #FF0000</c> on a <c>SurfaceVariantDark
     /// #2D2D2D</c> card was 3.44:1 — the state an operator most needs to notice was the hardest
     /// one to notice. From the palette it is 6.84:1, 7.96:1 and 6.91:1 for paid / partial /
-    /// unpaid respectively, with the same three hues, so nothing about the look of the light
-    /// theme changes.
+    /// unpaid respectively.
+    /// <para>
+    /// The light branch is not a transcription of the dark one. Partial payment used
+    /// <c>Warning #ED6C02</c> there, because the palette had no warm tone dark enough to
+    /// serve as text: it is 3.11:1 on the light card #FFFFFF and 2.98:1 on #FAFAFA, both
+    /// under the 4.5:1 owed at 12pt bold. <c>WarningText #A35B00</c> replaces it at
+    /// 5.18:1 and 4.96:1, so the partial state is finally legible in the light theme. On
+    /// the light card the full set now reads 5.13:1 paid, 5.18:1 partial, 4.98:1 unpaid;
+    /// the dark branch is untouched.
+    /// </para>
     /// <para>
     /// As with <see cref="StatusColor"/>, the wording is what carries the state:
     /// <see cref="PaymentText"/> spells it out and <see cref="PaymentHint"/> is the description,
@@ -184,7 +199,7 @@ public partial class OrderRowViewModel : ObservableObject
     public Color PaymentColor => Model.PaymentState switch
     {
         PaymentState.Paid => ThemeColors.Resolve("Success", "SuccessDark"),
-        PaymentState.PartiallyPaid => ThemeColors.Resolve("Warning", "WarningDark"),
+        PaymentState.PartiallyPaid => ThemeColors.Resolve("WarningText", "WarningDark"),
         _ => ThemeColors.Resolve("Danger", "DangerDark")
     };
 

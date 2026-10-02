@@ -375,16 +375,34 @@
                         <Border Grid.Row="0" Style="{StaticResource Tag}" Padding="8,6" StrokeShape="RoundRectangle 6"
                                 BackgroundColor="{AppThemeBinding Light={StaticResource WarningLight}, Dark={StaticResource Gray800}}"
                                 IsVisible="{Binding HasLowStock}">
-                            <!-- Warning in BOTH branches, over a fill that flipped to grey — the signature
-                                 of a missing dark token rather than an intentional constant. This is the
-                                 fourth instance of that pairing in the app and the one the palette pass
-                                 left behind: it sat at 1.99:1 against the old Gray700, because the light
-                                 Warning token cannot carry a dark tonal fill. The fill is now Gray800 (the
-                                 dark tonal fill every other label-on-fill pair in Styles.xaml uses) and
-                                 the label takes WarningDark, 5.81:1 there. The state is still carried by
-                                 the wording and the leading "!", never by the tint. -->
+                            <!-- The dark branch used to be Warning in BOTH, over a fill that flipped to grey —
+                                 the signature of a missing dark token rather than an
+                                 intentional constant. This was the fourth instance of that pairing in
+                                 the app and the one the palette pass left behind: it sat at 1.99:1
+                                 against the old Gray700, because the light Warning token cannot
+                                 carry a dark tonal fill. The fill is now Gray800 (the dark tonal
+                                 fill every other label-on-fill pair in Styles.xaml uses) and the
+                                 label takes WarningDark, 5.81:1 there.
+
+                                 THE LIGHT BRANCH WAS THE SAME GAP, AND IT IS NOW CLOSED. It was
+                                 Warning on this pill's own WarningLight #FFF3E0 fill: 2.84:1, on a
+                                 12pt bold label, which owes 4.5:1. It could not be fixed from this
+                                 file, because the palette had no darker orange to reach for —
+                                 Warning #ED6C02 is the only warm token and it is 2.84:1 on a fill
+                                 that is already nearly white. Colors.xaml now carries WarningText
+                                 #A35B00, and this label takes it:
+                                   WarningText #A35B00 on WarningLight #FFF3E0   4.72:1  (light, was 2.84:1)
+                                   WarningDark #FFB74D on Gray800 #424242        5.81:1  (dark, unchanged)
+                                 The fill is deliberately NOT changed: it is a tonal pill, not a
+                                 text background, and WarningToolbarButton / TagWarning already
+                                 established that Warning as a saturated fill is the one pairing
+                                 that works (Gray900 #212121 on it is 5.17:1; WarningText on that
+                                 same fill would be 1.66:1). What changed is only the ink.
+
+                                 The state is still carried by the wording and the leading "!",
+                                 never by the tint, so nothing here signals state by colour alone. -->
                             <Label FontSize="12" FontAttributes="Bold" LineBreakMode="WordWrap"
-                                   TextColor="{AppThemeBinding Light={StaticResource Warning}, Dark={StaticResource WarningDark}}"
+                                   TextColor="{AppThemeBinding Light={StaticResource WarningText}, Dark={StaticResource WarningDark}}"
                                    Text="{Binding LowStockText}" />
                         </Border>
 

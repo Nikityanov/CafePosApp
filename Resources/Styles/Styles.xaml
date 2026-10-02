@@ -415,15 +415,15 @@
          the void button, on the one pill an operator reads to decide whether a product can be sold.
          The dark branch was then corrected to WarningDark on Gray800, 5.81:1.
 
-         THE LIGHT BRANCH WAS NEVER MEASURED, AND NO DARKER WARNING CAN FIX IT.
-         Light was WarningLight fill + Warning label: 2.84:1. TagText is 11pt, which is body text, so
-         it owes 4.5:1 and 2.84:1 is not close. There is no darker orange in this palette — Warning
-         #ED6C02 is the only warm token and at L=0.287 it cannot reach 4.5:1 on ANY light background,
-         pure white included (3.11:1). A WarningText/Amber800 token is the real fix and belongs in
-         Colors.xaml, which is not this file's to change.
+         THE LIGHT BRANCH WAS THAT SAME GAP — AND THE TOKEN THAT CLOSES IT NOW EXISTS, BUT IT DOES
+         NOT APPLY HERE, because this is a FILL and not a text background. Colors.xaml now carries
+         WarningText #A35B00, which clears 4.5:1 on a WarningLight #FFF3E0 fill (4.72:1), and on a
+         WarningLight fill that would have been the obvious answer to the 2.84:1 below.
 
-         So the hue moves to the FILL, exactly as it did for WarningToolbarButton above, and the
-         label takes an ink that clears the bar:
+         It is still the wrong answer for THIS style, because TagWarning is a saturated Warning fill
+         and the label sits on top of it: WarningText #A35B00 on Warning #ED6C02 is 1.66:1, worse
+         than what it would have replaced. So the hue moves to the FILL, exactly as it did for
+         WarningToolbarButton below, and the label takes an ink that clears the bar:
            Gray900 #212121 on Warning #ED6C02   5.17:1   (light)
            WarningDark #FFB74D on Gray800 #424242 5.81:1 (dark, unchanged)
          5.17:1 is a body-text pass at 11pt, not a large-text exemption. The pill becomes a solid
@@ -509,25 +509,21 @@
          beneath it flipped to grey while the label stayed untinted on a *semantic* button. It now
          carries the tone it exists for: WarningDark on Gray800, 5.81:1.
 
-         THE LIGHT BRANCH WAS THE SAME DEFECT, UNMEASURED, AND NO DARKER WARNING CAN FIX IT.
-         Light was WarningLight fill + Warning label — 2.84:1, which fails even the 3:1 that 13pt
-         bold would owe as large text, let alone the 4.5:1 it owes as body text at this size. The
-         instinct is to reach for a darker orange; there is not one. Warning #ED6C02 is the palette's
-         only warm token, and at L=0.287 it cannot reach 4.5:1 on ANY light background — even pure
-         white only manages 3.11:1. WarningDark is the fix for the DARK branch, where the fill is
-         dark grey; on a pale fill it is nothing. Danger (#D32F2F on DangerLight, 4.36:1) and Info
-         (#1976D2 on InfoLight, 4.03:1) both clear the bar on their tonal fills; Warning is the one
-         hue in this palette that is too light to be light-theme text, and that is a Colors.xaml
-         limitation — a WarningText / Amber800 token is the real fix and is not added here because
-         the palette is not this file.
+         THE LIGHT BRANCH WAS THE SAME DEFECT, UNMEASURED — AND THE TOKEN THAT CLOSES IT NOW EXISTS, BUT IT
+         DOES NOT APPLY HERE, for the same reason as TagTextWarning above: this is a FILL. Light was
+         a WarningLight fill + a Warning label, 2.84:1, on a 13pt bold button that owes 4.5:1.
 
-         So the fill takes the hue instead and the label takes a tone that clears the bar:
+         Colors.xaml now carries WarningText #A35B00 (4.72:1 on a WarningLight fill, 4.96:1 on
+         BackgroundLight), which would have fixed a WarningLight fill. It cannot fix THIS one: the
+         fill here is the saturated Warning #ED6C02, and WarningText on it is 1.66:1. Darkening the
+         FILL instead would change what the button IS — a saturated orange against the grey of every
+         neutral header button and the pale red of DangerButton — so the hue stays on the fill and
+         the label takes an ink that clears the bar:
            Gray900 #212121 on Warning #ED6C02   5.17:1
-         That keeps the button unmistakably a warning — a saturated orange against the grey of every
-         neutral header button and the pale red of DangerButton — instead of a cream fill with grey
-         text, which at 13pt in a header row would read as SecondaryButton and waste the style.
-         The dark branch keeps Gray800 + WarningDark (5.81:1) and its quiet tonal chrome: the two
-         themes are built differently on purpose, because one of them has no choice. -->
+         That keeps the button unmistakably a warning rather than a cream fill with grey text, which
+         at 13pt in a header row would read as SecondaryButton and waste the style. The dark branch
+         keeps Gray800 + WarningDark (5.81:1) and its quiet tonal chrome: the two themes are built
+         differently on purpose, because one of them has no choice. -->
     <Style TargetType="Button" x:Key="WarningToolbarButton" BasedOn="{StaticResource ToolbarButton}">
         <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Warning}, Dark={StaticResource Gray800}}" />
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource WarningDark}}" />
