@@ -61,6 +61,29 @@ public class TextFormatTests
         }
     }
 
+    [Theory]
+    [InlineData(0, "many")]
+    [InlineData(1, "one")]
+    [InlineData(2, "few")]
+    [InlineData(4, "few")]
+    [InlineData(5, "many")]
+    [InlineData(11, "many")]
+    [InlineData(12, "many")]
+    [InlineData(14, "many")]
+    [InlineData(21, "one")]
+    [InlineData(22, "few")]
+    [InlineData(25, "many")]
+    [InlineData(101, "one")]
+    [InlineData(111, "many")]
+    [InlineData(1000, "many")]
+    public void Plural_picks_the_russian_form_for_each_count(int count, string expected)
+    {
+        // The teen rule is the point of the 11–14 band: their last digit is 1–4, so checking the
+        // units digit first would give «11 позиция» and «14 позиции» instead of «many».
+        var form = TextFormat.Plural(count, "one", "few", "many");
+        Assert.Equal(expected, form);
+    }
+
     [Fact]
     public void ParseList_trims_splits_and_deduplicates()
     {

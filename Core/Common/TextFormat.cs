@@ -62,6 +62,31 @@ public static class TextFormat
         decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out value)
         || decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out value);
 
+    /// <summary>
+    /// Selects the Russian plural form for a count: one / few / many.
+    /// </summary>
+    /// <remarks>
+    /// ONE implementation for the whole app, and it was private to
+    /// <c>CatalogManagementViewModel</c> until a second screen needed it — which is exactly how
+    /// "1 товаров" gets written twice in two files and fixed in only one. It belongs here beside the
+    /// other Russian formatting helpers rather than in a ViewModel, because a word-choice rule is
+    /// not a view concern and this file is what the test project already covers.
+    /// <para>
+    /// The teen rule comes first and is not a special case of the units rule: 11–14 take «many» even
+    /// though their last digit is 1–4, so checking the units digit first gets 11 «позиция».
+    /// </para>
+    /// </remarks>
+    public static string Plural(int count, string one, string few, string many)
+    {
+        if ((uint)(count % 100) is >= 11 and <= 14) return many;
+        return (uint)(count % 10) switch
+        {
+            1 => one,
+            2 or 3 or 4 => few,
+            _ => many
+        };
+    }
+
     /// <summary>Splits a comma separated list, removes blanks and duplicates.</summary>
     public static List<string> ParseList(string? text) => string.IsNullOrWhiteSpace(text)
         ? []

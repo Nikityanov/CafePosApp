@@ -100,29 +100,110 @@ public sealed partial class OrderService
             isStale);
     }
 
+    /// <summary>
+    /// The shift's product breakdown: one row per distinct product × modifier × variant.
+    /// </summary>
+    /// <remarks>
+    /// The section of each dish comes from <c>Products</c> → <c>Categories</c>, and that link must be
+    /// OUTER. <c>OrderItem</c> stores no category, so the join is the only source; a line whose
+    /// product row cannot be reached, or whose product has no section, is still a sale and still
+    /// belongs in the report.
+    /// <para>
+    /// <b>THE JOIN THAT DELETED SALES.</b> <c>Join(...)</c> with a cast-to-nullable key was believed
+    /// to give a LEFT JOIN. It does not — EF Core kept it INNER, so every line whose product had
+    /// <c>CategoryId == null</c> vanished from the breakdown while still counting in
+    /// <c>ItemsCount</c> and in revenue. Measured on the emulator: a shift that sold 30 items showed
+    /// 14, the missing 16 being exactly the unfiled dishes, with nothing on screen to say so. The
+    /// symptom is the worst kind — every figure on the page looks reasonable, and the one number
+    /// that cannot be checked against anything else is quietly short.
+    /// <para>
+    /// The fix is <c>SelectMany(..., DefaultIfEmpty())</c>, which EF translates to a real LEFT JOIN.
+    /// Note what is NOT the fix: <c>GroupJoin</c> alone, and <c>GroupJoin</c> over a subquery with
+    /// the key already cast. Both compiled, both looked like an outer join, and both had to be thrown
+    /// away — the first because <c>DefaultIfEmpty</c> never reached the translator, the second
+    /// because EF emitted a correlated <c>APPLY</c>, which SQLite refuses outright.
+    /// <para>
+    /// The section is the dish's CURRENT one, not the one it had when it was sold. That is a
+    /// deliberate trade and it is not the same trade <see cref="Models.OrderItem.ProductName"/>
+    /// makes: the name is snapshotted because a rename must not rewrite what a customer was charged,
+    /// whereas a manager grouping yesterday's sales by where a dish sits TODAY is what "which
+    /// section is this performing in" means. A dish moved between sections regroups its history, and
+    /// the alternative — a snapshot column — would have needed a migration and would still be wrong
+    /// for the question actually being asked.
+    /// </para>
+    /// <para>
+    /// Grouping happens AFTER the join and carries the section, so a dish name that occurs in two
+    /// sections stays two rows and an unfiled dish needs no special case in SQL. There is
+    /// deliberately NO <c>ORDER BY</c>: ordering lives in <see cref="ProductAnalyticsProjection"/>
+    /// so a screen which forgets to sort cannot be left holding a stale order from SQL.
+    /// </para>
+    /// </remarks>
     public async Task<List<ProductAnalyticsRowData>> GetProductAnalyticsAsync(Guid shiftId, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        var rows = await db.OrderItems.AsNoTracking()
-            .Join(db.Orders.Where(order => order.ShiftId == shiftId && order.Status == OrderStatus.Completed),
-                item => item.OrderId, order => order.Id, (item, order) => item)
-            .GroupBy(item => new { item.ProductName, item.SelectedModifierName, item.SelectedVariantName })
+
+        // ONE genuine inner join: a line whose order is not a completed order of THIS shift is not
+        // this shift's sale, and that is the scope of the whole report.
+        //
+        // The product lookup below is SelectMany(..., DefaultIfEmpty()) — a LEFT JOIN EF actually
+        // emits. It is NOT written as Join with nullable cast keys: that form compiled, looked right
+        // and was silently INNER, which deleted every unfiled dish from the breakdown while it still
+        // counted in ItemsCount. Measured on the emulator: a shift that sold 30 items showed 14, and
+        // the cards at the top of the page — which read a different query — said 30 the whole time.
+        var completed = db.Orders
+            .Where(order => order.ShiftId == shiftId && order.Status == OrderStatus.Completed)
+            .Select(order => order.Id);
+
+        var items = db.OrderItems.AsNoTracking().Where(item => completed.Contains(item.OrderId));
+
+        // LEFT JOIN: every line survives even when its product row is gone, and the section rides
+        // the same outer join off the navigation rather than a second one.
+        var lines = items
+            .SelectMany(
+                item => db.Products.AsNoTracking()
+                    .Where(product => product.Id == item.ProductId)
+                    .DefaultIfEmpty(),
+                (item, product) => new
+                {
+                    item.ProductName,
+                    item.SelectedModifierName,
+                    item.SelectedVariantName,
+                    item.Quantity,
+                    item.PriceKopecks,
+                    CategoryId = product == null ? (Guid?)null : product.CategoryId,
+                    CategoryName = product == null || product.Category == null
+                        ? null
+                        : product.Category.Name
+                });
+
+        var rows = await lines
+            .GroupBy(line => new
+            {
+                line.ProductName,
+                line.SelectedModifierName,
+                line.SelectedVariantName,
+                line.CategoryId,
+                line.CategoryName
+            })
             .Select(group => new
             {
                 group.Key.ProductName,
                 group.Key.SelectedModifierName,
                 group.Key.SelectedVariantName,
-                Quantity = group.Sum(item => item.Quantity),
-                RevenueKopecks = group.Sum(item => item.PriceKopecks * item.Quantity)
+                group.Key.CategoryId,
+                group.Key.CategoryName,
+                Quantity = group.Sum(line => line.Quantity),
+                RevenueKopecks = group.Sum(line => line.PriceKopecks * line.Quantity)
             })
-            .OrderByDescending(row => row.Quantity)
             .ToListAsync(cancellationToken);
 
         return rows.Select(row => new ProductAnalyticsRowData(
             row.ProductName,
             DescribeModifier(row.SelectedModifierName, row.SelectedVariantName),
             row.Quantity,
-            Money.FromKopecks(row.RevenueKopecks))).ToList();
+            Money.FromKopecks(row.RevenueKopecks),
+            row.CategoryId,
+            row.CategoryName)).ToList();
     }
 
     private static string DescribeModifier(string? modifierName, string? variantName)
