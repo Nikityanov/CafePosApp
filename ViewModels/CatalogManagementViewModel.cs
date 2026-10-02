@@ -288,17 +288,17 @@ public partial class CatalogManagementViewModel : ObservableObject
 
     public string LowStockText => $"! {LowStockCount} {Plural(LowStockCount, "ингредиент заканчивается", "ингредиента заканчивается", "ингредиентов заканчивается")}";
 
-    /// <summary>Russian plural selection: one / few / many.</summary>
-    private static string Plural(int count, string one, string few, string many)
-    {
-        if ((uint)(count % 100) is >= 11 and <= 14) return many;
-        return (uint)(count % 10) switch
-        {
-            1 => one,
-            2 or 3 or 4 => few,
-            _ => many
-        };
-    }
+    /// <summary>
+    /// Russian plural selection: one / few / many.
+    /// </summary>
+    /// <remarks>
+    /// A one-line delegate to <see cref="TextFormat.Plural"/>. The rule used to live here as a
+    /// private copy, which meant a second screen needing it had to either duplicate the rule — and a
+    /// duplicated rule gets fixed in one place only — or take a dependency on a ViewModel. The word
+    /// choice is a formatting concern and now sits with the rest of them in Core.
+    /// </remarks>
+    private static string Plural(int count, string one, string few, string many) =>
+        TextFormat.Plural(count, one, few, many);
 
     /// <summary>
     /// The severity of <see cref="ValidationMessage"/>. The one notice label carries both

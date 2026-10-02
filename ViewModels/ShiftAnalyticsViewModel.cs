@@ -23,23 +23,277 @@ namespace CafePosApp.ViewModels;
 /// </param>
 public sealed record ShiftChoice(Guid Id, string DisplayName, bool IsClosed);
 
-/// <summary>One line of «Продажи по блюдам и модификаторам».</summary>
-/// <param name="Revenue">The line's revenue in major units.</param>
-/// <param name="RevenueText">
-/// The same figure already formatted in the operator's selected currency. Carried as data because
-/// the row binds a Label directly and this is a record, not an ObservableObject — a computed
-/// property would work here only by reading the ambient <c>Currencies.Default</c>, which is fine,
-/// but the value is resolved once when the row is built and the whole row is rebuilt on every load
-/// anyway, so there is nothing to keep in step.
-/// </param>
-public sealed record ProductAnalyticsRow(
-    string ProductName,
-    string ModifierName,
-    int Quantity,
-    decimal Revenue,
-    string RevenueText);
+/// <summary>
+/// One modifier line of the product breakdown, as it is bound on screen.
+/// </summary>
+/// <remarks>
+/// An <see cref="ObservableObject"/> rather than the Core record, and the ONLY reason is the bindable
+/// <see cref="IsVisible"/>: the projection already dropped the lines a filter hid, so there is no
+/// per-line visibility logic here — the row is asked to disappear or not by the ViewModel when it
+/// rebuilds, never by a row deciding something about itself.
+/// </remarks>
+public sealed partial class ProductAnalyticsLineRow : ObservableObject
+{
+    private bool isVisible = true;
 
-public class ShiftAnalyticsViewModel : ObservableObject
+    public ProductAnalyticsLineRow(ProductAnalyticsLine line)
+    {
+        ProductName = line.DishName;
+        ModifierName = line.ModifierName;
+        Quantity = line.Quantity;
+        RevenueText = TextFormat.Money(line.Revenue);
+        Hint = $"{line.DishName}, {line.ModifierName}: × {line.Quantity}, {RevenueText}";
+    }
+
+    public string ProductName { get; }
+
+    /// <summary>The composed modifier/variant description, or «Без модификатора».</summary>
+    public string ModifierName { get; }
+
+    public int Quantity { get; }
+
+    /// <summary>Money in the active currency, resolved when the row was built.</summary>
+    public string RevenueText { get; }
+
+    /// <summary>The whole line in one sentence, for a screen reader that cannot see the columns.</summary>
+    public string Hint { get; }
+
+    public bool IsVisible
+    {
+        get => isVisible;
+        set => SetProperty(ref isVisible, value);
+    }
+}
+
+/// <summary>
+/// One dish header with its modifier rows under it, collapsible.
+/// </summary>
+/// <remarks>
+/// The totals are of what the header CONTAINS, which the projection has already filtered: a dish
+/// whose rows a search term removed reports only what is left. That is a deliberate difference from
+/// the shift report, where the figure is the dish's whole shift — on a filtered screen the number
+/// the reader adds up from the rows below must be the number on the header.
+/// </remarks>
+public sealed partial class ProductAnalyticsDishRow : ObservableObject
+{
+    public ProductAnalyticsDishRow(ProductAnalyticsDish dish, string share)
+    {
+        Name = dish.Name;
+        Quantity = dish.Quantity;
+        Revenue = dish.Revenue;
+        Share = share;
+        Lines = new ObservableCollection<ProductAnalyticsLineRow>(dish.Lines.Select(line => new ProductAnalyticsLineRow(line)));
+    }
+
+    public string Name { get; }
+
+    public int Quantity { get; }
+
+    public decimal Revenue { get; }
+
+    /// <summary>«12% выручки смены», or empty at zero. Resolved at build — the denominator is fixed.</summary>
+    public string Share { get; }
+
+    public ObservableCollection<ProductAnalyticsLineRow> Lines { get; }
+
+    private bool isExpanded = true;
+
+    /// <summary>
+    /// Whether the modifier lines are shown. OPEN by default: the shift breakdown is a handful of
+    /// rows, and hiding content behind a tap the reader has to discover is the wrong default for a
+    /// report. A filter or a re-sort does not change it — see
+    /// <see cref="ShiftAnalyticsViewModel.RebuildProductRows"/> — while a SHIFT change folds
+    /// everything, because there the dishes are different ones.
+    /// </summary>
+    public bool IsExpanded
+    {
+        get => isExpanded;
+        set
+        {
+            if (!SetProperty(ref isExpanded, value)) return;
+            OnPropertyChanged(nameof(IsCollapsed));
+            OnPropertyChanged(nameof(ChevronGlyph));
+            OnPropertyChanged(nameof(Hint));
+        }
+    }
+
+    /// <summary>The chevron's state, spelled out because a glyph is not a state.</summary>
+    public bool IsCollapsed => !isExpanded;
+
+    /// <summary>An up chevron while open, a right one when collapsed. A text glyph, not an asset.</summary>
+    public string ChevronGlyph => isExpanded ? "⌃" : "›";
+
+    public string QuantityText => $"× {Quantity}";
+
+    public string RevenueText => TextFormat.Money(Revenue);
+
+    /// <summary>
+    /// The header as one sentence for a screen reader: what it is, how much, and whether it is
+    /// open. Without the last part a non-sighted reader cannot tell a folded dish from a dish with
+    /// nothing under it.
+    /// </summary>
+    public string Hint => $"{Name}. {QuantityText}, {RevenueText}. {Share}. {(isExpanded ? "Развёрнуто" : "Свёрнуто")}";
+}
+
+/// <summary>One section header with the dishes sold in it.</summary>
+public sealed partial class ProductAnalyticsSectionRow : ObservableObject
+{
+    public ProductAnalyticsSectionRow(ProductAnalyticsSection section, Func<decimal, string> share)
+    {
+        Name = section.Name;
+        Quantity = section.Quantity;
+        Revenue = section.Revenue;
+        Share = share(section.Revenue);
+        Dishes = new ObservableCollection<ProductAnalyticsDishRow>(
+            section.Dishes.Select(dish => new ProductAnalyticsDishRow(dish, share(dish.Revenue))));
+    }
+
+    public string Name { get; }
+
+    public int Quantity { get; }
+
+    public decimal Revenue { get; }
+
+    /// <summary>«12% выручки смены» for the section, or empty when the shift sold nothing.</summary>
+    public string Share { get; }
+
+    public ObservableCollection<ProductAnalyticsDishRow> Dishes { get; }
+
+    public string QuantityText => $"× {Quantity}";
+
+    public string RevenueText => TextFormat.Money(Revenue);
+
+    public string Hint => $"{Name}. {QuantityText}, {RevenueText}. {Share}";
+}
+
+/// <summary>
+/// One chip of the section filter strip: «Все» plus one chip per section present in the shift.
+/// </summary>
+/// <remarks>
+/// The count is on the chip because deciding where to look is an arithmetic question, and it is
+/// text rather than a badge so a screen reader reads it with the name — the same reasoning as
+/// <see cref="OrderFilterChip"/>, which this mirrors.
+/// </remarks>
+public sealed partial class ProductAnalyticsSectionChip : ObservableObject
+{
+    public ProductAnalyticsSectionChip(Guid? sectionId, string name)
+    {
+        SectionId = sectionId;
+        Name = name;
+    }
+
+    /// <summary>The section this chip selects, or null for «Без раздела».</summary>
+    public Guid? SectionId { get; }
+
+    public string Name { get; }
+
+    private int count;
+    public int Count
+    {
+        get => count;
+        set
+        {
+            if (SetProperty(ref count, value)) OnPropertyChanged(nameof(Label));
+        }
+    }
+
+    private decimal revenue;
+    public decimal Revenue
+    {
+        get => revenue;
+        set
+        {
+            if (SetProperty(ref revenue, value)) OnPropertyChanged(nameof(Share));
+        }
+    }
+
+    /// <summary>«34% выручки смены». Empty at zero, where a share would only add a division.</summary>
+    public string Share
+    {
+        get
+        {
+            var share = analyticsRevenueShare;
+            return share <= 0 ? string.Empty : $"{Math.Round(share * 100)}% выручки смены";
+        }
+    }
+
+    private double analyticsRevenueShare;
+
+    /// <summary>Recomputed from the shift total after every load, because the denominator moves.</summary>
+    public void SetShare(double share)
+    {
+        if (Math.Abs(analyticsRevenueShare - share) < 0.0001) return;
+        analyticsRevenueShare = share;
+        OnPropertyChanged(nameof(Share));
+    }
+
+    /// <summary>The name and the count. A zero count stays, because «Напитки · 0» is an answer.</summary>
+    public string Label => Count > 0 ? $"{Name} · {Count}" : Name;
+
+    private bool isSelected;
+    public bool IsSelected
+    {
+        get => isSelected;
+        set => SetProperty(ref isSelected, value);
+    }
+
+    /// <summary>What a screen reader says for the whole chip, including the share.</summary>
+    public string Hint => IsSelected ? $"{Label}. Выбран" : Label;
+}
+
+/// <summary>One choice of the sorting control: a criterion, spelled out.</summary>
+public sealed partial class ProductAnalyticsSortOption : ObservableObject
+{
+    public ProductAnalyticsSortOption(ProductAnalyticsSortCriterion criterion, string name)
+    {
+        Criterion = criterion;
+        Name = name;
+    }
+
+    public ProductAnalyticsSortCriterion Criterion { get; }
+
+    public string Name { get; }
+
+    private bool isSelected;
+    public bool IsSelected
+    {
+        get => isSelected;
+        set
+        {
+            if (!SetProperty(ref isSelected, value)) OnPropertyChanged(nameof(Hint));
+        }
+    }
+
+    public string Hint => $"Сортировать: {Name}{(IsSelected ? ". Выбрано" : string.Empty)}";
+}
+
+/// <summary>One choice of the grouping control.</summary>
+public sealed partial class ProductAnalyticsGroupingOption : ObservableObject
+{
+    public ProductAnalyticsGroupingOption(ProductAnalyticsGrouping grouping, string name)
+    {
+        Grouping = grouping;
+        Name = name;
+    }
+
+    public ProductAnalyticsGrouping Grouping { get; }
+
+    public string Name { get; }
+
+    private bool isSelected;
+    public bool IsSelected
+    {
+        get => isSelected;
+        set
+        {
+            if (!SetProperty(ref isSelected, value)) OnPropertyChanged(nameof(Hint));
+        }
+    }
+
+    public string Hint => $"Группировать: {Name}{(IsSelected ? ". Выбрано" : string.Empty)}";
+}
+
+public partial class ShiftAnalyticsViewModel : ObservableObject
 {
     private readonly IOrderService orders;
     private readonly ILogger<ShiftAnalyticsViewModel> logger;
@@ -54,25 +308,164 @@ public class ShiftAnalyticsViewModel : ObservableObject
         this.logger = logger;
         LoadCommand = new AsyncRelayCommand(LoadAsync, options: AsyncRelayCommandOptions.AllowConcurrentExecutions);
         AnalyzeCommand = new AsyncRelayCommand(AnalyzeAsync);
+        ToggleFilterPanelCommand = new RelayCommand(() => IsFilterPanelOpen = !IsFilterPanelOpen);
+        ClearSearchCommand = new RelayCommand(() => SearchText = string.Empty);
+        SelectSectionChipCommand = new RelayCommand<ProductAnalyticsSectionChip>(ToggleSectionChip);
+        SelectSortCommand = new RelayCommand<ProductAnalyticsSortOption>(SelectSort);
+        SelectGroupingCommand = new RelayCommand<ProductAnalyticsGroupingOption>(SelectGrouping);
+        ToggleSortDirectionCommand = new RelayCommand(SortDirectionCommand);
+        ToggleDishCommand = new RelayCommand<ProductAnalyticsDishRow>(ToggleDish);
+        SeedControls();
     }
 
     public ObservableCollection<ShiftChoice> Shifts { get; } = [];
-    public ObservableCollection<ProductAnalyticsRow> ProductRows { get; } = [];
+
+    // ── The product breakdown: three shapes, one at a time ───────────────────────────────────
+    // The projection returns whichever tree the grouping asks for, and only that one is bound.
+    // Three collections rather than one union type, because a BindableLayout has no way to pick a
+    // DataTemplate by runtime type — a single list would mean one template rendering three
+    // different things behind IsVisible panels.
+    public ObservableCollection<ProductAnalyticsSectionRow> SectionRows { get; } = [];
+    public ObservableCollection<ProductAnalyticsDishRow> DishRows { get; } = [];
+    public ObservableCollection<ProductAnalyticsLineRow> LineRows { get; } = [];
+
+    // ── The controls ────────────────────────────────────────────────────────────────────────
+    public ObservableCollection<ProductAnalyticsSectionChip> SectionChips { get; } = [];
+    public ObservableCollection<ProductAnalyticsSortOption> SortOptions { get; } = [];
+    public ObservableCollection<ProductAnalyticsGroupingOption> GroupingOptions { get; } = [];
+
+    private bool isFilterPanelOpen;
 
     /// <summary>
-    /// True while the selected shift has no product breakdown to show.
+    /// Whether the filter/sort panel is open. CLOSED by default: it is five controls and a search
+    /// box, and a manager opening the page to read the shift does not want them between the cards
+    /// and the breakdown. The trigger carries the current state in words, so a collapsed panel is
+    /// never "what is this list showing" — see <see cref="FilterPanelSummary"/>.
     /// </summary>
-    /// <remarks>
-    /// The breakdown is a BindableLayout inside the page's ScrollView rather than a CollectionView on
-    /// a star row, so «За выбранную смену нет закрытых заказов.» has no <c>EmptyView</c> to live in —
-    /// BindableLayout has none. An ordinary label bound to this is what carries it, and it is why this
-    /// property exists. Re-announced from <c>AnalyzeAsync</c> after every <c>SyncWith</c>, which is the
-    /// only place <see cref="ProductRows"/> changes.
-    /// </remarks>
-    public bool HasNoProductRows => ProductRows.Count == 0;
+    public bool IsFilterPanelOpen
+    {
+        get => isFilterPanelOpen;
+        set
+        {
+            if (!SetProperty(ref isFilterPanelOpen, value)) return;
+            OnPropertyChanged(nameof(FilterPanelSummary));
+            OnPropertyChanged(nameof(FilterPanelHint));
+            OnPropertyChanged(nameof(FilterPanelGlyph));
+        }
+    }
+
+    /// <summary>The chevron on the panel trigger.</summary>
+    public string FilterPanelGlyph => isFilterPanelOpen ? "⌃" : "›";
+
+    private string searchText = string.Empty;
+
+    /// <summary>
+    /// The search term, bound two ways to an <c>Entry</c>. Set from code by
+    /// <see cref="ClearSearchCommand"/> as well as by the user, so it raises rather than being a
+    /// field the view writes into.
+    /// </summary>
+    public string SearchText
+    {
+        get => searchText;
+        set
+        {
+            if (!SetProperty(ref searchText, value ?? string.Empty)) return;
+            OnPropertyChanged(nameof(HasSearch));
+            OnPropertyChanged(nameof(FilterPanelSummary));
+            OnPropertyChanged(nameof(FilterPanelHint));
+
+            // Re-projected on every keystroke, which is affordable ONLY because the rows are already
+            // in hand and nothing here touches the database — see ProductAnalyticsProjection. The
+            // alternative, waiting for a submit, makes a filter feel like it ignored the first
+            // letters.
+            RebuildProductRows();
+        }
+    }
+
+    public bool HasSearch => !string.IsNullOrWhiteSpace(SearchText);
+
+    // The five commands behind the filter panel and the collapsible dish headers. Declared HERE, on the
+    // page's own type, rather than in the List partial: a compiled binding on the page resolves
+    // against ShiftAnalyticsViewModel, and a property the compiler cannot see on that type is a
+    // build failure rather than a silently unbound tap.
+    public IRelayCommand ToggleFilterPanelCommand { get; }
+
+    public IRelayCommand ClearSearchCommand { get; }
+
+    public IRelayCommand<ProductAnalyticsSectionChip> SelectSectionChipCommand { get; }
+
+    public IRelayCommand<ProductAnalyticsSortOption> SelectSortCommand { get; }
+
+    public IRelayCommand<ProductAnalyticsGroupingOption> SelectGroupingCommand { get; }
+
+    public IRelayCommand ToggleSortDirectionCommand { get; }
+
+    public IRelayCommand<ProductAnalyticsDishRow> ToggleDishCommand { get; }
+
+    private bool hasNoProductRows;
+
+    /// <summary>
+    /// True while the list has nothing to show. Split three ways by <see cref="EmptyListText"/>,
+    /// because "the shift sold nothing", "the filter excluded everything" and "the search found
+    /// nothing" are three different facts and the one sentence that used to sit here could only
+    /// state the first of them.
+    /// </summary>
+    public bool HasNoProductRows
+    {
+        get => hasNoProductRows;
+        private set => SetProperty(ref hasNoProductRows, value);
+    }
+
+    /// <summary>
+    /// The list is empty because a filter or a search hid everything — which is a different fact
+    /// from a shift with no closed orders, and is what the second empty state has to be keyed on.
+    /// </summary>
+    public bool IsFilteredToNothing { get; private set; }
+
+    /// <summary>«По названию ничего не найдено.»</summary>
+    public bool IsSearchEmpty => IsFilteredToNothing && HasSearch;
+
+    public string EmptyListText => IsSearchEmpty
+        ? $"По запросу «{SearchText.Trim()}» ничего не найдено."
+        : IsFilteredToNothing
+            ? "Выбранные фильтры ничего не оставили."
+            : "За выбранную смену нет закрытых заказов.";
 
     private ShiftChoice? selectedShift;
-    public ShiftChoice? SelectedShift { get => selectedShift; set => SetProperty(ref selectedShift, value); }
+
+    /// <summary>
+    /// The shift the page is about. Setting it RE-RUNS the analysis.
+    /// </summary>
+    /// <remarks>
+    /// The setter is where the analysis used to be missing, and it was not a small gap: picking
+    /// another shift in the picker changed the label at the top and NOTHING else. The cards and the
+    /// breakdown kept the previous shift's figures, so the page said one shift's name over another
+    /// shift's revenue — verified on the emulator, where «Завершённая · 30.09» sat on top of a
+    /// «Продано позиций 30» that belonged to a different shift entirely, and «Обновить аналитику»
+    /// existed only to paper over it. The whole page is ABOUT one shift, so its selection is an
+    /// input to the page, not a display preference.
+    /// <para>
+    /// Guarded against self-invocation: <see cref="LoadAsync"/> assigns this while restoring the
+    /// previous selection, and the analysis it then runs must not start a second one.
+    /// </para>
+    /// </remarks>
+    public ShiftChoice? SelectedShift
+    {
+        get => selectedShift;
+        set
+        {
+            if (!SetProperty(ref selectedShift, value)) return;
+            if (suppressShiftReload) return;
+
+            _ = AnalyzeAsync();
+        }
+    }
+
+    /// <summary>
+    /// Set while <see cref="LoadAsync"/> picks the shift to open on, so restoring a selection does
+    /// not fire a second analysis on top of the one that method is about to run itself.
+    /// </summary>
+    private bool suppressShiftReload;
 
     private decimal revenue;
     public decimal Revenue { get => revenue; private set => SetProperty(ref revenue, value); }
@@ -139,9 +532,7 @@ public class ShiftAnalyticsViewModel : ObservableObject
     /// derived here, in one place, and the caption says which part of it came back, so the cell
     /// cannot be read as a gross "how much we took" and quietly disagree with the shift report's
     /// «Принято картой». It is hidden at zero: a caption with nothing to add would make this one
-    /// card taller than the eight around it for no information. That used to be reinforced by the
-    /// page having no ScrollView — every dp here came out of the list below — but the page scrolls
-    /// now and the hiding stands on its own merit.
+    /// card taller than the eight around it for no information.
     /// </remarks>
     public string CardRefundsText => refundsCard <= 0
         ? string.Empty
@@ -374,9 +765,31 @@ public class ShiftAnalyticsViewModel : ObservableObject
             // !IsActive, because the domain's own definition of "this shift ended" is the moment it
             // ended, not the flag that happened to be flipped at the time. GetShiftsAsync orders
             // closed shifts newest first, so the first one is the shift just closed.
-            SelectedShift = Shifts.FirstOrDefault(choice => choice.Id == previousId)
+            var next = Shifts.FirstOrDefault(choice => choice.Id == previousId)
                 ?? Shifts.FirstOrDefault(choice => choice.IsClosed)
                 ?? Shifts.FirstOrDefault();
+            var switched = next?.Id != previousId;
+
+            // Folds are per-SHIFT state, not per-session state: a manager who folded away «Капучино» to
+            // read the rest of the day does not expect the fold to survive moving to yesterday,
+            // where it would hide a dish they have never seen folded. OPEN, not folded, is the
+            // reset: the previous shift's folds are meaningless here.
+            if (switched) OpenAllDishes();
+
+            // Assigned with the reload suppressed: the analysis this method runs next IS the analysis
+            // for this selection, and letting the setter start one too would run the two queries
+            // concurrently against a DbContext each — harmless in result, wasteful, and a race on
+            // whichever finished last.
+            suppressShiftReload = true;
+            try
+            {
+                SelectedShift = next;
+            }
+            finally
+            {
+                suppressShiftReload = false;
+            }
+
             await AnalyzeAsync();
         }
         catch (Exception exception)
@@ -434,19 +847,7 @@ public class ShiftAnalyticsViewModel : ObservableObject
             OnPropertyChanged(nameof(AveragePreparationTime));
             OnPropertyChanged(nameof(AverageCompletionTime));
 
-            var rows = await orders.GetProductAnalyticsAsync(SelectedShift.Id);
-            ProductRows.SyncWith(
-                rows.Select(row => new ProductAnalyticsRow(
-                    row.ProductName,
-                    row.ModifierName,
-                    row.Quantity,
-                    row.Revenue,
-                    TextFormat.Money(row.Revenue))),
-                row => $"{row.ProductName}|{row.ModifierName}");
-            // BindableLayout has no EmptyView, so the empty state is a label bound to this flag. It
-            // is derived from the count and notifies itself when it has to — but only when something
-            // asks it to, and SyncWith raises collection changes without consulting the ViewModel.
-            OnPropertyChanged(nameof(HasNoProductRows));
+            ApplyAnalytics(await orders.GetProductAnalyticsAsync(SelectedShift.Id));
 
             Message = string.Empty;
         }

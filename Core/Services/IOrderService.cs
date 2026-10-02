@@ -101,6 +101,13 @@ public interface IOrderService
     /// </summary>
     Task<ShiftStats> GetShiftStatsAsync(Guid shiftId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The shift's product breakdown, one row per distinct product × modifier × variant, with the
+    /// section each dish currently belongs to. UNSORTED on purpose: the breakdown is ordered by
+    /// <see cref="CafePos.Core.Services.ProductAnalyticsProjection"/>, which is the one place the
+    /// order is defined — an <c>ORDER BY</c> here would be a second definition that silently wins
+    /// whenever a screen forgets to re-sort.
+    /// </summary>
     Task<List<ProductAnalyticsRowData>> GetProductAnalyticsAsync(Guid shiftId, CancellationToken cancellationToken = default);
 }
 
@@ -173,4 +180,22 @@ public sealed record CashReconciliation(
     };
 }
 
-public sealed record ProductAnalyticsRowData(string ProductName, string ModifierName, int Quantity, decimal Revenue);
+/// <summary>
+/// One line of the shift's product breakdown.
+/// </summary>
+/// <param name="ProductName">The name snapshot carried by the order line.</param>
+/// <param name="ModifierName">The modifier/variant description, already composed by the query.</param>
+/// <param name="Quantity">Units sold across the shift's completed orders.</param>
+/// <param name="Revenue">Line revenue in major units.</param>
+/// <param name="CategoryId">
+/// The section the dish belongs to TODAY, or null when it has none. Read through the product, not
+/// snapshotted onto the order line — see <see cref="GetProductAnalyticsAsync"/>.
+/// </param>
+/// <param name="CategoryName">That section's current name, or null.</param>
+public sealed record ProductAnalyticsRowData(
+    string ProductName,
+    string ModifierName,
+    int Quantity,
+    decimal Revenue,
+    Guid? CategoryId,
+    string? CategoryName);

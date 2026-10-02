@@ -1,5 +1,27 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.ShiftAnalyticsPage" x:DataType="vm:ShiftAnalyticsViewModel" Title="Аналитика смены"
              Shell.NavBarIsVisible="False">
+    <!-- ═══════════════════════════════════════════════════════════════════════════════════════════
+         ФИЛЬТРЫ, СОРТИРОВКА, ГРУППИРОВКА — seven controls for one list.
+
+         The reasons are recorded rather than the layout being "obvious":
+
+         1. THE LIST IS THREE COLLECTIONS, NOT ONE. ProductAnalyticsProjection returns whichever
+            shape the grouping asks for, and a BindableLayout cannot pick a DataTemplate by runtime
+            type. Three trees, one of them visible, bound to three flags — not a union row type with
+            IsVisible panels, which would have meant one template rendering three different things.
+
+         2. ISGrouped IS NOT AN OPTION HERE. XamlC cannot resolve PropertyGroupDescription, so
+            CollectionView.IsGrouped is a Debug-only green build and a Release failure (XC0000) —
+            the same trap OrdersPage documents at line 151. The headers are ordinary rows.
+
+         3. THE PANEL IS CLOSED BY DEFAULT, and its trigger carries the current state IN WORDS. The
+            cards at the top of this page do not change when the list is filtered, so a trigger that
+            only read «Фильтры и сортировка» would leave the reader unable to tell a filtered list
+            from an unfiltered one.
+
+         4. TOUCH TARGETS ARE 44-48dp THROUGHOUT (§6). The chips reuse the shared FilterChip style
+            the catalogue and the orders board use, so the three strips read as one control family.
+         ═══════════════════════════════════════════════════════════════════════════════════════════ -->
     <!-- Same verdict as the shift report, same reason, same history: this page HAD a
          ScrollView and it was deliberately REMOVED to give the product breakdown a recycling
          CollectionView on the only `*` row. The consequence was arithmetic, and it is the bug
@@ -35,7 +57,7 @@
          why a dedicated row is no longer off the table.
          ═══════════════════════════════════════════════════════════════════════════════════════ -->
     <ScrollView>
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
             <!-- The shift picker, full width. It used to share a row with «Обновить», which
                  is gone by the owner's decision: this page has no polling, so the button was
                  its only manual reload and OnAppearing is now the way to refresh — leaving the
@@ -155,15 +177,358 @@
                         </VerticalStackLayout>
                     </Border>
                 </VerticalStackLayout>
-                <Label Grid.Row="5" Text="Продажи по блюдам и модификаторам" Style="{StaticResource SectionTitle}" />
-                <!-- BindableLayout, not a CollectionView: the trade-off is spelled out at the top
-                     of this file. One scroller, one gesture, and the list is as tall as the rows
-                     it holds. Spacing 0 keeps the cards flush exactly as the CollectionView
-                     rendered them. SelectionMode="None" went with it — a BindableLayout has no
-                     selection to disable, and it was already the default for these rows. -->
-                <VerticalStackLayout Grid.Row="6" BindableLayout.ItemsSource="{Binding ProductRows}" Spacing="0">
+                <!-- ═══ THE FILTER / SORT / GROUP PANEL ═══
+                     One trigger row, CLOSED by default. The breakdown is at the bottom of a long
+                     scrolling page, and the manager who opens this screen wants the shift's figures,
+                     not a search box. Everything the panel holds is also stated on the trigger
+                     itself, so a collapsed panel is never ambiguous. -->
+                <Border Grid.Row="5" Style="{StaticResource CardBorder}">
+                    <VerticalStackLayout Spacing="8">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ToggleFilterPanelCommand}" />
+                            </Grid.GestureRecognizers>
+                            <VerticalStackLayout>
+                                <Label Text="Фильтры и сортировка" FontAttributes="Bold" />
+                                <Label Text="{Binding FilterPanelSummary}" Style="{StaticResource SecondaryLabel}"
+                                       LineBreakMode="WordWrap"
+                                       SemanticProperties.Description="{Binding FilterPanelHint}" />
+                            </VerticalStackLayout>
+                            <Label Grid.Column="1" Text="{Binding FilterPanelGlyph}" FontSize="18"
+                                   VerticalTextAlignment="Center" Margin="8,0,0,0" />
+                        </Grid>
+
+                        <VerticalStackLayout Spacing="10" IsVisible="{Binding IsFilterPanelOpen}">
+                            <!-- SECTIONS. A horizontal strip rather than a Picker, because a Picker
+                                 opens a blocking modal on Android and cannot show the active filter
+                                 as part of the list header — the reason the catalogue page moved off
+                                 it in the first place. Multi-select, so «Все» is expressed by
+                                 un-checking every chip (an empty set) rather than by a sentinel. -->
+                            <Label Text="Разделы" Style="{StaticResource Caption}" />
+                            <!-- NO negative margin. The orders board's chip strip bleeds 12dp to the screen edge because
+                                 it sits on the page background; this one sits inside a bordered card,
+                                 and pulling the scroller past the card's own left edge made the
+                                 ScrollView's clip cut the FIRST chip in half — «по разделам и
+                                 блюдам» rendered as «елам и блюдам». The card's padding is the
+                                 correct inset and the strip still scrolls. -->
+                            <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never"
+                                        HeightRequest="44">
+                                <HorizontalStackLayout BindableLayout.ItemsSource="{Binding SectionChips}"
+                                                        Spacing="0">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ProductAnalyticsSectionChip">
+                                            <Border Style="{StaticResource FilterChip}" Margin="0,0,8,0">
+                                                <Border.Triggers>
+                                                    <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                                                        <Setter Property="Stroke" Value="Transparent" />
+                                                    </DataTrigger>
+                                                </Border.Triggers>
+                                                <Label Text="{Binding Label}" Style="{StaticResource FilterChipText}"
+                                                       SemanticProperties.Description="{Binding Hint}">
+                                                    <Label.Triggers>
+                                                        <DataTrigger TargetType="Label" Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="TextColor" Value="White" />
+                                                        </DataTrigger>
+                                                    </Label.Triggers>
+                                                </Label>
+                                                <Border.GestureRecognizers>
+                                                    <TapGestureRecognizer
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectSectionChipCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                </Border.GestureRecognizers>
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </HorizontalStackLayout>
+                            </ScrollView>
+
+                            <!-- An Entry, NOT a SearchBar: SearchBar is drawn by the platform and
+                                 looks different on Windows and Android, so the one control every
+                                 screen should look identical on is the one that does not. The
+                                 cross is a sibling of the field, not inside it — Button.Content
+                                 cannot hold arbitrary controls. -->
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Entry Style="{StaticResource FormField}"
+                                       Placeholder="Поиск по названию блюда"
+                                       Text="{Binding SearchText}"
+                                       SemanticProperties.Description="Поиск по названию блюда" />
+                                <Button Grid.Column="1" Text="✕" Margin="8,0,0,0"
+                                        Command="{Binding ClearSearchCommand}"
+                                        IsVisible="{Binding HasSearch}"
+                                        SemanticProperties.Description="Очистить поиск" />
+                            </Grid>
+
+                            <!-- GROUPING. Three chips, three shapes. The default is the two-level
+                                 «по разделам и блюдам» because that is the question a manager asks
+                                 of a section report; «без группировки» is here because the flat list
+                                 is what this screen always showed and a reader looking for it should
+                                 not have to be told it no longer exists. -->
+                            <Label Text="Группировка" Style="{StaticResource Caption}" />
+                            <!-- The scroller is not decoration. A bare HorizontalStackLayout clips at
+                                 the page width and silently drops everything past the fold: «без
+                                 группировки» was simply unreachable on a 411dp phone, with no way to
+                                 tell it existed. Same fix as the orders board's chip strip. -->
+                            <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never"
+                                        HeightRequest="44">
+                                <HorizontalStackLayout BindableLayout.ItemsSource="{Binding GroupingOptions}"
+                                                        Spacing="0">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ProductAnalyticsGroupingOption">
+                                            <Border Style="{StaticResource FilterChip}" Margin="0,0,8,0">
+                                                <Border.Triggers>
+                                                    <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                                                        <Setter Property="Stroke" Value="Transparent" />
+                                                    </DataTrigger>
+                                                </Border.Triggers>
+                                                <Label Text="{Binding Name}" Style="{StaticResource FilterChipText}"
+                                                       SemanticProperties.Description="{Binding Hint}">
+                                                    <Label.Triggers>
+                                                        <DataTrigger TargetType="Label" Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="TextColor" Value="White" />
+                                                        </DataTrigger>
+                                                    </Label.Triggers>
+                                                </Label>
+                                                <Border.GestureRecognizers>
+                                                    <TapGestureRecognizer
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectGroupingCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                </Border.GestureRecognizers>
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </HorizontalStackLayout>
+                            </ScrollView>
+
+                            <!-- SORTING. One strip of criteria plus one direction button, and the
+                                 button is separate for a reason: re-picking the criterion already in
+                                 force REVERSES it (see SelectSort), so the two affordances overlap
+                                 and the explicit button is what makes the current direction
+                                 visible at a glance instead of implied. -->
+                            <Label Text="Сортировка" Style="{StaticResource Caption}" />
+                            <!-- Scroller for the same reason as the grouping strip above: «по
+                                 названию» is the longest criterion and lands past the fold. -->
+                            <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never"
+                                        HeightRequest="44">
+                                <HorizontalStackLayout BindableLayout.ItemsSource="{Binding SortOptions}" Spacing="0">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ProductAnalyticsSortOption">
+                                            <Border Style="{StaticResource FilterChip}" Margin="0,0,8,0">
+                                                <Border.Triggers>
+                                                    <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                                                        <Setter Property="Stroke" Value="Transparent" />
+                                                    </DataTrigger>
+                                                </Border.Triggers>
+                                                <Label Text="{Binding Name}" Style="{StaticResource FilterChipText}"
+                                                       SemanticProperties.Description="{Binding Hint}">
+                                                    <Label.Triggers>
+                                                        <DataTrigger TargetType="Label" Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="TextColor" Value="White" />
+                                                        </DataTrigger>
+                                                    </Label.Triggers>
+                                                </Label>
+                                                <Border.GestureRecognizers>
+                                                    <TapGestureRecognizer
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectSortCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                </Border.GestureRecognizers>
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </HorizontalStackLayout>
+                            </ScrollView>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Text="{Binding SortDirectionName}" VerticalTextAlignment="Center" />
+                                <Button Grid.Column="1" Text="{Binding SortDirectionGlyph}"
+                                        Command="{Binding ToggleSortDirectionCommand}"
+                                        SemanticProperties.Description="{Binding SortDirectionHint}" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Heading is no longer a constant. «Продажи по блюдам и модификаторам» became a lie
+                     the moment a section header went above a modifier row. -->
+                <Label Grid.Row="6" Text="{Binding ProductSectionTitle}" Style="{StaticResource SectionTitle}" />
+
+                <!-- The summary the cards above cannot give: they do not move when the list is
+                     filtered, so without this line a two-row list under «Продано позиций 137» looks
+                     like the app lost data. ABOVE the list, not below — under it, the reader has to
+                     scroll past everything to find the answer to "why is this short". -->
+                <Label Grid.Row="7" Text="{Binding VisibleSummaryText}" Style="{StaticResource SecondaryLabel}"
+                       IsVisible="{Binding HasVisibleSummary}" LineBreakMode="WordWrap"
+                       SemanticProperties.Description="{Binding VisibleSummaryHint}" />
+
+                <!-- ═══ THE THREE SHAPES ═══
+                     One scroller, one gesture, and each list measures itself — the trade-off is
+                     spelled out at the top of this file. Nothing here recycles: it is bounded by the
+                     distinct products sold in ONE shift. -->
+
+                <!-- 1. SECTIONS → DISHES → MODIFIERS. The default. -->
+                <VerticalStackLayout Grid.Row="8" Spacing="0"
+                                     BindableLayout.ItemsSource="{Binding SectionRows}"
+                                     IsVisible="{Binding IsSectionGrouping}">
                     <BindableLayout.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ProductAnalyticsRow">
+                        <DataTemplate x:DataType="vm:ProductAnalyticsSectionRow">
+                            <VerticalStackLayout Spacing="0">
+                                <Border Style="{StaticResource CardBorder}"
+                                        BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <VerticalStackLayout>
+                                            <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                            <Label Text="{Binding Share}" Style="{StaticResource CountLabel}" />
+                                        </VerticalStackLayout>
+                                        <VerticalStackLayout Grid.Column="1" HorizontalOptions="End">
+                                            <Label Text="{Binding QuantityText}" HorizontalTextAlignment="End" />
+                                            <Label Text="{Binding RevenueText}" FontAttributes="Bold"
+                                                   HorizontalTextAlignment="End" />
+                                        </VerticalStackLayout>
+                                    </Grid>
+                                </Border>
+                                <VerticalStackLayout Spacing="0"
+                                                     BindableLayout.ItemsSource="{Binding Dishes}"
+                                                     Margin="12,0,0,0">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ProductAnalyticsDishRow">
+                                            <VerticalStackLayout Spacing="0">
+                                                <Border Style="{StaticResource CardBorderCompact}">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                                        <Grid.GestureRecognizers>
+                                                            <TapGestureRecognizer
+                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.ToggleDishCommand}"
+                                                                CommandParameter="{Binding .}" />
+                                                        </Grid.GestureRecognizers>
+                                                        <!-- The chevron is TEXT, not an image asset, and the
+                                                             fold state is also in the row's
+                                                             description: a glyph alone is invisible
+                                                             to a screen reader, which would then have
+                                                             no way to tell a folded dish from a dish
+                                                             with nothing under it. -->
+                                                        <Label Text="{Binding ChevronGlyph}" FontSize="16"
+                                                               WidthRequest="20" VerticalTextAlignment="Center"
+                                                               HorizontalTextAlignment="Center" />
+                                                        <VerticalStackLayout Grid.Column="1">
+                                                            <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                                            <Label Text="{Binding Share}" Style="{StaticResource CountLabel}" />
+                                                        </VerticalStackLayout>
+                                                        <VerticalStackLayout Grid.Column="2" HorizontalOptions="End">
+                                                            <Label Text="{Binding QuantityText}" HorizontalTextAlignment="End" />
+                                                            <Label Text="{Binding RevenueText}" FontAttributes="Bold"
+                                                                   HorizontalTextAlignment="End" />
+                                                        </VerticalStackLayout>
+                                                    </Grid>
+                                                </Border>
+                                                <!-- A folded dish costs its rows nothing: a collapsed
+                                                     child in a VerticalStackLayout is neither measured
+                                                     nor counted for spacing (see the note at the top of
+                                                     this file), so IsVisible is the whole mechanism. -->
+                                                <VerticalStackLayout Spacing="0"
+                                                                     BindableLayout.ItemsSource="{Binding Lines}"
+                                                                     IsVisible="{Binding IsExpanded}"
+                                                                     Margin="20,0,0,0">
+                                                    <BindableLayout.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:ProductAnalyticsLineRow">
+                                                            <Border Style="{StaticResource CardBorderCompact}"
+                                                                    BackgroundColor="Transparent"
+                                                                    Stroke="Transparent"
+                                                                    Padding="8,4"
+                                                                    SemanticProperties.Description="{Binding Hint}">
+                                                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                                                    <Label Text="{Binding ModifierName}"
+                                                                           Style="{StaticResource SecondaryLabel}"
+                                                                           LineBreakMode="TailTruncation" />
+                                                                    <Label Grid.Column="1" Text="{Binding Quantity, StringFormat='× {0}'}"
+                                                                           Style="{StaticResource SecondaryLabel}"
+                                                                           HorizontalTextAlignment="End" />
+                                                                    <Label Grid.Column="2" Text="{Binding RevenueText}"
+                                                                           Style="{StaticResource SecondaryLabel}"
+                                                                           HorizontalTextAlignment="End" />
+                                                                </Grid>
+                                                                <!-- The description rides on the LINE's own Border,
+                                                                     not on the dish header above it: a container
+                                                                     with a contentDescription is announced as
+                                                                     one node and its children are not traversed,
+                                                                     so putting it higher would swallow every
+                                                                     modifier row under it. -->
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </BindableLayout.ItemTemplate>
+                                                </VerticalStackLayout>
+                                            </VerticalStackLayout>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <!-- 2. DISHES → MODIFIERS. No section level. -->
+                <VerticalStackLayout Grid.Row="8" Spacing="0"
+                                     BindableLayout.ItemsSource="{Binding DishRows}"
+                                     IsVisible="{Binding IsDishGrouping}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ProductAnalyticsDishRow">
+                            <VerticalStackLayout Spacing="0">
+                                <Border Style="{StaticResource CardBorder}"
+                                        BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <Grid.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.ToggleDishCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Grid.GestureRecognizers>
+                                        <Label Text="{Binding ChevronGlyph}" FontSize="16"
+                                               WidthRequest="20" VerticalTextAlignment="Center"
+                                               HorizontalTextAlignment="Center" />
+                                        <VerticalStackLayout Grid.Column="1">
+                                            <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                            <Label Text="{Binding Share}" Style="{StaticResource CountLabel}" />
+                                        </VerticalStackLayout>
+                                        <VerticalStackLayout Grid.Column="2" HorizontalOptions="End">
+                                            <Label Text="{Binding QuantityText}" HorizontalTextAlignment="End" />
+                                            <Label Text="{Binding RevenueText}" FontAttributes="Bold"
+                                                   HorizontalTextAlignment="End" />
+                                        </VerticalStackLayout>
+                                    </Grid>
+                                    </Border>
+                                <VerticalStackLayout Spacing="0"
+                                                     BindableLayout.ItemsSource="{Binding Lines}"
+                                                     IsVisible="{Binding IsExpanded}"
+                                                     Margin="20,0,0,0">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ProductAnalyticsLineRow">
+                                            <Border Style="{StaticResource CardBorderCompact}"
+                                                    BackgroundColor="Transparent" Stroke="Transparent"
+                                                    Padding="8,4"
+                                                    SemanticProperties.Description="{Binding Hint}">
+                                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                                    <Label Text="{Binding ModifierName}"
+                                                           Style="{StaticResource SecondaryLabel}"
+                                                           LineBreakMode="TailTruncation" />
+                                                    <Label Grid.Column="1" Text="{Binding Quantity, StringFormat='× {0}'}"
+                                                           Style="{StaticResource SecondaryLabel}"
+                                                           HorizontalTextAlignment="End" />
+                                                    <Label Grid.Column="2" Text="{Binding RevenueText}"
+                                                           Style="{StaticResource SecondaryLabel}"
+                                                           HorizontalTextAlignment="End" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <!-- 3. FLAT. Exactly the list this screen had before: one row per dish × modifier. -->
+                <VerticalStackLayout Grid.Row="8" BindableLayout.ItemsSource="{Binding LineRows}" Spacing="0"
+                                     IsVisible="{Binding IsFlatGrouping}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ProductAnalyticsLineRow">
                             <Border Style="{StaticResource CardBorder}">
                                 <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
                                     <Label Text="{Binding ProductName}" FontAttributes="Bold" />
@@ -178,13 +543,12 @@
                     </BindableLayout.ItemTemplate>
                 </VerticalStackLayout>
 
-                <!-- The empty state CollectionView.EmptyView carried for free, now an ordinary
-                     label: BindableLayout has no EmptyView, and dropping this line would have left
-                     a shift with no closed orders showing a bare heading and nothing under it.
-                     Its own row costs nothing while the list has content, and while it does not,
-                     the collapsed row costs only the 10dp RowSpacing — which on a page that
-                     scrolls is not a measurement that matters. -->
-                <Label Grid.Row="7" Text="За выбранную смену нет закрытых заказов." Style="{StaticResource EmptyLabel}"
+                <!-- One sentence for THREE situations, which is why it is bound to a computed
+                     property rather than written out: a shift with no closed orders, a filter that
+                     excluded everything and a search that matched nothing are different facts, and
+                     the single hardcoded string this label used to carry could only state the
+                     first. BindableLayout has no EmptyView, hence a label. -->
+                <Label Grid.Row="9" Text="{Binding EmptyListText}" Style="{StaticResource EmptyLabel}"
                        IsVisible="{Binding HasNoProductRows}" />
         </Grid>
     </ScrollView>
