@@ -477,16 +477,71 @@
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray100}}" />
     </Style>
 
-    <!-- The «Восстановить из копии…» button the owner reported, and every other DangerButton:
-         OrdersPage's per-card void, ShiftReportPage's void and «Закрыть смену», OrderDetailsPage's
-         «Удалить» and «Вернуть оплату». Same-value binding before: Danger in both branches over a
-         Gray700 fill, 1.24:1. Now DangerDark on Gray800, 5.04:1.
+    <!-- THE «Восстановить из копии…» button the owner reported, and every other DangerButton:
+         OrdersPage's per-card void, ShiftReportPage's «Изъять на инкассацию», its order void,
+         its per-movement «Отменить движение» and «Закрыть смену», SettingsPage's restore and
+         import, OrderDetailsPage's «Удалить», «Вернуть оплату» and void.
          48dp on the reportable instances; the two 44dp call sites on the details page are noted
          in the handoff, not changed here — the touch minimum is a product decision about the
-         design system, not a colour fix. -->
+         design system, not a colour fix.
+
+         HISTORY, because it is the same defect twice. The first pass fixed the LIGHT pairing —
+         Danger in both branches over a Gray700 fill, 1.24:1 — and moved the dark branch to
+         DangerDark on Gray800, 5.04:1.
+
+         THE DARK BRANCH WAS STILL WRONG, and the device said so: SecondaryButton's dark branch is
+         Gray800 too, so every danger button in the app and every neutral button beside it had the
+         SAME FILL and the only thing that told them apart was the ink, DangerDark against Gray100.
+         «Внести размен» and «Изъять на инкассацию» were two grey plates told apart by a tint of
+         their letters. That is not weight, and the light branch had never needed it: there the
+         difference lives in the FILL (a pale red plate against a neutral grey one). Dark theme
+         carried it in the text and only in the text.
+
+         So the dark branch moves the hue onto the fill, the way the light branch already does.
+         DangerDark becomes the plate instead of the letters — which is the SAME inversion this file
+         already makes with the primary pair, where Primary fills in light and PrimaryDark fills in
+         dark with Black on top of it (the implicit Button style, ExtendedFAB, PaymentMethodActive).
+         One rule for the dark theme, and it is the one the app is already built on: an action that
+         is emphasised is a PALE plate with BLACK lettering on it. DangerDark is that pale red, and
+         it was already in the palette — it did not need a new token and it did not need a new
+         danger scale. The tone existed and was being spent as ink.
+
+         Measured, WCAG 2.1 relative luminance, the same formula as the tables in Colors.xaml:
+           Black on DangerDark #FF9E8E                10.53:1  the label, from 5.04:1 (DangerDark on Gray800)
+           White on DangerDark #FF9E8E                 1.99:1  which is why the ink is Black: the same
+                                                              argument the ExtendedFAB comment makes
+                                                              about white on the pale PrimaryDark (2.10:1)
+           DangerDark plate on BackgroundDark #121212   9.40:1  the plate against the page
+           DangerDark plate on SurfaceDark #1E1E1E      8.36:1  and against a card
+           Gray800 plate on BackgroundDark #121212      1.86:1  SecondaryButton, for comparison
+           Gray800 plate on SurfaceDark #1E1E1E         1.66:1
+         Nothing else moved. DangerDark on Gray800 is still 5.04:1 and is still spent as INK on that
+         tonal fill — SheetActionDanger's label, RowActionDanger's label and its border, and the
+         inline warning-coloured labels on the shift, analytics, orders and details pages — because
+         a tonal fill is what makes those quiet. This style is the one that is not quiet, and it is
+         the one an operator is about to destroy something with.
+
+         THE LIGHT BRANCH IS UNCHANGED, and its own number is written down here because nobody had
+         measured it on its fill: Danger #D32F2F on DangerLight #FFEBEE is 4.36:1, not the 4.77:1
+         that Danger reaches on the page. At this style's 14pt BOLD the 3:1 large-text threshold is
+         the one that applies and it clears it with room; the single call site below 14pt bold —
+         «Удалить» on OrderDetailsPage at 12pt — owes 4.5:1 and sits 0.14:1 under it. That is
+         pre-existing, this change does not touch it, and it lives on another page: closing it means
+         a deeper danger INK in the light theme, which is a decision about the palette and not a
+         side effect of fixing dark mode.
+
+         EVERY DANGER BUTTON IN THE APP GETS THE HEAVIER DARK PLATE, and that is the intent rather
+         than a side effect: until now «Закрыть смену», the per-order void, «Отменить и вернуть
+         деньги» and the per-movement «Отменить движение» were four different acts of no
+         consequence to look at, all of them the same quiet grey plate in dark theme. If one of them
+         ever has to be quieter than the others — a void on every card of a long list, say — take it
+         out at the call site, where RowAction (the row-level variant) is what a list of cards should
+         wear. Do NOT answer it with a second danger colour: one scale, Danger and DangerLight on
+         the light plate and DangerDark on the dark one, and a stronger consequence is expressed in
+         the LABEL and the description, not in a new hue. -->
     <Style TargetType="Button" x:Key="DangerButton" BasedOn="{StaticResource SecondaryButton}">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource Gray800}}" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource DangerDark}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource Black}}" />
     </Style>
 
     <!-- 40dp was below the touch minimum every other control in the app honours; these are the

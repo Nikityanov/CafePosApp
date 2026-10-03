@@ -27,7 +27,8 @@ public sealed class SchemaMigrator(
         new Migration005_AuditDraftsSoftDelete(),
         new Migration006_OrderPayments(),
         new Migration007_Refunds(),
-        new Migration008_CashReconciliation()
+        new Migration008_CashReconciliation(),
+        new Migration009_CashMovements()
     ];
 
     public int LatestVersion => AllMigrations.Max(migration => migration.Version);

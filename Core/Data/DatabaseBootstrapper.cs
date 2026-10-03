@@ -30,7 +30,6 @@ public sealed class DatabaseBootstrapper(
     IDbContextFactory<AppDbContext> factory,
     SchemaMigrator migrator,
     DatabaseOptions options,
-    TimeProvider timeProvider,
     IBackupService backupService,
     ILogger<DatabaseBootstrapper> logger)
 {
@@ -80,8 +79,12 @@ public sealed class DatabaseBootstrapper(
     {
         var result = await migrator.MigrateAsync(CancellationToken.None).ConfigureAwait(false);
 
+        // NO SHIFT IS CREATED HERE, and removing that call is one of the three places this change
+        // touches. Startup used to guarantee an active shift, which meant a terminal that was merely
+        // RESTARTED came back with a shift that nobody opened and a drawer nobody counted — and no
+        // place to record the change in it, because the shift already existed. A terminal between
+        // shifts is now a normal state that the opening screen handles.
         await using var db = await factory.CreateDbContextAsync(CancellationToken.None).ConfigureAwait(false);
-        await EnsureActiveShiftAsync(db, CancellationToken.None).ConfigureAwait(false);
         if (options.SeedDemoData) await DemoDataSeeder.SeedIfEmptyAsync(db, CancellationToken.None).ConfigureAwait(false);
 
         // Daily safety copy: never block startup if the backup cannot be written.
@@ -97,19 +100,5 @@ public sealed class DatabaseBootstrapper(
 
         logger.LogInformation("Database ready. Schema version {Version}", result.FinalVersion);
         return result;
-    }
-
-    private async Task EnsureActiveShiftAsync(AppDbContext db, CancellationToken cancellationToken)
-    {
-        if (await db.Shifts.AnyAsync(shift => shift.IsActive, cancellationToken).ConfigureAwait(false)) return;
-
-        db.Shifts.Add(new Shift
-        {
-            Id = Guid.NewGuid(),
-            StartTime = timeProvider.GetUtcNow(),
-            IsActive = true,
-            NextOrderNumber = 1
-        });
-        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

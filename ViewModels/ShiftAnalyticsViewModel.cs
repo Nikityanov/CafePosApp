@@ -505,6 +505,30 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
         private set { if (SetProperty(ref cashInDrawer, value)) NotifyStale(); }
     }
 
+    /// <summary>Change put into the drawer over the shift, net of corrections.</summary>
+    private decimal floatCash;
+    public decimal FloatCash
+    {
+        get => floatCash;
+        // Raises the formatted twin, because THAT is what the card binds: the page shows
+        // FloatCashText, so a raise of FloatCash alone reaches no binding at all. These two setters
+        // used to raise only themselves, and the texts were republished from NotifyStale instead —
+        // which runs from the CashInDrawer setter, three lines EARLIER in AnalyzeAsync, while these
+        // fields are still zero. So the card showed «Размен: 0.00 ₿» and «Изъято: 0.00 ₿» under a
+        // drawer total that was itself correct, and kept showing them until the values happened to
+        // return to zero. Found on device, not by a test: the total is bound to CashInDrawerText and
+        // was right, so the page looked healthy.
+        private set { if (SetProperty(ref floatCash, value)) OnPropertyChanged(nameof(FloatCashText)); }
+    }
+
+    /// <summary>Cash carried out of the drawer over the shift, net of corrections.</summary>
+    private decimal payoutCash;
+    public decimal PayoutCash
+    {
+        get => payoutCash;
+        private set { if (SetProperty(ref payoutCash, value)) OnPropertyChanged(nameof(PayoutCashText)); }
+    }
+
     private decimal cardTotal;
     public decimal CardTotal
     {
@@ -683,6 +707,12 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
         // figure as an amount has to be republished with it — otherwise the sentence updates and
         // the number beside it stays on the previous load's value.
         OnPropertyChanged(nameof(CashInDrawerText));
+        // FloatCashText and PayoutCashText used to be raised here too, on the reasoning that this is
+        // where every derived amount gets republished. It is the wrong place and was the cause of a
+        // wrong figure on screen: this method runs from the CashInDrawer setter, which AnalyzeAsync
+        // reaches BEFORE assigning FloatCash and PayoutCash, so it recomputed both texts from a pair
+        // of still-zero fields and the card froze on «0.00 ₿» under a correct total. Each setter now
+        // raises its own twin, where the value is known to be current.
     }
 
     // ── Formatted money ───────────────────────────────────────────────────────────────────────
@@ -702,6 +732,12 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
     /// staleness note quotes this same figure in words — see that method.
     /// </remarks>
     public string CashInDrawerText => TextFormat.Money(CashInDrawer);
+
+    /// <summary>Change put in, in the active currency.</summary>
+    public string FloatCashText => TextFormat.Money(FloatCash);
+
+    /// <summary>Cash carried out, in the active currency.</summary>
+    public string PayoutCashText => TextFormat.Money(PayoutCash);
 
     /// <summary>Card money net of refunds, in the active currency.</summary>
     public string CardTotalText => TextFormat.Money(CardTotal);
@@ -826,6 +862,11 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
             // RefundsCash written here: a second definition of the drawer is how two reports end up
             // disagreeing about whether the till balanced.
             CashInDrawer = stats.ExpectedCashNow;
+
+            // Assigned before the formatted texts are raised below, so the breakdown under the total
+            // lands in the same pass as the total it explains.
+            FloatCash = stats.FloatCash;
+            PayoutCash = stats.PayoutCash;
             // The card side has no Core counterpart and needs none — card money is not countable, so
             // nothing is ever compared against a physical count of it. Derived once, here, and the
             // refunds that produced it are published alongside so the number is never bare.

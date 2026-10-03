@@ -67,8 +67,7 @@ public class CashReconciliationTests
         return await orders.AdvanceStatusAsync(orderId);
     }
 
-    private static async Task<Guid> ActiveShiftAsync(IOrderService orders) =>
-        (await orders.GetOrCreateActiveShiftAsync()).Id;
+    private static async Task<Guid> ActiveShiftAsync(IOrderService orders) => (await orders.GetActiveShiftAsync())!.Id;
 
     /// <summary>The stored row itself, so the test can tell a stored 0 from an absent count.</summary>
     private static async Task<Shift> ShiftRowAsync(TestHost.Host host, Guid shiftId)
@@ -96,16 +95,19 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
         await CompleteAsync(orders, order.Id);
         var shiftId = await ActiveShiftAsync(orders);
 
-        var next = await orders.CloseShiftAsync(0, MissingMoneyReason);
+        // A close returns the shift it closed, and opens nothing.
+        var closed = await orders.CloseShiftAsync(0, MissingMoneyReason);
 
-        Assert.True(next.IsActive);
-        Assert.NotEqual(shiftId, next.Id);
+        Assert.Equal(shiftId, closed.Id);
+        Assert.False(closed.IsActive);
+        Assert.Null(await orders.GetActiveShiftAsync());
 
         var row = await ShiftRowAsync(host, shiftId);
         Assert.True(row.CountedCashKopecks.HasValue, "Пересчёт 0 должен сохраняться как пересчёт, а не как его отсутствие.");
@@ -138,6 +140,7 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
@@ -165,6 +168,7 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
@@ -195,6 +199,7 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
@@ -208,15 +213,17 @@ public class CashReconciliationTests
         Assert.Equal(0, first.DiscrepancyKopecks);
         Assert.Null(first.Reason);
 
-        // The new shift holds nothing yet, so counting its empty drawer is a MATCH, and a reason
-        // offered anyway is stored rather than refused.
+        // Nothing opens the next shift any more, so the empty one is opened on purpose. Its empty
+        // drawer is a MATCH at a count of 0, and a reason offered anyway is stored rather than
+        // refused.
+        var empty = await orders.OpenShiftAsync(0);
         var third = await orders.CloseShiftAsync(0, "проверен дважды, касса пуста");
 
-        var secondRow = await ShiftRowAsync(host, second.Id);
+        var secondRow = await ShiftRowAsync(host, empty.Id);
         Assert.Equal(0, secondRow.CountedCashKopecks);
         Assert.Equal("проверен дважды, касса пуста", secondRow.CashDiscrepancyReason);
-        Assert.Equal(CashDifference.Matched, (await ReconciliationAsync(orders, second.Id)).Difference);
-        Assert.True(third.IsActive);
+        Assert.Equal(CashDifference.Matched, (await ReconciliationAsync(orders, empty.Id)).Difference);
+        Assert.False(third.IsActive);
 
         // Closing again did not touch the first shift's reconciliation: a recorded count stands.
         var firstRow = await ShiftRowAsync(host, shiftId);
@@ -237,6 +244,7 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
@@ -271,6 +279,7 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         // Paid but still InProgress: the shift cannot close, and 220 ₽ is in the drawer so a count
@@ -301,6 +310,7 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
@@ -308,7 +318,7 @@ public class CashReconciliationTests
         var shiftId = await ActiveShiftAsync(orders);
 
         // Counted 20 short, and the reason is on record.
-        var next = await orders.CloseShiftAsync(LatteKopecks - 2000, "не выдали сдачу");
+        var closed = await orders.CloseShiftAsync(LatteKopecks - 2000, "не выдали сдачу");
 
         var atClose = await orders.GetShiftStatsAsync(shiftId);
         Assert.Equal(LattePrice, atClose.ExpectedCashNow);
@@ -328,8 +338,12 @@ public class CashReconciliationTests
         Assert.Equal("не выдали сдачу", after.Reconciliation.Reason);
         Assert.True(after.IsReconciliationStale);
 
-        // And the new shift never saw that money — its drawer never held it.
-        Assert.Equal(0m, (await orders.GetShiftStatsAsync(next.Id)).ExpectedCashNow);
+        // And the shift opened afterwards never saw that money — its drawer never held it. The close no
+        // longer opens one, so it is opened here, which is the whole point: a drawer that cannot be
+        // attributed to the shift that owned the cash cannot be reconciled against the wrong one.
+        var fresh = await orders.OpenShiftAsync(0);
+        Assert.NotEqual(shiftId, fresh.Id);
+        Assert.Equal(0m, (await orders.GetShiftStatsAsync(fresh.Id)).ExpectedCashNow);
     }
 
     /// <summary>
@@ -343,6 +357,7 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var cash = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
@@ -382,6 +397,7 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
@@ -415,6 +431,7 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var first = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
@@ -463,25 +480,31 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
         await CompleteAsync(orders, order.Id);
         var shiftId = await ActiveShiftAsync(orders);
 
-        var next = await orders.CloseShiftAsync(0, MissingMoneyReason);
-
-        var stats = await orders.GetShiftStatsAsync(next.Id);
+        var stats = await orders.GetShiftStatsAsync(shiftId);
         Assert.Null(stats.Reconciliation);
-        // An uncounted shift is not "stale" — there is nothing to have drifted away from.
+        // An uncounted shift is not "stale" - there is nothing to have drifted away from.
         Assert.False(stats.IsReconciliationStale);
-        Assert.Equal(0m, stats.ExpectedCashNow);
+        Assert.Equal(LattePrice, stats.ExpectedCashNow);
 
-        var row = await ShiftRowAsync(host, next.Id);
+        var row = await ShiftRowAsync(host, shiftId);
         Assert.Null(row.CountedCashKopecks);
         Assert.Null(row.ExpectedCashKopecks);
         Assert.Null(row.ReconciledAt);
         Assert.Null(row.CashDiscrepancyReason);
+
+        // And closing writes them, which is the other half: NULL means "never counted" only until
+        // somebody stands at the till.
+        var closed = await orders.CloseShiftAsync(0, MissingMoneyReason);
+        var closedRow = await ShiftRowAsync(host, closed.Id);
+        Assert.NotNull(closedRow.CountedCashKopecks);
+        Assert.NotNull(closedRow.ExpectedCashKopecks);
     }
 
     /// <summary>
@@ -496,6 +519,7 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, 20, new PaymentIntent(4400m, PaymentMethod.Cash));
@@ -534,6 +558,7 @@ public class CashReconciliationTests
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         var orders = host.Get<IOrderService>();
+        await TestHost.OpenEmptyShiftAsync(orders);
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
@@ -550,11 +575,14 @@ public class CashReconciliationTests
         Assert.DoesNotContain("Учтено возвратов после пересчёта", overage);
         Assert.DoesNotContain("Ожидается сейчас", overage);
 
-        // The shift opened by that close is empty, so counting it at 0 is a match.
-        var next = await orders.GetOrCreateActiveShiftAsync();
+        // A close no longer opens the next shift, so the empty shift this case needs is opened on
+        // purpose — which is the whole behavioural change: "no shift" is now a state a terminal is
+        // in between shifts, and one it has to leave deliberately.
+        await TestHost.OpenEmptyShiftAsync(orders);
         await orders.CloseShiftAsync(0, null);
 
-        var match = await host.Get<IReportExportService>().ExportShiftReportCsvAsync(next.Id);
+        var emptyShift = await orders.GetLatestShiftAsync();
+        var match = await host.Get<IReportExportService>().ExportShiftReportCsvAsync(emptyShift!.Id);
         Assert.Contains("Ожидалось на момент закрытия;0.00", match);
         Assert.Contains("Пересчитано в кассе;0.00", match);
         Assert.DoesNotContain("Не хватает", match);
@@ -684,6 +712,12 @@ public class CashReconciliationTests
 
         await new Migration006_OrderPayments().ApplyAsync(db, CancellationToken.None);
         await new Migration007_Refunds().ApplyAsync(db, CancellationToken.None);
+
+        // NOT 008: the tests that use this fixture are about 008's four columns, and 008 is applied
+        // by those tests themselves so they can watch it happen. 009 IS applied, because the domain
+        // now reads CashMovements on every shift report — without it, a test about the reconciliation
+        // columns fails with 'no such table' and never reaches the assertion it was written for.
+        await new Migration009_CashMovements().ApplyAsync(db, CancellationToken.None);
         return shiftId;
     }
 

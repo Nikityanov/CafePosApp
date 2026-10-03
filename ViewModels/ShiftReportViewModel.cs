@@ -31,6 +31,8 @@ public partial class ShiftReportViewModel : ObservableObject
     private readonly AppSettings settings;
     private readonly IStockDispositionSheet stockDisposition;
     private readonly IHapticService haptics;
+    private readonly ICashLedgerService cashLedger;
+    private readonly IShiftSession shiftSession;
     private readonly ILogger<ShiftReportViewModel> logger;
 
     public ShiftReportViewModel(
@@ -43,6 +45,8 @@ public partial class ShiftReportViewModel : ObservableObject
         AppSettings settings,
         IStockDispositionSheet stockDisposition,
         IHapticService haptics,
+        ICashLedgerService cashLedger,
+        IShiftSession shiftSession,
         ILogger<ShiftReportViewModel> logger)
     {
         this.orders = orders;
@@ -55,6 +59,8 @@ public partial class ShiftReportViewModel : ObservableObject
         this.stockDisposition = stockDisposition;
         this.haptics = haptics;
         this.logger = logger;
+        this.cashLedger = cashLedger;
+        this.shiftSession = shiftSession;
 
         LoadCommand = new AsyncRelayCommand(LoadAsync, options: AsyncRelayCommandOptions.AllowConcurrentExecutions);
         OpenAnalyticsCommand = new AsyncRelayCommand(() => navigation.GoToTabAsync("shift-analytics"));
@@ -63,7 +69,33 @@ public partial class ShiftReportViewModel : ObservableObject
         CancelOrderCommand = new AsyncRelayCommand<OrderRowViewModel>(CancelOrderAsync);
         OpenDetailsCommand = new AsyncRelayCommand<OrderRowViewModel>(row =>
             row is null ? Task.CompletedTask : navigation.GoToOrderDetailsAsync(row.Model.Id));
+        AddFloatCommand = new AsyncRelayCommand(AddFloatAsync);
+        AddPayoutCommand = new AsyncRelayCommand(AddPayoutAsync);
+        CancelMovementCommand = new AsyncRelayCommand<CashMovementRow>(CancelMovementAsync);
+        OpenShiftCommand = new AsyncRelayCommand(() => navigation.GoToOpenShiftAsync());
     }
+
+    /// <summary>
+    /// The change put in and the cash carried out, oldest first — the drawer as a list of events
+    /// rather than a single number.
+    /// </summary>
+    /// <remarks>
+    /// Present because a drawer figure with nothing behind it cannot be investigated. A shortage is a
+    /// single number, and this is the list that says whether it is a missed collection, a mistyped
+    /// amount or change that was never counted in — which are three different conversations with the
+    /// operator and three different fixes.
+    /// <para>
+    /// Corrections are rows here too, not edits: the operator can see that something happened AND that
+    /// it was undone, which is the fact the ledger exists to preserve.
+    /// </para>
+    /// </remarks>
+    public ObservableCollection<CashMovementRow> CashMovements { get; } = [];
+
+    /// <summary>
+    /// BindableLayout has no EmptyView, so «Движений по кассе не было.» is a label bound here — the
+    /// same arrangement as <see cref="HasNoShiftHistory"/>, and for the same reason.
+    /// </summary>
+    public bool HasNoCashMovements => CashMovements.Count == 0;
 
     /// <summary>
     /// The shift's closed orders: Completed AND Cancelled.
@@ -90,7 +122,8 @@ public partial class ShiftReportViewModel : ObservableObject
     /// row, so «Закрытых заказов пока нет.» has no <c>EmptyView</c> to live in — BindableLayout has
     /// none. An ordinary label bound to this is what carries it, and it is the reason this property
     /// exists at all. Re-announced from <c>LoadAsync</c> after every <c>SyncWith</c>, which is the
-    /// only place <see cref="ShiftHistory"/> changes.
+    /// only place <see cref="ShiftHistory"/> changes: SyncWith edits the collection without knowing
+    /// this property exists, so nothing about a reload would re-raise it on its own.
     /// </remarks>
     public bool HasNoShiftHistory => ShiftHistory.Count == 0;
 
@@ -142,6 +175,8 @@ public partial class ShiftReportViewModel : ObservableObject
         OnPropertyChanged(nameof(RefundsCashText));
         OnPropertyChanged(nameof(RefundsCardText));
         OnPropertyChanged(nameof(CashInDrawerText));
+        OnPropertyChanged(nameof(FloatCashText));
+        OnPropertyChanged(nameof(PayoutCashText));
     }
 
     // ── Money through the till ────────────────────────────────────────────────────────────────
@@ -162,6 +197,25 @@ public partial class ShiftReportViewModel : ObservableObject
 
     private decimal refundsCard;
     public decimal RefundsCard { get => refundsCard; private set => SetProperty(ref refundsCard, value); }
+
+    private decimal floatCash;
+    public decimal FloatCash { get => floatCash; private set => SetProperty(ref floatCash, value); }
+
+    private decimal payoutCash;
+    public decimal PayoutCash { get => payoutCash; private set => SetProperty(ref payoutCash, value); }
+
+    /// <summary>Change put into the drawer, in the active currency.</summary>
+    public string FloatCashText => TextFormat.Money(FloatCash);
+
+    /// <summary>Cash carried out for collection, in the active currency.</summary>
+    public string PayoutCashText => TextFormat.Money(PayoutCash);
+
+    /// <summary>
+    /// True when a shift is open. False is a state the operator can arrive at on purpose — from the
+    /// opening screen's «Смена» tab, or right after closing one — and the page says so instead of
+    /// showing an empty report that looks like a shift with nothing in it.
+    /// </summary>
+    public bool HasOpenShift { get; private set; }
 
     /// <summary>
     /// What is physically in the drawer at the end of the shift: taken in cash, less cash handed
@@ -211,8 +265,22 @@ public partial class ShiftReportViewModel : ObservableObject
     /// Null means "nothing typed yet", which is NOT the same as a typed 0: a count of 0 is a real
     /// count and the pre-fill for it is "0", not the live figure.
     /// </para>
+    /// <para>
+    /// The EXPECTED figure is stored with the count, and the two are one field so that neither can
+    /// be written without the other. The pre-fill is only honest while the drawer still holds what it
+    /// held when the operator counted it, and after a refused close the drawer can and does move: two
+    /// refunds taken while the operator went and closed those orders changed the figure from 6 660 to
+    /// 5 580, and the dialog went on offering 6 660 in a field labelled «по учёту 5 580». One tap on
+    /// «Закрыть смену» would then have stored a 1 080 discrepancy nobody counted — on the one figure
+    /// this feature exists to get right, and written to the shift as fact.
+    /// </para>
+    /// <para>
+    /// Which entry may be offered back is <c>CashCountPrefill.Resolve</c> in the core, not a line here:
+    /// it is a rule about the drawer, it has no UI in it, and until it was extracted the only thing
+    /// checking it was a person counting cash on a device.
+    /// </para>
     /// </remarks>
-    private long? lastCountedCashKopecks;
+    private PendingCashCount? pendingCount;
 
     private int closedOrdersCount;
     public int ClosedOrdersCount { get => closedOrdersCount; private set => SetProperty(ref closedOrdersCount, value); }
@@ -244,6 +312,18 @@ public partial class ShiftReportViewModel : ObservableObject
     public IAsyncRelayCommand OpenAnalyticsCommand { get; }
     public IAsyncRelayCommand CloseShiftCommand { get; }
     public IAsyncRelayCommand ExportShiftCommand { get; }
+
+    /// <summary>Puts change into the drawer. Same operation as opening a shift with a float.</summary>
+    public IAsyncRelayCommand AddFloatCommand { get; }
+
+    /// <summary>Takes cash out of the drawer for collection. Refused above what the drawer holds.</summary>
+    public IAsyncRelayCommand AddPayoutCommand { get; }
+
+    /// <summary>Cancels one movement with a second, opposite row. Never edits the first.</summary>
+    public IAsyncRelayCommand<CashMovementRow> CancelMovementCommand { get; }
+
+    /// <summary>Goes to the opening screen. The only way out of this page with no shift open.</summary>
+    public IAsyncRelayCommand OpenShiftCommand { get; }
 
     /// <summary>
     /// Voids a closed order from the history list. The one entry point to the refund feature for a

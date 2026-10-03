@@ -62,7 +62,7 @@ public sealed partial class OrderService
         // ShiftStats.ExpectedCashNow — not computed at each point of presentation, because a screen
         // that subtracts the two halves itself is a second definition of the same figure, and a
         // second definition is how two reports end up disagreeing about the drawer.
-        var payments = await ShiftPayments.ReadAsync(db, shiftId, cancellationToken);
+        var ledger = await CashLedger.ReadAsync(db, shiftId, cancellationToken);
 
         // The frozen count comes off the shift row itself. AsNoTracking on purpose: this is a
         // report, and nothing here may accidentally mark a shift modified. A shift that was never
@@ -75,7 +75,7 @@ public sealed partial class OrderService
         // against a closed shift moves the live figure and leaves the frozen snapshot alone, so the
         // two disagree from that moment on — and that disagreement is exactly what a manager has to
         // be shown, rather than a snapshot quietly rewritten to match the new reality.
-        var isStale = ShiftReconciliation.IsStale(reconciliation, payments.CashInDrawerKopecks);
+        var isStale = ShiftReconciliation.IsStale(reconciliation, ledger.InDrawerKopecks);
 
         return new ShiftStats(
             allCount,
@@ -88,14 +88,16 @@ public sealed partial class OrderService
             preparation.Count == 0 ? 0 : preparation.Average(),
             completion.Count == 0 ? 0 : completion.Average(),
             BuildPeakHour(timestamps),
-            payments.Count,
-            Money.FromKopecks(payments.CashKopecks),
-            Money.FromKopecks(payments.CardKopecks),
-            Money.FromKopecks(payments.TotalKopecks),
-            Money.FromKopecks(payments.RefundsCashKopecks),
-            Money.FromKopecks(payments.RefundsCardKopecks),
-            Money.FromKopecks(payments.RefundedKopecks),
-            Money.FromKopecks(payments.CashInDrawerKopecks),
+            ledger.Payments.Count,
+            Money.FromKopecks(ledger.Payments.CashKopecks),
+            Money.FromKopecks(ledger.Payments.CardKopecks),
+            Money.FromKopecks(ledger.Payments.TotalKopecks),
+            Money.FromKopecks(ledger.Payments.RefundsCashKopecks),
+            Money.FromKopecks(ledger.Payments.RefundsCardKopecks),
+            Money.FromKopecks(ledger.Payments.RefundedKopecks),
+            Money.FromKopecks(ledger.FloatKopecks),
+            Money.FromKopecks(ledger.PayoutKopecks),
+            Money.FromKopecks(ledger.InDrawerKopecks),
             reconciliation,
             isStale);
     }
@@ -223,7 +225,17 @@ public sealed partial class OrderService
         return timeline
             .GroupBy(row => row.CreatedAt.ToLocalTime().Hour)
             .OrderByDescending(group => group.Count())
-            .Select(group => $"{group.Key:00}:00–{(group.Key + 1) % 24:00}:00 ({group.Count()} заказов)")
+            .Select(group =>
+            {
+                var count = group.Count();
+                // TextFormat.Plural, NOT a bare "заказов". On device this read «11:00–12:00 (1 заказов)»
+                // for a single-order shift, and the green test run said nothing because the rule is a
+                // formatting concern, not an aggregate. The helper exists precisely for this — its own
+                // docblock records that "1 товаров" was written in two files and corrected in one — and
+                // every count around this one on the same page already pluralises correctly, which is
+                // exactly why the single wrong form survived a visual pass on a 411dp phone.
+                return $"{group.Key:00}:00–{(group.Key + 1) % 24:00}:00 ({count} {TextFormat.Plural(count, "заказ", "заказа", "заказов")})";
+            })
             .First();
     }
 

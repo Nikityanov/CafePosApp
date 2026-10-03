@@ -12,6 +12,25 @@ public interface INavigationService
     Task GoToOrderDetailsAsync(Guid orderId);
     Task GoBackAsync();
     Task GoToTabAsync(string route);
+
+    /// <summary>
+    /// The opening screen. A PUSH rather than a tab switch, so that leaving it is not a matter of
+    /// choosing a different tab: <see cref="AppShell"/> refuses every other destination while no shift
+    /// is open, and this route is the one that is allowed.
+    /// </summary>
+    Task GoToOpenShiftAsync();
+
+    /// <summary>
+    /// Takes the operator off the opening screen once a shift exists, and lands on the menu.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="GoToTabAsync"/> because the opening screen is a PUSH onto whichever
+    /// tab happened to be current, so switching tabs does not remove it — it stays on that tab's
+    /// stack as its current page. Switch to the menu and the opening screen is buried, not gone, and
+    /// the operator who then taps the shift tab is returned to a page telling them no shift is open
+    /// over a shift that has been open for a minute, with no way forward from there.
+    /// </remarks>
+    Task LeaveOpenShiftAsync();
 }
 
 public interface IDialogService

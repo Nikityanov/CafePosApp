@@ -1,4 +1,5 @@
 ﻿using CafePos.Core.Data;
+using CafePos.Core.Services;
 using CafePosApp.Diagnostics;
 using CafePosApp.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,8 +10,15 @@ namespace CafePosApp
     {
         private readonly AppShell shell;
         private readonly DatabaseBootstrapper bootstrapper;
+        private readonly IShiftSession shiftSession;
+        private readonly INavigationService navigation;
 
-        public App(IServiceProvider services, AppSettings settings, DatabaseBootstrapper bootstrapper)
+        public App(
+            IServiceProvider services,
+            AppSettings settings,
+            DatabaseBootstrapper bootstrapper,
+            IShiftSession shiftSession,
+            INavigationService navigation)
         {
             AppLog.Info("App constructor started");
             InitializeComponent();
@@ -21,6 +29,8 @@ namespace CafePosApp
             CurrencySelection.Reload();
             shell = services.GetRequiredService<AppShell>();
             this.bootstrapper = bootstrapper;
+            this.shiftSession = shiftSession;
+            this.navigation = navigation;
             AppLog.Info("AppShell resolved successfully");
         }
 
@@ -85,6 +95,13 @@ namespace CafePosApp
             try
             {
                 await bootstrapper.InitializeAsync();
+
+                // Only NOW can the answer be known, and it decides where the operator lands: a first
+                // launch, a restart, and a terminal between shifts all arrive here with no shift open,
+                // and all three are states the app used to paper over by creating one silently.
+                await shiftSession.RefreshAsync();
+                if (!shiftSession.IsShiftOpen) OpenShiftScreenAsync();
+
                 AppLog.Info("Database initialization completed");
             }
             catch (Exception exception)
@@ -92,6 +109,34 @@ namespace CafePosApp
                 // Not fatal, and not latched: the bootstrapper evicts a failed run from its
                 // cache, so the first page load (or any later tab) retries the migration.
                 AppLog.Exception("Startup database initialization failed; pages will retry", exception);
+            }
+        }
+
+        /// <summary>
+        /// Shows the opening screen from a startup task that knows nothing about Shell's state.
+        /// </summary>
+        /// <remarks>
+        /// Dispatched, because this runs while the window is still being built: <c>GoToAsync</c> on a
+        /// Shell whose first navigation has not finished is a no-op that reports success, and the
+        /// operator would be left on the menu of a till with no shift, guarded by
+        /// <c>AppShell.OnNavigating</c> but with nothing on screen explaining why.
+        /// <para>
+        /// Deliberately NOT awaited — the caller is already a fire-and-forget task, and holding the
+        /// startup continuation open for a dispatcher round-trip would delay the first page load for
+        /// no gain.
+        /// </para>
+        /// </remarks>
+        private void OpenShiftScreenAsync() => Dispatcher.Dispatch(() => _ = NavigateToOpenShiftAsync());
+
+        private async Task NavigateToOpenShiftAsync()
+        {
+            try
+            {
+                await navigation.GoToOpenShiftAsync();
+            }
+            catch (Exception exception)
+            {
+                AppLog.Exception("Could not show the opening screen", exception);
             }
         }
 

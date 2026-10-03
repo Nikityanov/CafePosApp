@@ -85,7 +85,8 @@ public sealed class ReportExportService(IDbContextFactory<AppDbContext> factory)
         // lines the drawer total cannot be reconciled against the day on paper. The wording and the
         // GROSS meaning are deliberately untouched: every existing reading of "Принято …" keeps
         // meaning "what came in".
-        var payments = await ShiftPayments.ReadAsync(db, shiftId, cancellationToken);
+        var ledger = await CashLedger.ReadAsync(db, shiftId, cancellationToken);
+        var payments = ledger.Payments;
 
         builder.AppendLine();
         builder.AppendLine(Csv.Join("Итого чеков", completed.Count.ToString()));
@@ -103,17 +104,24 @@ public sealed class ReportExportService(IDbContextFactory<AppDbContext> factory)
         builder.AppendLine(Csv.Join("Возвращено картой", Money.FromKopecks(payments.RefundsCardKopecks).ToString("F2")));
         builder.AppendLine(Csv.Join("Возвращено всего", Money.FromKopecks(payments.RefundedKopecks).ToString("F2")));
 
+        // The two figures that are not orders. Printed as their own lines, ABOVE the total, because a
+        // "Итого наличными в кассе" that does not balance against the line above it is the exact
+        // situation an export is taken to the till to resolve — and a drawer with change in it has
+        // never been explainable from "Принято наличными" alone.
+        builder.AppendLine(Csv.Join("Внесено размена", Money.FromKopecks(ledger.FloatKopecks).ToString("F2")));
+        builder.AppendLine(Csv.Join("Изъято на инкассацию", Money.FromKopecks(ledger.PayoutKopecks).ToString("F2")));
+
         // The one line a manager counts against the drawer, so it is the last word in the export and
         // the only one that nets out. Anything ambiguous about it defeats the whole point of taking
         // the report to the till.
-        builder.AppendLine(Csv.Join("Итого наличными в кассе", Money.FromKopecks(payments.CashInDrawerKopecks).ToString("F2")));
+        builder.AppendLine(Csv.Join("Итого наличными в кассе", Money.FromKopecks(ledger.InDrawerKopecks).ToString("F2")));
 
         // The count itself, printed last because it is the manager's own answer to the drawer line
         // above. The shift row is loaded here for the first time: the export used to read orders
         // only, so it had nothing to say about the money after it left the drawer.
         var shift = await db.Shifts.AsNoTracking()
             .FirstOrDefaultAsync(current => current.Id == shiftId, cancellationToken);
-        AppendReconciliation(builder, ShiftReconciliation.Read(shift), payments.CashInDrawerKopecks);
+        AppendReconciliation(builder, ShiftReconciliation.Read(shift), ledger.InDrawerKopecks);
 
         return builder.ToString();
     }

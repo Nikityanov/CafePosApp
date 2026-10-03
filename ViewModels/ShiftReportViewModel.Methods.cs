@@ -1,6 +1,8 @@
 using System.Globalization;
 using CafePos.Core.Common;
 using CafePos.Core.Errors;
+using CafePos.Core.Models;
+using CafePos.Core.Services;
 using CafePosApp.Services;
 using Microsoft.Extensions.Logging;
 
@@ -15,7 +17,27 @@ public partial class ShiftReportViewModel
         IsBusy = true;
         try
         {
-            var shift = await orders.GetOrCreateActiveShiftAsync();
+            // NO SHIFT IS A NORMAL STATE NOW, not something to paper over by creating one. This screen is what
+            // the operator comes to when there is nothing open, and it offers to open a shift rather
+            // than quietly opening one with no float — which is the state the whole cash ledger
+            // feature exists to stop.
+            var shift = await orders.GetActiveShiftAsync();
+            await shiftSession.RefreshAsync();
+            HasOpenShift = shift is not null;
+            OnPropertyChanged(nameof(HasOpenShift));
+
+            if (shift is null)
+            {
+                shiftId = Guid.Empty;
+                ShiftHistory.Clear();
+                CashMovements.Clear();
+                OnPropertyChanged(nameof(HasNoShiftHistory));
+                OnPropertyChanged(nameof(HasNoCashMovements));
+                OnPropertyChanged(nameof(StartTimeText));
+                Message = "Смена не открыта.";
+                return;
+            }
+
             shiftId = shift.Id;
             startTime = shift.StartTime;
             OnPropertyChanged(nameof(StartTimeText));
@@ -36,6 +58,12 @@ public partial class ShiftReportViewModel
             PaymentsCard = stats.PaymentsCard;
             RefundsCash = stats.RefundsCash;
             RefundsCard = stats.RefundsCard;
+            // The change put in and the cash carried out, so the drawer line below is a SUM the
+            // operator can check on the screen instead of a number they have to trust. Both are net
+            // of correcting entries, which is why an uncorrected mistake and a corrected one show the
+            // same figure here and differ only in the list underneath.
+            FloatCash = stats.FloatCash;
+            PayoutCash = stats.PayoutCash;
             // The net, copied from the one place it is computed. It used to be
             // PaymentsCash - RefundsCash written here, plus a hand-written
             // OnPropertyChanged(nameof(CashInDrawer)) to re-notify a derived property; both are gone,
@@ -47,6 +75,8 @@ public partial class ShiftReportViewModel
             // page actually binds are re-raised together here. Setting a decimal raises only that
             // decimal; the *Text properties it feeds are a second binding and are told once.
             NotifyMoneyTexts();
+
+            SyncMovements(await cashLedger.GetMovementsAsync(shift.Id));
 
             // GetShiftOrderHistoryAsync (Completed AND Cancelled), not GetCompletedOrdersAsync.
             // Cancelling a paid order flips it to Cancelled, so under the old query the one sale a
@@ -71,6 +101,55 @@ public partial class ShiftReportViewModel
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Brings the movements list in line with the domain, using only Add and Remove.
+    /// </summary>
+    /// <remarks>
+    /// NOT <c>ObservableCollectionSync.SyncWith</c>, and at the time of writing the reason was a crash
+    /// rather than a preference. <c>SyncWith</c> replaced a row whose key was unchanged but whose
+    /// instance differed, which is every reload here because these rows are classes; MAUI's
+    /// <c>BindableLayoutController.ReplaceChild</c> indexes into its own list of realised children and
+    /// throws <c>ArgumentOutOfRangeException</c> when a reload happens before that list exists. The
+    /// exception was raised inside this reload, caught by the page's own handler and shown to the
+    /// operator as «Не удалось загрузить смену» — with the drawer figures above it already updated,
+    /// which is the worst shape a partial failure can take.
+    /// <para>
+    /// <c>SyncWith</c> no longer raises Replace at all — it re-creates a changed row AT ITS INDEX or
+    /// refreshes it through a delegate — so it would be safe here too. This method stays anyway,
+    /// because for THIS list it is the clearer statement of what the list can do: a movement is
+    /// written once and never edited, a correction is a new row rather than a change to an old one,
+    /// and so the only two operations the list ever needs are Add and Remove. Add/Remove/Reset are
+    /// the actions BindableLayout applies through layout.Insert / layout.RemoveAt / CreateChildren(),
+    /// so nothing here depends on the collection and its realised children agreeing by index.
+    /// </para>
+    /// <para>
+    /// The reason it is not <c>SyncWith</c> was never that a movement cannot change in place. It is
+    /// that <c>OrderRowViewModel</c> — the row <see cref="ShiftHistory"/> is built from — has
+    /// <c>Model { get; }</c> with computed properties, so there is nothing on it to write: a changed
+    /// row can only be replaced by a NEW instance. <c>SyncWith</c> now does exactly that at the same
+    /// index, which is why the history list needed no second sync method to become safe.
+    /// </para>
+    /// <para>
+    /// O(n²) over a handful of rows, which is not a cost worth optimising away.
+    /// </para>
+    /// </remarks>
+    private void SyncMovements(IReadOnlyList<CashMovement> movements)
+    {
+        var incoming = movements.Select(movement => movement.Id).ToHashSet();
+
+        for (var index = CashMovements.Count - 1; index >= 0; index--)
+        {
+            if (!incoming.Contains(CashMovements[index].Id)) CashMovements.RemoveAt(index);
+        }
+
+        foreach (var movement in movements)
+        {
+            if (CashMovements.All(row => row.Id != movement.Id)) CashMovements.Add(new CashMovementRow(movement));
+        }
+
+        OnPropertyChanged(nameof(HasNoCashMovements));
     }
 
     /// <summary>
@@ -171,7 +250,12 @@ public partial class ShiftReportViewModel
     {
         try
         {
-            if (!await dialogs.ConfirmAsync("Закрыть смену?", "Текущая смена будет закрыта и открыта новая.", "Закрыть смену", "Отмена"))
+            // Says what happens and nothing more. It used to promise "и открыта новая", because the
+            // close did open one; it does not any more, and a dialog that describes a behaviour the
+            // app no longer has is worse than no dialog at all — the operator waits for a shift that
+            // never arrives. The terminal sits empty until someone opens the next one, which is the
+            // whole point of counting the drawer onto paper first.
+            if (!await dialogs.ConfirmAsync("Закрыть смену?", "Текущая смена будет закрыта. Следующую нужно будет открыть заново.", "Закрыть смену", "Отмена"))
             {
                 return;
             }
@@ -183,11 +267,11 @@ public partial class ShiftReportViewModel
             }
 
             // Captured BEFORE the close, and this is the whole reason the post-close export works at
-            // all. CloseShiftAsync opens a new shift and the reload below rebinds this ViewModel to
-            // it, so `shiftId` — the id every export in this ViewModel reads — is the new, empty
-            // shift by then. Exporting it after a close produced a CSV of a shift with no orders in
-            // it, which is how a reconciliation became unexportable: the one file that carries the
-            // counted cash was the file about the wrong shift.
+            // all. The close ends the shift and the reload below rebinds this ViewModel to whatever
+            // is open - which, right after a close, is nothing - so `shiftId`, the id every export in
+            // this ViewModel reads, would be empty. Exporting against that produced a CSV of a
+            // shift with no orders in it, which is how a reconciliation became unexportable: the
+            // one file that carries the counted cash was the file about the wrong shift.
             //
             // The start time is captured for the same reason: the file is named after the SHIFT it
             // describes, not after the moment it was exported, or every shift closed within the same
@@ -200,22 +284,32 @@ public partial class ShiftReportViewModel
 
             // Safety copy before the shift boundary: the cash register should never lose a day.
             await backups.CreateBackupAsync("Закрытие смены");
-            var next = await orders.CloseShiftAsync(entry.CountedKopecks, entry.Reason);
+            var closed = await orders.CloseShiftAsync(entry.CountedKopecks, entry.Reason);
 
             // Only now is the count spent: it lives on the closed shift and there is no path that
             // rewrites it, which is why the retry pre-fill has to be dropped at this exact point.
-            lastCountedCashKopecks = null;
+            pendingCount = null;
+
+            // No shift is open now, and the terminal cannot be used until one is. The cache is
+            // updated BEFORE the reload so the page renders the closed state rather than the last
+            // open one, and the opening screen pre-fills the counted drawer - the number the
+            // operator has just written on paper.
+            shiftSession.SetKnownState(false, null);
 
             await LoadAsync();
-            Message = $"Смена закрыта. {CashWording.Describe(entry.CountedKopecks - entry.ExpectedKopecks)}. "
-                      + $"Новая смена открыта {next.StartTime.ToLocalTime():HH:mm}.";
+            // The count result is the one thing the operator cannot read off the screen they are on:
+            // a balance is stated here and then, for a shift with no orders, there is nothing left
+            // on this page to compare it against. The time is the moment the shift ENDED, which is
+            // what it always was — it was being labelled as the start of the next shift, which never
+            // came.
+            Message = $"Смена закрыта в {closed.EndTime?.ToLocalTime():HH:mm}. "
+                      + CashWording.Describe(entry.CountedKopecks - entry.ExpectedKopecks);
 
-            // The report of the shift that was just closed, NOT the archive. The archive used to be
-            // shared here and it is still available from Настройки, so nothing is lost by this
-            // change — but the archive's own shift-report.csv is written from
-            // GetOrCreateActiveShiftAsync, which after a close is the new empty shift, so the
-            // reconciliation was never in it. This CSV is the only artefact that carries the count,
-            // and it is now about the right shift.
+            // The report of the shift that was just closed, NOT the archive. The archive is still
+            // available from Настройки, so nothing is lost by asking here instead — but the
+            // archive's own shift-report.csv is written from whatever shift it is handed, and after
+            // a close there is no open shift to hand it, so the reconciliation was never in it.
+            // This CSV is the only artefact that carries the count, and it is about the right shift.
             if (await dialogs.ConfirmAsync("Экспорт отчёта?",
                     "Отправить отчёт по закрытой смене с пересчётом кассы?", "Отправить", "Позже"))
             {
@@ -224,6 +318,14 @@ public partial class ShiftReportViewModel
                     $"shift-{closingShiftStartedAt.ToLocalTime():yyyyMMdd-HHmm}.csv", csv);
                 await files.ShareFileAsync(path, "Отчёт смены");
             }
+
+            // LAST, after the export question, because that dialog is the only thing left that belongs
+            // to the shift being closed. Then the opening screen, for the same reason the startup path
+            // shows it: the terminal cannot be used until a shift exists, and its field arrives
+            // pre-filled with the figure the operator just wrote on paper. Staying on this page would
+            // leave them looking at "Смена не открыта" with a button, which is the same fact said more
+            // weakly.
+            await navigation.GoToOpenShiftAsync();
         }
         catch (Exception exception)
         {
@@ -262,15 +364,22 @@ public partial class ShiftReportViewModel
         var expectedKopecks = Money.ToKopecks(CashInDrawer);
         var expected = Money.FromKopecks(expectedKopecks);
 
-        // A previous entry wins over the live figure: after a refused close the operator is being
-        // asked the same question again about the same physical drawer, and the answer they already
-        // gave is still true. Overwriting it with the live figure would silently undo their count.
+        // A previous entry wins over the live figure ONLY while the drawer it was counted against is
+        // the same drawer. After a refused close the operator is being asked the same question about
+        // the same money, and their answer is still true — unless the drawer moved while they were
+        // away closing orders, which is exactly what happens after that refusal. So the previous entry
+        // carries the figure it was counted against and is used only when that still matches; otherwise
+        // the live figure, which the sentence above already states.
         //
+        // WHICH entry to offer is decided in the core (CashCountPrefill.Resolve) and only formatted
+        // here: the rule is tested rather than trusted, and no arithmetic about money lives in a
+        // dialog. This ViewModel no longer knows how to tell a fresh count from a stale one.
+        var prefillKopecks = CashCountPrefill.Resolve(pendingCount, expectedKopecks);
+
         // "0.00" rather than "F2" on purpose: F2 in ru-RU groups the thousands ("4 320,00"), and a
         // numeric prompt is not the place for a group separator the soft keyboard cannot reliably
         // reproduce. The readable grouped form is in the message text instead.
-        var prefill = Money.FromKopecks(lastCountedCashKopecks ?? expectedKopecks)
-            .ToString("0.00", CultureInfo.CurrentCulture);
+        var prefill = Money.FromKopecks(prefillKopecks).ToString("0.00", CultureInfo.CurrentCulture);
 
         var entry = await dialogs.PromptAsync(
             "Пересчёт кассы",
@@ -328,8 +437,9 @@ public partial class ShiftReportViewModel
         }
 
         // Retained BEFORE the close is attempted, and only now: see the remark on
-        // lastCountedCashKopecks for why the retry must not cost the operator their count.
-        lastCountedCashKopecks = countedKopecks;
+        // pendingCount for why the retry must not cost the operator their count, and why the figure
+        // it was counted against travels with it.
+        pendingCount = new PendingCashCount(countedKopecks, expectedKopecks);
         return new CashCountEntry(countedKopecks, expectedKopecks, reason);
     }
 

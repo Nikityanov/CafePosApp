@@ -140,8 +140,19 @@ public sealed class BackupService(
         var backup = await CreateBackupAsync("Экспорт данных", cancellationToken);
         var productsCsv = await catalog.ExportProductsCsvAsync(cancellationToken);
         var salesCsv = await reports.ExportSalesCsvAsync(cancellationToken);
-        var shift = await orders.GetOrCreateActiveShiftAsync(cancellationToken);
-        var shiftCsv = await reports.ExportShiftReportCsvAsync(shift.Id, cancellationToken);
+
+        // The shift the report is about: the open one, or the last one closed when nothing is open.
+        //
+        // It used to be GetOrCreateActiveShiftAsync, which both created a shift and could not fail.
+        // Now that a shift is opened deliberately there is a legitimate state with no open shift —
+        // a terminal between shifts — and an export that threw there would lose the products and
+        // sales CSVs too, because they were already built by then. Falling back to the most recent
+        // closed shift keeps the archive useful at exactly the moment somebody is most likely to
+        // take one.
+        var shift = await orders.GetLatestShiftAsync(cancellationToken);
+        var shiftCsv = shift is null
+            ? string.Empty
+            : await reports.ExportShiftReportCsvAsync(shift.Id, cancellationToken);
 
         var exportDirectory = Path.Combine(options.BackupDirectory, "exports");
         Directory.CreateDirectory(exportDirectory);

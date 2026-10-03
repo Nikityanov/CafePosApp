@@ -33,6 +33,8 @@ public partial class MenuViewModel : ObservableObject
     private readonly IHapticService haptics;
     private readonly IPaymentSheet paymentSheet;
     private readonly TimeProvider timeProvider;
+    private readonly INavigationService navigation;
+    private readonly IShiftSession shiftSession;
     private readonly ILogger<MenuViewModel> logger;
 
     private readonly SemaphoreSlim loadGate = new(1, 1);
@@ -54,6 +56,8 @@ public partial class MenuViewModel : ObservableObject
         IDialogService dialogs,
         IHapticService haptics,
         IPaymentSheet paymentSheet,
+        INavigationService navigation,
+        IShiftSession shiftSession,
         TimeProvider timeProvider,
         ILogger<MenuViewModel> logger)
     {
@@ -67,6 +71,8 @@ public partial class MenuViewModel : ObservableObject
         this.dialogs = dialogs;
         this.haptics = haptics;
         this.paymentSheet = paymentSheet;
+        this.navigation = navigation;
+        this.shiftSession = shiftSession;
         this.timeProvider = timeProvider;
         this.logger = logger;
 

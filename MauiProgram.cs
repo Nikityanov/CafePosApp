@@ -1,4 +1,4 @@
-﻿using CafePos.Core.Data;
+using CafePos.Core.Data;
 using CafePos.Core.DependencyInjection;
 using CafePosApp.Diagnostics;
 using CafePosApp.Services;
@@ -74,6 +74,7 @@ namespace CafePosApp
             builder.Services.AddTransient<OrdersViewModel>();
             builder.Services.AddTransient<OrderDetailsViewModel>();
             builder.Services.AddTransient<ShiftReportViewModel>();
+            builder.Services.AddTransient<OpenShiftViewModel>();
             builder.Services.AddTransient<ShiftAnalyticsViewModel>();
             builder.Services.AddTransient<CatalogManagementViewModel>();
             builder.Services.AddTransient<SettingsViewModel>();
@@ -89,6 +90,7 @@ namespace CafePosApp
             builder.Services.AddTransient<OrdersPage>();
             builder.Services.AddTransient<OrderDetailsPage>();
             builder.Services.AddTransient<ShiftReportPage>();
+            builder.Services.AddTransient<OpenShiftPage>();
             builder.Services.AddTransient<ShiftAnalyticsPage>();
             builder.Services.AddTransient<CatalogManagementPage>();
             builder.Services.AddTransient<SettingsPage>();

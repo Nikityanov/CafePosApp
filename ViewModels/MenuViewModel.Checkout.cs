@@ -58,13 +58,60 @@ public partial class MenuViewModel
         catch (Exception exception)
         {
             logger.LogError(exception, "Checkout with payment failed");
-            SetError(exception, "Не удалось создать заказ");
+            await HandleCheckoutFailureAsync(exception);
             haptics.Warn();
         }
         finally
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Reports a failed checkout, and offers the opening screen when the reason is that there is no
+    /// shift.
+    /// </summary>
+    /// <remarks>
+    /// Checked against the session rather than against the domain's message text. The refusal is a
+    /// <c>ConflictException</c> whose wording is written for a human, and matching on that string
+    /// would break the moment anybody rewords it — silently, by sending the operator to a screen
+    /// that has nothing to do with what went wrong.
+    /// <para>
+    /// The CART IS KEPT. The operator built it before pressing the button, and losing it because the
+    /// shift happened to be closed would be the most expensive possible way to ask them to open one.
+    /// </para>
+    /// </remarks>
+    private async Task HandleCheckoutFailureAsync(Exception exception)
+    {
+        await shiftSession.RefreshAsync();
+        if (!shiftSession.IsShiftOpen)
+        {
+            if (await dialogs.ConfirmAsync(
+                    "Смена не открыта",
+                    "Продавать нельзя, пока смена не открыта и в кассу не внесён размен. Открыть смену сейчас?",
+                    "Открыть смену",
+                    "Отмена"))
+            {
+                await navigation.GoToOpenShiftAsync();
+                return;
+            }
+
+            SetError(exception, "Смена не открыта");
+            return;
+        }
+
+        // The shift IS open, so there is nothing left to offer: no screen to send the operator to and
+        // no state to refresh. This line used to be `await HandleCheckoutFailureAsync(exception)` —
+        // the method calling itself with no overload in between. Every checkout failure with a shift
+        // open (out of stock, a price that moved, anything at all) therefore re-entered this method,
+        // found the shift still open, and recursed until the stack ran out: StackOverflowException,
+        // which is not catchable and takes the process down with no message and no dialog. The common
+        // case was the crash, and the rare case (no shift) was the only one that ever worked.
+        //
+        // What belongs here is the same thing the no-shift branch does one line up: report it. The
+        // reason this is worth a paragraph is that the guard above looks like it covers both cases,
+        // and it does — the bug lived entirely in what came after it.
+        SetError(exception, "Не удалось оформить заказ");
     }
 
     /// <summary>
@@ -90,7 +137,7 @@ public partial class MenuViewModel
         catch (Exception exception)
         {
             logger.LogError(exception, "Checkout failed");
-            SetError(exception, "Не удалось создать заказ");
+            await HandleCheckoutFailureAsync(exception);
             haptics.Warn();
         }
         finally

@@ -79,12 +79,116 @@ public sealed partial class OrderService(
         return history.OrderBy(entry => entry.ChangedAt).ToList();
     }
 
-    public async Task<Shift> GetOrCreateActiveShiftAsync(CancellationToken cancellationToken = default)
+    public async Task<Shift?> GetActiveShiftAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        var shift = await GetActiveShiftAsync(db, cancellationToken);
+        return await db.Shifts.AsNoTracking()
+            .FirstOrDefaultAsync(shift => shift.IsActive, cancellationToken);
+    }
+
+    /// <summary>
+    /// Opens a shift with the change recorded into its drawer in the same write.
+    /// </summary>
+    /// <remarks>
+    /// The float and the shift go in together, deliberately: a shift that exists before anyone has
+    /// said what was in the drawer is a shift whose end-of-shift count has nothing to be compared
+    /// against. That is precisely how this feature was broken before — the shift appeared by itself
+    /// on first sale, so there was never a moment at which the change in the till was recorded
+    /// against a shift that did not yet have orders in it.
+    /// <para>
+    /// The overlap guard runs first and before the float is validated, for the same reason the close
+    /// checks its open orders first: the operator needs to know which part of the flow is wrong, and
+    /// "a shift is already open" is a different fix from "that amount is impossible".
+    /// </para>
+    /// </remarks>
+    public async Task<Shift> OpenShiftAsync(long floatKopecks, string? reason = null, CancellationToken cancellationToken = default)
+    {
+        if (floatKopecks < 0)
+            throw new ValidationFailureException("Размен не может быть отрицательным.");
+
+        var cleanReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        if (cleanReason is { Length: > MaxDiscrepancyReasonLength })
+            throw new ValidationFailureException(
+                $"Причина длиннее {MaxDiscrepancyReasonLength} символов — это поле аудита, сокращать его нельзя.");
+
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+
+        if (await db.Shifts.AnyAsync(shift => shift.IsActive, cancellationToken))
+        {
+            throw new ConflictException("Смена уже открыта. Закройте её, прежде чем открывать новую.");
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var shift = new Shift
+        {
+            Id = Guid.NewGuid(),
+            StartTime = now,
+            IsActive = true,
+            NextOrderNumber = 1
+        };
+        db.Shifts.Add(shift);
+
+        // The float is a CashMovement like any other, so the opening change is read by the same
+        // arithmetic as a mid-shift top-up and shows in the same list on screen. It is NOT a column
+        // on the shift: a column would make "the float" a different kind of fact from "change added
+        // at 11:40", and the drawer is one sum of the same rows.
+        db.CashMovements.Add(new CashMovement
+        {
+            Id = Guid.NewGuid(),
+            ShiftId = shift.Id,
+            Kind = CashMovementKind.Float,
+            AmountKopecks = floatKopecks,
+            Reason = cleanReason,
+            CreatedAt = now
+        });
+
         await db.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Shift {ShiftId} opened at {StartedAt} with {Float} ₽ of change",
+            shift.Id,
+            now,
+            Money.FromKopecks(floatKopecks));
+
         return shift;
+    }
+
+    public async Task<long?> GetLastCountedCashKopecksAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+
+        // Ordered IN MEMORY, and that is not laziness: SQLite cannot ORDER BY a DateTimeOffset, so
+        // this throws NotSupportedException rather than sorting silently. A terminal has one shift
+        // per working period, so the rows are a handful and loading two scalars each is cheaper than
+        // any workaround that would keep the ordering in SQL.
+        var counted = await db.Shifts.AsNoTracking()
+            .Where(shift => !shift.IsActive && shift.CountedCashKopecks != null)
+            .Select(shift => new { shift.EndTime, shift.CountedCashKopecks })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return counted
+            .OrderByDescending(shift => shift.EndTime)
+            .Select(shift => shift.CountedCashKopecks)
+            .FirstOrDefault();
+    }
+
+    public async Task<Shift?> GetLatestShiftAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+
+        // An open shift wins outright, even if a closed one has a later EndTime — which happens the
+        // moment a shift is closed and the next is not yet opened, and in that window the closed one
+        // is exactly the report somebody wants.
+        var active = await db.Shifts.AsNoTracking()
+            .FirstOrDefaultAsync(shift => shift.IsActive, cancellationToken);
+        if (active is not null) return active;
+
+        // See GetLastCountedCashKopecksAsync: no DateTimeOffset ordering in SQLite.
+        var closed = await db.Shifts.AsNoTracking()
+            .Where(shift => !shift.IsActive)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return closed.OrderByDescending(shift => shift.EndTime).FirstOrDefault();
     }
 
     /// <summary>
@@ -166,17 +270,27 @@ public sealed partial class OrderService(
         // the startup bootstrap and GetOrCreateActiveShiftAsync both guarantee an active shift, so
         // this is only reachable through a hand-edited database, and silently discarding a cash
         // count is the one outcome money must never have.
+        //
+        // This is reachable through the UI only by a terminal whose shift was closed and never
+        // reopened; it used to be defended by an invariant that no longer exists, because startup no
+        // longer creates a shift. The refusal stays: a count with nothing to reconcile against would
+        // have to be discarded, and discarding a cash count is the one outcome money must never have.
         if (active is null)
             throw new ConflictException("Нельзя закрыть смену: нет открытой смены.");
 
-        // The expectation, frozen by being read HERE and written to the row below. It can never be
-        // negative: ShiftPayments reads the ledger of THIS shift's own orders (the join filters on
-        // the order's ShiftId, never on a timestamp), and PaymentRecorder.AllocateMirroredSlices
-        // guarantees per-order per-method refunded <= collected — summing that inequality over the
-        // shift's orders gives the same inequality for the shift. So there is no negative-expectation
-        // branch to refuse on, and none is invented here.
-        var payments = await ShiftPayments.ReadAsync(db, active.Id, cancellationToken);
-        var expectedCashKopecks = payments.CashInDrawerKopecks;
+        // The expectation, frozen by being read HERE and written to the row below.
+        //
+        // CashLedger, NOT ShiftPayments: the drawer is the float plus the cash from orders minus the
+        // cash handed back minus what was carried away, and a count taken against the payments alone
+        // would report a shortage of exactly the change that was in the till all day. Read once, in
+        // this context, so the figure written is the figure that was compared against.
+        //
+        // It CAN be negative here, and that is not a bug to guard against: a cash refund taken after
+        // a collection leaves money the drawer no longer holds (see CashLedger for the full case).
+        // The count below cannot be negative, so such a shift closes as an overage with a reason
+        // demanded, which is the correct thing to make a human look at.
+        var ledger = await CashLedger.ReadAsync(db, active.Id, cancellationToken);
+        var expectedCashKopecks = ledger.InDrawerKopecks;
 
         // 0 is a REAL count and is stored as one. An empty drawer against a non-zero expectation is
         // the single most important case this feature has to catch, so the guard is `>= 0` and
@@ -218,51 +332,36 @@ public sealed partial class OrderService(
         active.IsActive = false;
         active.EndTime = now;
 
-        var next = new Shift
-        {
-            Id = Guid.NewGuid(),
-            StartTime = now,
-            IsActive = true,
-            NextOrderNumber = 1
-        };
-        db.Shifts.Add(next);
-
-        // ONE save for the whole close: the four columns, the end of the old shift and the new shift
-        // are a single event, and a half-applied close would leave a shift that is neither open nor
-        // reconciled nor followed by a drawer.
+        // NO NEXT SHIFT IS CREATED HERE, and that is the change this method exists to make. It used
+        // to open one, because a shift had to exist before anybody could sell anything. Now a shift
+        // is opened on purpose with the change recorded against it, so closing leaves the terminal
+        // with NO open shift — which is the state the opening screen is for, and the state in which
+        // the operator is asked to count the change they are about to put in.
+        //
+        // The old behaviour had a second, quieter cost: the new shift opened with a drawer figure of
+        // zero while the physical drawer still held yesterday's change. Every report for the rest of
+        // that shift understated it by exactly that amount.
+        //
+        // ONE save for the whole close: the four columns and the end of the shift are a single event,
+        // and a half-applied close would leave a shift that is neither open nor reconciled.
         await db.SaveChangesAsync(cancellationToken);
 
         // The structured log is the other audit trail, and this codebase uses it deliberately: a
         // future migration can rewrite a column, it cannot rewrite a log line.
         logger.LogInformation(
-            "Shift {PreviousShiftId} closed: counted {Counted} ₽ against {Expected} ₽ expected ({Difference}), reason: {Reason}. New shift {ShiftId}",
+            "Shift {PreviousShiftId} closed: counted {Counted} ₽ against {Expected} ₽ expected (float {Float} ₽, collected {Payout} ₿) ({Difference}), reason: {Reason}",
             active.Id,
             Money.FromKopecks(countedCashKopecks),
             Money.FromKopecks(expectedCashKopecks),
+            Money.FromKopecks(ledger.FloatKopecks),
+            Money.FromKopecks(ledger.PayoutKopecks),
             discrepancyKopecks switch
             {
                 0 => "без расхождения",
                 < 0 => $"не хватает {TextFormat.Money(Money.FromKopecks(-discrepancyKopecks))}",
                 _ => $"излишек {TextFormat.Money(Money.FromKopecks(discrepancyKopecks))}"
             },
-            reason ?? "—",
-            next.Id);
-        return next;
-    }
-
-    private async Task<Shift> GetActiveShiftAsync(AppDbContext db, CancellationToken cancellationToken)
-    {
-        var shift = await db.Shifts.FirstOrDefaultAsync(current => current.IsActive, cancellationToken);
-        if (shift is not null) return shift;
-
-        shift = new Shift
-        {
-            Id = Guid.NewGuid(),
-            StartTime = timeProvider.GetUtcNow(),
-            IsActive = true,
-            NextOrderNumber = 1
-        };
-        db.Shifts.Add(shift);
-        return shift;
+            reason ?? "—");
+        return active;
     }
 }
