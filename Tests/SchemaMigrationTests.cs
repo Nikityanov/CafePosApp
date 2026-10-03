@@ -33,7 +33,7 @@ public class SchemaMigrationTests
         Assert.Equal(migrator.LatestVersion, result.FinalVersion);
         // Pinned on purpose: when the next migration lands this line is the reminder that the
         // expectations above it are no longer enough.
-        Assert.Equal(8, result.FinalVersion);
+        Assert.Equal(9, result.FinalVersion);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class SchemaMigrationTests
 
         Assert.False(result.FreshDatabase);
         Assert.Equal(migrator.LatestVersion, result.FinalVersion);
-        Assert.Equal(7, result.AppliedMigrations.Count); // 2, 3, 4, 5, 6, 7, 8
+        Assert.Equal(8, result.AppliedMigrations.Count); // 2, 3, 4, 5, 6, 7, 8, 9
 
         // Money became integer kopecks; totals were recalculated from the order items.
         await using var connection = new SqliteConnection($"Data Source={host.DatabasePath}");

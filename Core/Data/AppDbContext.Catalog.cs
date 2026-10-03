@@ -125,5 +125,26 @@ public partial class AppDbContext
             // converter or a 0 default would erase that distinction — a counted 0 is missing money,
             // while NULL is a shift nobody stood at the till for.
         });
+
+        modelBuilder.Entity<CashMovement>(entity =>
+        {
+            entity.HasKey(movement => movement.Id);
+            // TEXT like OrderPayment.Method, so the ledger is readable straight out of SQLite during
+            // an investigation rather than being a column of ordinals only this build understands.
+            entity.Property(movement => movement.Kind).HasConversion<string>().HasMaxLength(30);
+            // Matches OrderPayment.Note (300) and Shift.CashDiscrepancyReason (300). The reason is
+            // REFUSED rather than truncated when over-long, so this bound is an integrity guarantee
+            // and never a silent cut — see CashLedgerService.
+            entity.Property(movement => movement.Reason).HasMaxLength(300);
+            // Every read of this table is "this shift's movements", both for the balance and for the
+            // list on screen, so the index is on ShiftId alone and not on ShiftId + CreatedAt: the
+            // balance sums without an order and the list orders in memory, and a composite index
+            // would only make the second read pay for a sort the first one does not use.
+            entity.HasIndex(movement => movement.ShiftId);
+            // ReversesMovementId is deliberately NOT a foreign key. A self-reference that SQLite
+            // enforces would mean deleting a movement — which nothing in the app does, but a
+            // hand-edited database could — silently cascade a second deletion or fail the write.
+            // The link is checked in CashLedgerService, where the refusal can be explained.
+        });
     }
 }

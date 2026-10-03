@@ -298,7 +298,13 @@ public partial class ShiftAnalyticsViewModel
             })
             .ToList();
 
-        SectionChips.SyncWith(chips, chip => chip.SectionId);
+        // Keyed on the (id, name) PAIR, not on the id. SectionId is a Guid? because null is a real chip
+        // («Без раздела») rather than "unknown", and SyncWith's TKey is constrained to notnull
+        // (CS8714). The usual shortcut — `SectionId ?? Guid.Empty` — would work and would be wrong in
+        // a way nobody could see: it silently merges «Без раздела» into a section that happens to
+        // have the empty GUID, and the two chips would then swap contents instead of coexisting.
+        // A ValueTuple is a struct, so it satisfies notnull, and null ids compare by the name.
+        SectionChips.SyncWith(chips, chip => (chip.SectionId, chip.Name));
         foreach (var chip in SectionChips) chip.SetShare(ShiftRevenueShare(chip.Revenue));
 
         OnPropertyChanged(nameof(FilterPanelSummary));
@@ -406,19 +412,28 @@ public partial class ShiftAnalyticsViewModel
     /// has to survive the next filter change or sort flip, and a rebuild cannot tell a dish the
     /// reader never touched from one they had opened.
     /// </remarks>
-    private void ToggleDish(ProductAnalyticsDishRow dish)
+    // Every handler below takes its row as NULLABLE and returns on null. IRelayCommand<T> declares
+    // Execute(object? parameter), so null is part of the contract whether or not the page supplies a
+    // CommandParameter: one of these rows losing its binding, or a tap landing before the template is
+    // realised, hands the command a null and the handler used to dereference it straight away. The
+    // compiler said so four times (CS8622) and the argument for leaving it was that the current XAML
+    // always passes a parameter — which is a property of a file, not of a type. `is not { } row`
+    // reads "and does nothing without a row", which is what a filter chip should do.
+    private void ToggleDish(ProductAnalyticsDishRow? dish)
     {
-        dish.IsExpanded = !dish.IsExpanded;
-        if (dish.IsExpanded) foldedDishes.Remove(dish.Name);
-        else foldedDishes.Add(dish.Name);
+        if (dish is not { } row) return;
+        row.IsExpanded = !row.IsExpanded;
+        if (row.IsExpanded) foldedDishes.Remove(row.Name);
+        else foldedDishes.Add(row.Name);
     }
 
-    private void ToggleSectionChip(ProductAnalyticsSectionChip chip)
+    private void ToggleSectionChip(ProductAnalyticsSectionChip? chip)
     {
+        if (chip is not { } row) return;
         // The «Все» behaviour is expressed by REMOVING every id rather than by adding a sentinel,
         // because the filter treats an empty set as "no section filter" — one meaning, one place.
-        if (selectedSections.Contains(chip.SectionId)) selectedSections.Remove(chip.SectionId);
-        else selectedSections.Add(chip.SectionId);
+        if (selectedSections.Contains(row.SectionId)) selectedSections.Remove(row.SectionId);
+        else selectedSections.Add(row.SectionId);
 
         foreach (var candidate in SectionChips) candidate.IsSelected = selectedSections.Contains(candidate.SectionId);
 
@@ -427,12 +442,13 @@ public partial class ShiftAnalyticsViewModel
         OnPropertyChanged(nameof(FilterPanelHint));
     }
 
-    private void SelectSort(ProductAnalyticsSortOption option)
+    private void SelectSort(ProductAnalyticsSortOption? option)
     {
+        if (option is not { } row) return;
         // Re-picking the criterion already in force REVERSES it. The alternative — a separate
         // direction control the user has to find — is one more control for the same decision, and
         // «sort by quantity» twice reading as a no-op would be worse than either.
-        if (sortCriterion == option.Criterion)
+        if (sortCriterion == row.Criterion)
         {
             sortDirection = sortDirection == ProductAnalyticsSortDirection.Descending
                 ? ProductAnalyticsSortDirection.Ascending
@@ -440,7 +456,7 @@ public partial class ShiftAnalyticsViewModel
         }
         else
         {
-            sortCriterion = option.Criterion;
+            sortCriterion = row.Criterion;
             // Money and names both read naturally largest-first; quantity does too. Every criterion
             // therefore starts DESCENDING, so switching criterion is a change of WHAT is ordered and
             // never silently flips the direction the reader already chose.
@@ -470,9 +486,10 @@ public partial class ShiftAnalyticsViewModel
         OnPropertyChanged(nameof(SortDirectionHint));
     }
 
-    private void SelectGrouping(ProductAnalyticsGroupingOption option)
+    private void SelectGrouping(ProductAnalyticsGroupingOption? option)
     {
-        grouping = option.Grouping;
+        if (option is not { } row) return;
+        grouping = row.Grouping;
         foreach (var candidate in GroupingOptions) candidate.IsSelected = candidate.Grouping == grouping;
 
         // A grouping change swaps one tree for another, and the dishes by name carry over: a dish the

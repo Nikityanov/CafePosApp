@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  THE RUSSIAN TITLE OF THE TAB-BAR OVERFLOW TAB.
+
+  A TabBar holding more than five items cannot show them all: MAUI's Android tab bar moves the rest
+  into a built-in overflow tab, and that tab's title came out of Microsoft.Maui.Controls' own
+  res/values/strings.xml as the literal " More ". It is not a Shell property, not a ShellContent
+  Title, and nothing in AppShell.xaml.cs can set it. What MAUI reads is the ANDROID string resource
+  `overflow_tab_title` from the app's own resources, so an app-level resource of that name replaces
+  the library's — the same override mechanism styles.xml in this folder uses to redefine
+  Maui.SplashTheme, and Android's normal rule that the app's value wins over a library's.
+
+  «Ещё» is the ordinary Russian for "more", and it is the word a Russian Android device already
+  uses for its own system tab overflow, so the operator reads the same word here as in the OS.
+
+  WHY THE SHELL IS NOT RESTRUCTURED INSTEAD
+  ==========================================
+  Six tabs with a Russian overflow title leaves every section one tap away and does not touch the
+  navigation tree at all, so nothing about LeaveOpenShiftAsync can regress. Every structural
+  alternative costs something that matters more:
+
+    · Three tabs, the other three sections in a FLYOUT. The flyout's hamburger is drawn in the Shell
+      nav bar, and every top-level page in this app hides that bar (Shell.NavBarIsVisible="False" on
+      MenuPage, OrdersPage, ShiftReportPage, ShiftAnalyticsPage, CatalogManagementPage, SettingsPage
+      and OpenShiftPage). The drawer would have no visible opener anywhere, and the only way in would
+      be an undocumented swipe from the screen edge.
+
+    · Four tabs plus a HUB page listing the other three. The six sections still have to exist as
+      ShellContent routes whatever happens to the tab bar, because ShiftReportViewModel opens the
+      analytics report with GoToTabAsync("shift-analytics") (NavigationService turns it into
+      "///shift-analytics") and NavigationService.LeaveOpenShiftAsync leaves the opening screen with
+      GoToAsync("..") followed by "///menu". A hub would put three rows behind two taps and add a
+      page plus a DI registration to get there.
+
+    · SHORTER TITLES. The overflow tab appears because of how many items there are, not how wide
+      their titles measure. No spelling of «Меню» removes it.
+
+  PLATFORM SCOPE. This resource exists only in MAUI's Android build (verified: the string
+  `overflow_tab_title` is present in Microsoft.Maui.Controls' net*-android assembly and in neither
+  the iOS nor the Windows one). On iOS the overflow tab belongs to the OS, which labels it in the
+  device language. On Windows nothing here applies; whether that build shows an overflow tab at all
+  was not checked.
+-->
+<resources>
+    <string name="overflow_tab_title">Ещё</string>
+</resources>

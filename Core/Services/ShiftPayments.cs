@@ -20,6 +20,10 @@ namespace CafePos.Core.Services;
 /// taken during the next shift still belongs to the drawer the money left. Booking it into the new
 /// shift would be the lie — the new drawer never held the cash.
 /// </para>
+/// <para>
+/// WHAT THIS IS NOT: the drawer. It never was, once a till can be opened with change in it, and
+/// <see cref="CashLedger"/> is where that figure lives.
+/// </para>
 /// </summary>
 internal static class ShiftPayments
 {
@@ -63,17 +67,25 @@ internal static class ShiftPayments
         long RefundsCardKopecks)
     {
         /// <summary>
-        /// What is physically in the drawer: taken in cash, minus cash handed back.
+        /// Cash taken in, less cash handed back — the payments side of the drawer figure ONLY.
         /// <para>
-        /// NEVER NEGATIVE, and that is a guarantee rather than an observation. The join above takes
-        /// this shift's payments and this shift's refunds from the shift's OWN orders, so the
-        /// per-order per-method inequality <c>refunded &lt;= collected</c> that
+        /// It is NOT the drawer, and it no longer offers one. It was, until the opening float and
+        /// collection existed, and the difference is the whole reason <see cref="CashLedger"/>
+        /// exists: this pair of numbers is right for a till opened empty and never emptied, and wrong
+        /// the moment anybody puts change in or carries cash out. Anything a human will read comes
+        /// from <see cref="CashLedger.Totals.InDrawerKopecks"/>.
+        /// </para>
+        /// <para>
+        /// What this pair CAN guarantee is non-negativity. The join above takes this shift's payments
+        /// and this shift's refunds from the shift's OWN orders, so the per-order per-method
+        /// inequality <c>refunded &lt;= collected</c> that
         /// <c>PaymentRecorder.AllocateMirroredSlices</c> guarantees sums to the same inequality for
         /// the shift. A refund pressed during a later shift on an order belonging to this one is
         /// still this shift's refund — that is the attribution the join performs — so it lowers the
-        /// figure exactly as much as it raised it, and never below zero.
+        /// figure exactly as much as it raised it, and never below zero. The drawer as a whole has
+        /// no such guarantee; see <see cref="CashLedger"/>.
         /// </para>
         /// </summary>
-        public long CashInDrawerKopecks => CashKopecks - RefundsCashKopecks;
+        public long PaymentsOnlyKopecks => CashKopecks - RefundsCashKopecks;
     }
 }

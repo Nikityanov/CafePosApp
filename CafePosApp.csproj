@@ -12,6 +12,37 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 
+		<!--
+		  XamlC and the `Path=BindingContext.*` idiom.
+
+		  The app binds a row's control to a command that lives on the PAGE's ViewModel, which means
+		  Source={x:Reference SomePageRoot} Path=BindingContext.SomeCommand. The alternative,
+		  RelativeSource AncestorType={vm:SomeViewModel}, makes the XAML runtime try to INSTANTIATE that
+		  ViewModel and throws XamlParseException on every DI type without a parameterless constructor —
+		  which is all of them. So this idiom is not laziness, it is the only one that runs; see §2.2 and
+		  §9.2 of BUGS-cash-register.md, and it is used 39 times across 7 pages.
+
+		  Those 39 bindings raised XC0045 on every build, and the number is not reducible by changing the
+		  idiom: BindableObject.BindingContext is typed `object`, so the SECOND segment of the path can
+	  never be resolved statically, and adding an inline x:DataType only moves the complaint to
+		  `Property "X" not found on "System.Object"`. Verified against Microsoft.Maui.Controls 10.0.101
+		  in a throw-away project: `Path=BindingContext.*` is structurally non-compilable.
+
+		  What is actually being given up is narrow. XC0045 does NOT check the second segment: rename
+		  SomeCommand on the ViewModel and you get the same 39 warnings plus a silently dead button, so
+		  XC0045 carries no information about the path by construction. What it does check is the SOURCE
+		  TYPE, and that is the one thing that now goes quiet — a binding whose Source type is wrong
+	  becomes silent. Hence WarningsAsErrors below: everything XamlC genuinely can check becomes a
+		  build error, so the suppression is narrow by construction and not by agreement.
+
+		  XC0022 is deliberately NOT suppressed. All six are Picker.ItemDisplayBinding, which has no
+		  x:DataType scope to be given, and each was checked by hand against its source type. Those six
+	  are the only diagnostics left on six bindings nothing can verify — six lines of noise is the
+		  price of keeping them.
+		-->
+		<NoWarn>$(NoWarn);XC0045</NoWarn>
+		<WarningsAsErrors>$(WarningsAsErrors);XC0023;XC0024;XC0025</WarningsAsErrors>
+
 		<!-- Display name -->
 		<ApplicationTitle>CafePosApp</ApplicationTitle>
 

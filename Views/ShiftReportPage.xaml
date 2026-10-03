@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.ShiftReportPage" x:DataType="vm:ShiftReportViewModel" Title="Смена"
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.ShiftReportPage"
+             x:Name="ShiftReportPageRoot" x:DataType="vm:ShiftReportViewModel" Title="Смена"
              Shell.NavBarIsVisible="False">
     <!-- ═══════════════════════════════════════════════════════════════════════════════════════
          THE WHOLE PAGE SCROLLS. The owner's decision, and it is settled — read this before
@@ -27,23 +28,50 @@
          Do not remove this ScrollView a third time without knowing the verdict above.
          ═══════════════════════════════════════════════════════════════════════════════════════ -->
     <ScrollView>
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
             <!-- No toolbar row. «Обновить» is gone by the owner's decision, and it was the only
              thing this row held — it duplicated leaving and re-entering the page. Nothing is
              lost by removing it: this page has no polling, and OnAppearing reloads, so
-             navigating away and back is a complete manual reload. The row indices below shift
-             up by one and the summary card becomes the first row. The Shell nav bar is hidden
+             navigating away and back is a complete manual reload. The Shell nav bar is hidden
              here too (Shell.NavBarIsVisible on this page): it repeated the "Смена" tab label,
-             and the tab bar is what names the section. -->
-        <!-- Static value, so an AppThemeBinding on the attribute is the whole fix and needs no ViewModel
+             and the tab bar is what names the section. Which is also why the page now carries a
+             heading of its own — hiding the nav bar took the last line that said where the
+             operator was, and nothing replaced it. -->
+            <!-- ═══════════════════════════════════════════════════════════════════════════
+                 WHICH SHIFT THIS IS, AND SINCE WHEN.
+
+                 The page used to open straight onto the summary card, so the figures at the top
+                 belonged to a shift nobody could identify: a report read at the end of one shift
+                 and one read at the start of the next were the same screen. A drawer total is
+                 only meaningful against the shift it was counted for.
+
+                 «Смена открыта 03.10.2026 11:22» is ShiftReportViewModel.StartTimeText — a
+                 property that ALREADY existed and was bound NOWHERE on the page, even though
+                 LoadAsync raises it on both paths. So this heading needed no ViewModel change at
+                 all: the property was already there, formatted, already doing the ToLocalTime()
+                 that Shift.StartTime requires of it (it is UTC, migration 3 — the same trap
+                 OrderRowViewModel.CreatedAtText documents for order times).
+
+                 The period has a start and no end, and that is not an omission: this page's route
+                 carries no shift id and it rebinds to whatever shift is open, so it can only ever
+                 show the OPEN one. The «Завершённая · 03.10.2026 11:22 – 11:43» half of the
+                 analytics page's shift label belongs to a page that can read a closed shift.
+                 With no shift open the text is empty and only the heading shows, which is the
+                 honest thing to say: there is no period to report. -->
+            <VerticalStackLayout Grid.Row="0" Spacing="0">
+                <Label Text="Отчёт по смене" Style="{StaticResource PageTitle}" />
+                <Label Text="{Binding StartTimeText}" Style="{StaticResource SecondaryLabel}"
+                       LineBreakMode="WordWrap" />
+            </VerticalStackLayout>
+            <!-- Static value, so an AppThemeBinding on the attribute is the whole fix and needs no ViewModel
                  change. A bare {StaticResource Danger} declared the light token in both themes: this
                  label sits on the page fill (#FAFAFA / #121212), where that is 4.77:1 in light and
                  3.76:1 in dark against the 4.5:1 owed at 14pt. DangerDark #FF9E8E on #121212 is
                  9.40:1. -->
-        <Label Text="{Binding Message}" IsVisible="{Binding HasMessage}"
-                TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
-                LineBreakMode="WordWrap" />
-                <Border Grid.Row="1" Style="{StaticResource CardBorder}">
+            <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}"
+                   TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
+                   LineBreakMode="WordWrap" />
+                <Border Grid.Row="2" Style="{StaticResource CardBorder}">
                     <VerticalStackLayout Spacing="6">
                         <Label Text="{Binding RevenueText, StringFormat='Выручка: {0}'}" FontAttributes="Bold" />
                         <Label Text="{Binding ClosedOrdersCount, StringFormat='Чеков: {0}'}" />
@@ -73,19 +101,229 @@
                         <Label Text="{Binding PaymentsCardText, StringFormat='Принято картой: {0}'}" />
                         <Label Text="{Binding RefundsCashText, StringFormat='Возвращено наличными: {0}'}" />
                         <Label Text="{Binding RefundsCardText, StringFormat='Возвращено картой: {0}'}" />
-    
-                        <!-- The drawer total. 20pt bold against the 14pt components above, because this
-                             is the number somebody physically counts and everything else on the card is
-                             a component of it. Not coloured: the emphasis is size and weight, and the
-                             label already says what the number is, so nothing here depends on colour to
-                             be read. -->
-                        <Label Text="{Binding CashInDrawerText, StringFormat='Итого наличными в кассе: {0}'}"
-                               FontSize="20" FontAttributes="Bold" Margin="0,4,0,0"
-                               SemanticProperties.Description="Итого наличными в кассе: принято наличными минус возвращено наличными" />
+
+                        <!-- The two movements that are not orders. Placed WITH the components of the
+                             total rather than in a section of their own, because the operator's job
+                             here is to check the sum by eye: change in, minus cash carried out, plus
+                             what came through the till, and that has to be readable as one block.
+
+                             Both are NET of corrections, so an uncorrected mistake and a corrected one
+                             show the same figure here — and differ only in the list below, which is
+                             the point: the totals are for reconciling, the list is for investigating. -->
+                        <Label Text="{Binding FloatCashText, StringFormat='Внесено размена: {0}'}" />
+                        <Label Text="{Binding PayoutCashText, StringFormat='Изъято на инкассацию: {0}'}" />
+
+                        <!-- The drawer total. TWO lines, and that is the fix rather than a layout
+                             preference: it used to be one label, «Итого наличными в кассе: {0}» at
+                             20pt bold, and the caption plus the amount do not both fit across a
+                             360dp card — the number the page exists for wrapped onto a second
+                             line under its own words, which is the worst possible break on the
+                             one figure the operator came to read. On a line of its own the amount
+                             has the whole width of the card to itself and simply fits; the
+                             caption, which may wrap harmlessly, gets a whole line too, and its
+                             wrapping no longer moves the number anywhere.
+
+                             The caption is a SectionTitle so the total reads as the card's
+                             conclusion and not as one more component of it: the components above
+                             are 14pt body text under «Деньги», this is what they add up to.
+
+                             Not coloured: the emphasis is size and weight, and the caption above
+                             already says what the number is, so nothing here depends on colour to
+                             be read. The description rides on the VALUE and not on the card —
+                             a container with a contentDescription is announced as a single node
+                             and its children stop being traversed (see ShiftAnalyticsPage), which
+                             would have cost the caption as well. -->
+                        <Label Text="Итого наличными в кассе" Style="{StaticResource SectionTitle}" />
+                        <Label Text="{Binding CashInDrawerText}"
+                               FontSize="20" FontAttributes="Bold"
+                               SemanticProperties.Description="Итого наличными в кассе: внесён размен плюс принято наличными, минус возвращено наличными и изъято на инкассацию" />
                     </VerticalStackLayout>
                 </Border>
-                <Button Grid.Row="2" Text="Анализировать смену" Command="{Binding OpenAnalyticsCommand}" />
-                <Label Grid.Row="3" Text="История заказов смены" Style="{StaticResource SectionTitle}" />
+
+                <!-- THE DRAWER ACTIONS. Two buttons and no more: put change in, take cash out. Both
+                     are reachable only with a shift open, and the layout says so by disappearing
+                     rather than by showing two disabled buttons an operator has to read past.
+                     Correction is not here either — it is per-row, on the movement being corrected,
+                     because "cancel a movement" is meaningless without naming which one.
+
+                     A STACK, not two columns, and the 360dp measurement is why. As
+                     ColumnDefinitions="*,*" each button got about 160dp for its label, and
+                     «Изъять на инкассацию» needs more than that: the device showed «Изъять на» with
+                     the second word cut off by the button's own edge, on the one control here that
+                     moves money OUT of the till. Full width gives both labels the whole content
+                     column instead of half of it, and unlike a re-proportioned Grid ("Auto,*" sized
+                     to its text, "1.3*,*") it does not depend on how the text happens to measure —
+                     a caption that grows with the platform's font scale, a narrower phone or a
+                     longer translation cannot push it back under the edge.
+
+                     THE DANGEROUS ONE LOOKS DANGEROUS. It was the same violet Primary as
+                     «Внести размен» and «Анализировать смену», so carrying cash out of the till
+                     was indistinguishable from putting cash in or from reading a report. It takes
+                     the app's existing DangerButton — the same style «Закрыть смену» wears at the
+                     bottom of this page and the same one the per-movement «Отменить движение» wears
+                     on each row below — so no new colour enters the palette. Money coming IN is
+                     SecondaryButton, the grey tonal every other non-primary action wears, and in
+                     dark theme the two now differ the way they do in light: by the plate. The dark
+                     DangerButton is a pale DangerDark fill with black lettering against the neutral
+                     Gray800 of SecondaryButton, which is the app's one dark-theme rule for an
+                     emphasised action (PrimaryDark + Black on the primary buttons) — see the
+                     measurements on DangerButton in Styles.xaml. It used to be Gray800 + DangerDark
+                     against Gray800 + Gray100: the same grey plate twice, told apart by a tint of the
+                     letters. «Анализировать смену» stays Primary — it is the page's one navigation
+                     action and touches no money at all — so the three read as navigate / safe /
+                     destructive in both themes now. -->
+                <VerticalStackLayout Grid.Row="3" Spacing="8" IsVisible="{Binding HasOpenShift}">
+                    <Button Text="Внести размен" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding AddFloatCommand}"
+                            SemanticProperties.Description="Положить наличные в кассу как размен" />
+                    <Button Text="Изъять на инкассацию" Style="{StaticResource DangerButton}"
+                            Command="{Binding AddPayoutCommand}"
+                            SemanticProperties.Description="Забрать наличные из кассы на инкассацию. На эту сумму уменьшится остаток в кассе." />
+                </VerticalStackLayout>
+
+                <!-- The movement list. Present because a drawer figure with nothing behind it cannot
+                     be investigated: a shortage is one number, and this is what says whether it is a
+                     missed collection, a mistyped amount or change nobody counted in. -->
+                <VerticalStackLayout Grid.Row="4" Spacing="4" IsVisible="{Binding HasOpenShift}">
+                    <Label Text="Движения по кассе" Style="{StaticResource SectionTitle}" />
+                    <!-- LEFT-ALIGNED HERE, NOT IN EmptyLabel. The global style centres every empty
+                         state in the app, and this page's text is left-aligned everywhere else, so a
+                         centred sentence under a heading read as a different design language rather
+                         than as an empty state. The override is LOCAL on purpose: whether the other
+                         empty states want centring is a decision about the app, not a fix to smuggle
+                         in from here, so the shared style is untouched. -->
+                    <Label Text="Движений по кассе не было." Style="{StaticResource EmptyLabel}"
+                           HorizontalTextAlignment="Start"
+                           IsVisible="{Binding HasNoCashMovements}" />
+                    <!-- ROWS ARE CARDS, like the order history below. This list used to be bare text
+                         on the page fill: no border, no fill, Spacing="0". «Размен / +5580.00 ₿ /
+                         11:22» floated under the heading with nothing around it, one row looked like
+                         a paragraph that had been cut off before it started, and two lists drawn two
+                         different ways on one screen read as two different apps.
+                         CardBorder is the very style the history cards use below — same fill, stroke,
+                         radius and padding — and the 4dp bottom Margin is the gap those cards
+                         already use, which is why this stack keeps Spacing="0". A full outline on
+                         every row also reads correctly at ONE row, where a divider between rows
+                         would have had nothing to divide. -->
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding CashMovements}" Spacing="0">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:CashMovementRow">
+                                <!-- ═══════════════════════════════════════════════════════════════
+                                     THE ROW TAP IS GONE.
+
+                                     Every row used to carry a TapGestureRecognizer bound to
+                                     CancelMovementCommand, so a touch anywhere on the row — on the
+                                     title, on the amount, on the empty part of the card — asked
+                                     «Отменить движение?». Nothing on the row said that was there:
+                                     no icon, no label, no pressed state. And the act is not an edit:
+                                     the row stays where it is and a reversing entry appears beside
+                                     it, which is harder to undo than the mistake was to make. Making
+                                     the row a card (§4.1) made it worse — a card is drawn as
+                                     something an operator picks up, and picking this one up
+                                     rewrites the ledger.
+
+                                     An unnamed gesture on a whole row is a bad way to expose an
+                                     irreversible action whatever it is called, so the tap was not
+                                     given a sign and kept: the action is a control with its own name
+                                     on it now, at the bottom of the card. The confirmation dialog is
+                                     untouched — this row is presentation only, and so is the row
+                                     structure: the wrapper VerticalStackLayout that used to sit
+                                     around the Border existed only to host <Grid.GestureRecognizers>
+                                     and is gone with it, which leaves a Border at the root of the
+                                     template, exactly like the order history cards below.
+                                     ═══════════════════════════════════════════════════════════════ -->
+                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
+                                    <!-- NESTED LAYOUTS, not one Grid with ColumnSpan. ColumnSpan is a
+                                         Layout property: putting it on a Label is a XamlParseException at
+                                         the moment the first row is realised, which surfaced as «Не удалось
+                                         загрузить смену» with every figure above it already updated.
+                                         The reason needs the full width and the header needs two columns,
+                                         and a stack of two Grids says that without asking one element to
+                                         have a property it does not have. -->
+                                    <VerticalStackLayout Spacing="2">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <Label Grid.Column="0" Text="{Binding Title}" FontAttributes="Bold" />
+                                            <Label Grid.Column="1" Text="{Binding AmountText}" FontAttributes="Bold" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <Label Grid.Column="0" Text="{Binding TimeText}" Style="{StaticResource Caption}"
+                                                   VerticalTextAlignment="Center" />
+                                            <!-- «отмена» as a pill, so the two kinds of row are told
+                                                 apart by shape and not only by a grey word in the
+                                                 corner. The plain Tag style, NOT TagWarning: a
+                                                 reversed movement is a FACT about the ledger, and
+                                                 an orange pill would claim it is a warning — the
+                                                 word carries the state, the pill only marks it.
+                                                 Same column and same right edge as the amount
+                                                 above, so a pill appearing cannot shift the
+                                                 amount out from under the eye. -->
+                                            <Border Grid.Column="1" Style="{StaticResource Tag}"
+                                                    VerticalOptions="Center"
+                                                    IsVisible="{Binding IsCorrection}">
+                                                <Label Text="отмена" Style="{StaticResource TagText}" />
+                                            </Border>
+                                        </Grid>
+                                        <!-- Wraps through as many lines as it needs: on a 360dp
+                                             card a long reason ran to four, which is exactly why
+                                             it sits on its own line under the header instead of
+                                             inside the two-column grid. -->
+                                        <Label Text="{Binding ReasonText}" Style="{StaticResource Caption}"
+                                               LineBreakMode="WordWrap"
+                                               IsVisible="{Binding ReasonText, Converter={StaticResource IsPresent}}" />
+
+                                        <!-- THE CONTROL THE TAP USED TO HIDE BEHIND.
+                                             FULL WIDTH, because there is nothing to put beside it and a
+                                             half-width button with an empty cell next to it reads as a
+                                             layout accident. «Отменить движение» rather than a bare
+                                             «Отменить»: this page carries three destructive controls —
+                                             this one, «Отмена» on an order, «Закрыть смену» — and the
+                                             label has to say which one is being pressed BEFORE the press.
+                                             DangerButton, the same style «Закрыть смену» wears at the
+                                             bottom of the page, so reversing a ledger entry and
+                                             closing a shift are visibly the same class of act.
+                                             48dp, not the 44 this style inherits: the whole point of
+                                             moving the action out of the row is that it is meant to be
+                                             pressed deliberately.
+
+                                             HIDDEN ON A CORRECTION. CancelMovementAsync refuses those
+                                             outright («Отменить отмену нельзя»), and a control whose
+                                             only possible outcome is a refusal is the thing the order
+                                             void spent its previous life getting rid of — the same
+                                             reasoning CanCancel carries on the history cards below.
+                                             The «отмена» pill already says the row is a correction,
+                                             so nothing is lost by not offering the action.
+
+                                             THE DESCRIPTION NAMES THE ROW AND THE CONSEQUENCE, because a
+                                             button announces itself and nothing else to a screen
+                                             reader. DescribeForConfirmation is the very string the
+                                             confirmation dialog opens with, so what is heard and
+                                             what is then read cannot disagree.
+
+                                             The command comes through the page's own x:Name, never
+                                             RelativeSource AncestorType={vm:ShiftReportViewModel}:
+                                             that form makes the XAML runtime construct the type, and
+                                             this ViewModel comes from DI. -->
+                                        <Button Text="Отменить движение" Style="{StaticResource DangerButton}"
+                                                Margin="0,6,0,0" MinimumHeightRequest="48"
+                                                Command="{Binding Source={x:Reference ShiftReportPageRoot}, Path=BindingContext.CancelMovementCommand}"
+                                                CommandParameter="{Binding .}"
+                                                IsVisible="{Binding IsCorrection, Converter={StaticResource InvertedBoolConverter}}"
+                                                SemanticProperties.Description="{Binding DescribeForConfirmation, StringFormat='Отменить движение: {0}. Запись не изменится — рядом появится корректирующая.'}" />
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+
+                <!-- No shift: the report has nothing to describe, and an empty report of an empty shift
+                     is indistinguishable from a report of a quiet one. -->
+                <VerticalStackLayout Grid.Row="3" Spacing="10" IsVisible="{Binding HasOpenShift, Converter={StaticResource InvertedBoolConverter}}">
+                    <Button Text="Открыть смену" Command="{Binding OpenShiftCommand}" />
+                </VerticalStackLayout>
+
+                <Button Grid.Row="5" Text="Анализировать смену" Command="{Binding OpenAnalyticsCommand}" />
+                <Label Grid.Row="6" Text="История заказов смены" Style="{StaticResource SectionTitle}" />
                 <!-- ShiftHistory, not CompletedOrders: it is GetShiftOrderHistoryAsync's Completed AND
                      Cancelled, so a voided sale shows up AS voided instead of disappearing from the
                      only list a manager reads after the fact.
@@ -96,7 +334,7 @@
                      Spacing 0 because the 4dp between cards is already on each Border.
                      SelectionMode="None" went with it — a BindableLayout has no selection
                      to disable, and it was already the default for these rows. -->
-                <VerticalStackLayout Grid.Row="4" BindableLayout.ItemsSource="{Binding ShiftHistory}" Spacing="0">
+                <VerticalStackLayout Grid.Row="7" BindableLayout.ItemsSource="{Binding ShiftHistory}" Spacing="0">
                     <BindableLayout.ItemTemplate>
                         <DataTemplate x:DataType="vm:OrderRowViewModel">
                             <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
@@ -175,18 +413,23 @@
                      gets its own row so it costs nothing while the list has content — and while
                      it does, the collapsed row costs only the 10dp RowSpacing, which on a page
                      that scrolls is not a measurement that matters. -->
-                <Label Grid.Row="5" Text="Закрытых заказов пока нет." Style="{StaticResource EmptyLabel}"
+                <!-- Left-aligned for the same reason as «Движений по кассе не было.» above, and by
+                     the same local override: EmptyLabel centres every empty state in the app, this
+                     page aligns its text to the left everywhere else, and the shared style is not
+                     this page's to change. -->
+                <Label Grid.Row="8" Text="Закрытых заказов пока нет." Style="{StaticResource EmptyLabel}"
+                       HorizontalTextAlignment="Start"
                        IsVisible="{Binding HasNoShiftHistory}" />
                 <!-- No reconciliation block on THIS page, and that is a decision rather than an
-                     omission: the page rebinds to the newly created shift after a close and its route
+                     omission: the page rebinds to whichever shift is open and its route
                      carries no shift id, so it can only ever display the open shift — which by
                      definition has no count. A block here would have been permanently invisible, and
                      the analytics page is the one screen that can read a closed shift.
                      The description carries the one thing the operator must know before pressing it:
                      the count is asked for and the shift does not close without one. -->
-                <Button Grid.Row="6" Text="Закрыть смену и открыть новую" Style="{StaticResource DangerButton}"
+                <Button Grid.Row="9" Text="Закрыть смену" Style="{StaticResource DangerButton}"
                         Command="{Binding CloseShiftCommand}"
-                        SemanticProperties.Description="Закрыть смену и открыть новую. Будет запрошен пересчёт наличных в кассе; без него смена не закроется." />
+                        SemanticProperties.Description="Закрыть смену и пересчитать кассу. Будет запрошена сумма, и без неё смена не закроется." />
         </Grid>
     </ScrollView>
 </ContentPage>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:CafePosApp.ViewModels"
+             x:Class="CafePosApp.Views.OpenShiftPage"
+             x:DataType="vm:OpenShiftViewModel"
+             Title="Открыть смену"
+             Shell.NavBarIsVisible="False">
+    <!-- THE SCREEN A TERMINAL WITH NO SHIFT HAS NOWHERE ELSE TO GO.
+         Shell.OnNavigating refuses every other destination while no shift is open, so this page is
+         not a dialog the operator can dismiss — the tab bar is not reachable from here, and the only
+         way out is to open a shift. That is the decision: a till that has never been given its change
+         cannot be used to sell, and an operator who cannot reach the menu until they have counted the
+         drawer is an operator who cannot sell into an undeclared drawer.
+
+         NavBarIsVisible is False for the same reason every other page does it: the tab bar already
+         names the section, and a second heading repeated it. Here there is no tab bar either, which is
+         why this page carries its own title. -->
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16">
+            <Label Text="Смена не открыта" FontSize="24" FontAttributes="Bold" />
+            <Label Text="Внесите размен — деньги, которыми будут разменивать купюры. В конце смены вы пересчитаете кассу, и приложение сравнит её с этой суммой."
+                   Style="{StaticResource Caption}" />
+
+            <Border Style="{StaticResource CardBorder}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Размен в кассе" Style="{StaticResource Caption}" />
+                    <Entry Text="{Binding AmountText}" Placeholder="0" Keyboard="Numeric" />
+
+                    <!-- The suggestion is shown, not applied silently: a number the operator did not
+                         write has to be visibly a number somebody else did. -->
+                    <Label Text="{Binding SuggestedText, StringFormat='Подсказка: столько было в кассе при закрытии прошлой смены ({0})'}"
+                           IsVisible="{Binding HasSuggestion}"
+                           Style="{StaticResource Caption}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Button Text="Открыть смену" Command="{Binding OpenCommand}" IsEnabled="{Binding CanSubmit}" />
+
+            <!-- Zero is a real value here, not an absent one: a café whose change belongs to the owner
+                 opens with 0. Saying so out loud stops it reading as "I forgot to fill this in". -->
+            <Label Text="Можно открыть смену с нулём, если размен в кассе не нужен."
+                   Style="{StaticResource EmptyLabel}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

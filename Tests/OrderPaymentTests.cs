@@ -82,6 +82,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
@@ -108,6 +109,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product);
@@ -124,6 +126,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
@@ -147,6 +150,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
@@ -173,6 +177,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
@@ -189,6 +194,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
@@ -208,6 +214,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
@@ -224,6 +231,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
@@ -238,6 +246,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
@@ -271,6 +280,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
@@ -336,6 +346,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
@@ -374,9 +385,10 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
-        var shiftId = (await orders.GetOrCreateActiveShiftAsync()).Id;
+        var shiftId = (await orders.GetActiveShiftAsync())!.Id;
 
         // 100 ₽ cash + 120 ₽ card: two tills, so the refund has to mirror both.
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product);
@@ -434,6 +446,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
@@ -461,6 +474,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
@@ -518,9 +532,10 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
-        var shiftId = (await orders.GetOrCreateActiveShiftAsync()).Id;
+        var shiftId = (await orders.GetActiveShiftAsync())!.Id;
 
         var order = await CheckoutAsync(host.Get<ICheckoutService>(), product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
         await CompleteAsync(orders, order.Id);
@@ -551,6 +566,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
@@ -579,27 +595,30 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
         var order = await CheckoutAsync(checkout, product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
-        var shiftId = (await orders.GetOrCreateActiveShiftAsync()).Id;
+        var shiftId = (await orders.GetActiveShiftAsync())!.Id;
         await CompleteAsync(orders, order.Id);
 
         // The count is the mandatory part of a close now: 220 ₽ was taken in cash and the drawer is
         // counted as holding exactly that, so the close needs no reason.
         var next = await orders.CloseShiftAsync(LatteKopecks, null);
-        Assert.NotEqual(shiftId, next.Id);
+        Assert.Equal(shiftId, next.Id);
 
         await orders.RefundAsync(order.Id, 120m, "вернули после смены");
 
-        // The old shift's drawer line reflects the money that left it; the new shift never saw it.
+        // The old shift's drawer line reflects the money that left it. Nothing was opened after the
+        // close, so there is no second shift for the refund to have wrongly landed in — and that is
+        // exactly what used to be asserted here, against the shift the close used to open itself.
         var closed = await orders.GetShiftStatsAsync(shiftId);
         Assert.Equal(LattePrice, closed.PaymentsCash);
         Assert.Equal(120m, closed.RefundsCash);
         Assert.Equal(LattePrice - 120m, closed.PaymentsCash - closed.RefundsCash);
-        Assert.Equal(0m, (await orders.GetShiftStatsAsync(next.Id)).RefundsCash);
+        Assert.Null(await orders.GetActiveShiftAsync());
     }
 
     /// <summary>A fully refunded order still closes out — refunding does not leave an order open.</summary>
@@ -608,6 +627,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
@@ -621,7 +641,11 @@ public class OrderPaymentTests
 
         var next = await orders.CloseShiftAsync(0, "всё вернули, касса пуста");
 
-        Assert.True(next.IsActive);
+        // Closing leaves the terminal with NO open shift, which is a normal state now — it is what
+        // the opening screen is for. The point of this test is the close itself: a fully refunded
+        // Completed order must not hold it open.
+        Assert.False(next.IsActive);
+        Assert.Null(await orders.GetActiveShiftAsync());
     }
 
     /// <summary>
@@ -634,6 +658,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var (product, milk) = await SeedLatteWithMilkAsync(host.Get<ICatalogService>());
@@ -662,6 +687,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var (product, milk) = await SeedLatteWithMilkAsync(host.Get<ICatalogService>());
@@ -688,6 +714,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
@@ -717,6 +744,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var catalog = host.Get<ICatalogService>();
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
@@ -749,6 +777,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var (product, milk) = await SeedLatteWithMilkAsync(host.Get<ICatalogService>());
@@ -799,6 +828,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var (product, milk) = await SeedLatteWithMilkAsync(host.Get<ICatalogService>());
@@ -858,6 +888,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var catalog = host.Get<ICatalogService>();
         var checkout = host.Get<ICheckoutService>();
         var (product, milk) = await SeedLatteWithMilkAsync(catalog);
@@ -880,10 +911,11 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
-        var shiftId = (await orders.GetOrCreateActiveShiftAsync()).Id;
+        var shiftId = (await orders.GetActiveShiftAsync())!.Id;
 
         var kept = await CheckoutAsync(checkout, product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
         await CompleteAsync(orders, kept.Id);
@@ -905,6 +937,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
 
@@ -926,6 +959,7 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
@@ -933,7 +967,7 @@ public class OrderPaymentTests
         await CheckoutAsync(checkout, product, new PaymentIntent(LattePrice, PaymentMethod.Cash));
         await CheckoutAsync(checkout, product, new PaymentIntent(100m, PaymentMethod.Cash));
         await CheckoutAsync(checkout, product, new PaymentIntent(50m, PaymentMethod.Card));
-        var shiftId = (await orders.GetOrCreateActiveShiftAsync()).Id;
+        var shiftId = (await orders.GetActiveShiftAsync())!.Id;
 
         var stats = await orders.GetShiftStatsAsync(shiftId);
         Assert.Equal(3, stats.PaymentsCount);
@@ -966,10 +1000,11 @@ public class OrderPaymentTests
     {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
         var checkout = host.Get<ICheckoutService>();
         var orders = host.Get<IOrderService>();
         var product = await SeedLatteAsync(host.Get<ICatalogService>());
-        var shiftId = (await orders.GetOrCreateActiveShiftAsync()).Id;
+        var shiftId = (await orders.GetActiveShiftAsync())!.Id;
 
         // Fully cash, finished: 220 in the drawer, later 70 of it handed back.
         var cash = await CheckoutAsync(checkout, product, new PaymentIntent(LattePrice, PaymentMethod.Cash));

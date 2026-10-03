@@ -96,7 +96,17 @@
                                  being traversed, so putting it on the card would cost a screen reader
                                  both labels to explain one number. -->
                             <Label Text="{Binding CashInDrawerText}" FontSize="18" FontAttributes="Bold"
-                                   SemanticProperties.Description="Наличные в кассе: принято наличными минус возвращено наличными" />
+                                   SemanticProperties.Description="Наличные в кассе: внесён размен плюс принято наличными, минус возвращено наличными и изъято на инкассацию" />
+
+                            <!-- The two terms of that total that are not orders, under it. A manager
+                                 reading this card for a CLOSED shift has no other screen that can
+                                 tell them whether a shortage was change nobody put in or a
+                                 collection nobody recorded, and the answer decides what they go and
+                                 look for. -->
+                            <Label Text="{Binding FloatCashText, StringFormat='Размен: {0}'}"
+                                   Style="{StaticResource SecondaryLabel}" FontSize="12" />
+                            <Label Text="{Binding PayoutCashText, StringFormat='Изъято: {0}'}"
+                                   Style="{StaticResource SecondaryLabel}" FontSize="12" />
                         </VerticalStackLayout>
                     </Border>
                     <Border Grid.Row="4" Grid.Column="1" Style="{StaticResource CardBorder}">

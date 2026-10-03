@@ -31,6 +31,8 @@ public static class CoreServiceCollectionExtensions
         services.AddSingleton<IOrderService, OrderService>();
         services.AddSingleton<ICheckoutService, CheckoutService>();
         services.AddSingleton<IInventoryService, InventoryService>();
+        services.AddSingleton<ICashLedgerService, CashLedgerService>();
+        services.AddSingleton<IShiftSession, ShiftSession>();
         services.AddSingleton<IDraftOrderService, DraftOrderService>();
         services.AddSingleton<IReportExportService, ReportExportService>();
         services.AddSingleton<IBackupService, BackupService>();

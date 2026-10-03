@@ -57,4 +57,22 @@ public class Shift
     public string? CashDiscrepancyReason { get; set; }
 
     public List<Order> Orders { get; set; } = new();
+
+    /// <summary>
+    /// Cash into and out of this shift's drawer: the opening float, any top-up, any collection, and
+    /// any correcting entry that cancels one of them.
+    /// </summary>
+    /// <remarks>
+    /// This is the FOURTH thing that is not derived from orders, and it is the one that decides
+    /// whether the drawer figure is right. Before it existed, "what is in the drawer" was exactly
+    /// "cash taken minus cash given back", which is true only for a till that was opened empty and
+    /// never had anything taken out of it. A café that puts 500 ₿ of change in at 08:00 and bags
+    /// 3000 ₿ at 15:00 has a drawer that is neither.
+    /// <para>
+    /// Read through the DbSet and folded by <c>CashLedger</c>, never through this collection: a
+    /// shift with a long day behind it carries hundreds of movements, and materialising them onto an
+    /// order-aggregating entity is how a shift load turns into a page of cartesian work.
+    /// </para>
+    /// </remarks>
+    public List<CashMovement> CashMovements { get; set; } = new();
 }

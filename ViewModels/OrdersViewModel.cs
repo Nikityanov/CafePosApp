@@ -307,6 +307,34 @@ public partial class OrderRowViewModel : ObservableObject
     /// <summary>Timestamps are stored in UTC and rendered in the local time zone.</summary>
     public string CreatedAtText => Model.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
 
+    /// <summary>The order's lines, projected into the display shape.</summary>
+    /// <remarks>
+    /// This is a LINQ iterator, not an <c>INotifyCollectionChanged</c> collection, and
+    /// BindableLayout only listens to INPC. The obvious conclusion — the lines are built
+    /// once and never move again — is wrong here, so read this before "fixing" it.
+    /// <para>
+    /// The row is RE-CREATED on each of the four collection actions BindableLayout
+    /// handles, Move included: it applies every one of them through
+    /// <c>NotifyCollectionChangedEventArgsExtensions.Apply</c>, where <c>Move</c> is a
+    /// <c>removeAt</c> + <c>insert</c> and <c>insert</c> calls <c>CreateItemView</c>. The
+    /// iterator is re-read each time, so the freshness does not depend on the row
+    /// instance surviving a change to the order. A recycling <c>CollectionView</c> would
+    /// be safe for the same reason: a new <c>BindingContext</c> is a new
+    /// <c>ItemsSource</c>, so <c>CreateChildren()</c> runs again.
+    /// </para>
+    /// <para>
+    /// Two things WOULD break it, and both are easy to reach by accident:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>a row instance that outlives a change to the set of lines — that is, any board
+    /// action that alters the order's lines without raising <c>ItemLines</c> and without
+    /// running its own <c>ReloadAsync</c>. Today every such action reloads the board, but
+    /// that is a fact about the CALLERS and is written down nowhere in this property;</item>
+    /// <item>a caller that bypasses <c>SyncWith</c> for this list, since the refresh guards
+    /// — including the one in the <c>Move</c> branch — live inside <c>SyncWith</c> and
+    /// nothing else stands behind them.</item>
+    /// </list>
+    /// </remarks>
     public IEnumerable<OrderItemLine> ItemLines => Model.Items.Select(item => new OrderItemLine(
         $"{item.ProductName}{(string.IsNullOrWhiteSpace(item.SelectedVariantName) ? string.Empty : $" [{item.SelectedVariantName}]")}" +
         $"{(string.IsNullOrWhiteSpace(item.SelectedModifierName) ? string.Empty : $" ({item.SelectedModifierName})")}",

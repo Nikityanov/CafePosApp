@@ -46,7 +46,7 @@ public sealed class CheckoutService(
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-        var shift = await EnsureActiveShiftAsync(db, cancellationToken);
+        var shift = await RequireOpenShiftAsync(db, cancellationToken);
 
         // Validate stock before anything is written, inside the same transaction.
         var plan = await StockPlanner.BuildAsync(db, lines.Select(line => (line.ProductId, line.Quantity)).ToList(), cancellationToken);
@@ -101,21 +101,24 @@ public sealed class CheckoutService(
         return order;
     }
 
-    private async Task<Shift> EnsureActiveShiftAsync(AppDbContext db, CancellationToken cancellationToken)
+    /// <summary>
+    /// The open shift, or a refusal naming the fix.
+    /// </summary>
+    /// <remarks>
+    /// This used to CREATE the shift, so that selling could never fail for want of one. That is now
+    /// a refusal, and the change is the point of the opening screen: a shift created by the first
+    /// sale is a shift whose opening change nobody ever recorded, and the end-of-shift count is then
+    /// compared against a drawer that was never declared to hold anything.
+    /// <para>
+    /// The refusal is thrown from inside the checkout transaction and before stock is validated, so
+    /// the transaction is unwound untouched and no partial order is left behind.
+    /// </para>
+    /// </remarks>
+    private async Task<Shift> RequireOpenShiftAsync(AppDbContext db, CancellationToken cancellationToken)
     {
         var shift = await db.Shifts.FirstOrDefaultAsync(current => current.IsActive, cancellationToken);
-        if (shift is not null) return shift;
-
-        shift = new Shift
-        {
-            Id = Guid.NewGuid(),
-            StartTime = timeProvider.GetUtcNow(),
-            IsActive = true,
-            NextOrderNumber = 1
-        };
-        db.Shifts.Add(shift);
-        await db.SaveChangesAsync(cancellationToken);
-        return shift;
+        return shift ?? throw new ConflictException(
+            "Смена не открыта. Откройте смену и внесите размен, чтобы можно было продавать.");
     }
 
     private static bool IsUniqueConstraintViolation(DbUpdateException exception) =>
