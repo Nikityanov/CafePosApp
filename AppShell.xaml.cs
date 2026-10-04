@@ -50,7 +50,7 @@ namespace CafePosApp
             // and settings are load-bearing, and so is "///menu" as the way OFF the opening screen:
             // NavigationService.LeaveOpenShiftAsync pops ".." and then goes to "///menu", which is
             // what fixes the opening screen staying on the shift tab's stack over a shift that has
-            // just been opened (BUGS-cash-register §2.3). ShiftReportViewModel opens the analytics
+            // just been opened. ShiftReportViewModel opens the analytics
             // report with GoToTabAsync("shift-analytics"), i.e. "///shift-analytics". Each of those
             // sections must therefore keep being a ShellContent reachable from the root, so moving
             // one into a pushed page or behind a hub would break a caller this file cannot see.

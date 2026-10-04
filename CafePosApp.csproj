@@ -19,8 +19,8 @@
 		  Source={x:Reference SomePageRoot} Path=BindingContext.SomeCommand. The alternative,
 		  RelativeSource AncestorType={vm:SomeViewModel}, makes the XAML runtime try to INSTANTIATE that
 		  ViewModel and throws XamlParseException on every DI type without a parameterless constructor —
-		  which is all of them. So this idiom is not laziness, it is the only one that runs; see §2.2 and
-		  §9.2 of BUGS-cash-register.md, and it is used 39 times across 7 pages.
+		  which is all of them. So this idiom is not laziness, it is the only one that runs, and it
+		  is used 39 times across 7 pages.
 
 		  Those 39 bindings raised XC0045 on every build, and the number is not reducible by changing the
 		  idiom: BindableObject.BindingContext is typed `object`, so the SECOND segment of the path can
