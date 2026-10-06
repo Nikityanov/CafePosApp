@@ -295,16 +295,29 @@ public sealed partial class ProductAnalyticsGroupingOption : ObservableObject
 
 public partial class ShiftAnalyticsViewModel : ObservableObject
 {
-    private readonly IOrderService orders;
+    // Two ports, not the old flat IOrderService. This screen read aggregates and a list of shifts, and
+        // held an interface that also closed the till — a report reconciling a drawer it only ever
+        // displays. The shift list comes from IShiftLedger because that IS a shift question; the
+        // numbers come from IOrderReporting, which is where their definitions live.
+        //
+        // Named `ledger` and `reporting` rather than `shifts`/`reports` because both methods below
+        // declare locals of those names, and a field a local silently shadows is a bug waiting for
+        // someone to add one line to the wrong scope.
+        private readonly IOrderReporting reporting;
+        private readonly IShiftLedger ledger;
     private readonly ILogger<ShiftAnalyticsViewModel> logger;
 
     private double averagePreparationMinutes;
     private double averageCompletionMinutes;
     private CashReconciliation? reconciliation;
 
-    public ShiftAnalyticsViewModel(IOrderService orders, ILogger<ShiftAnalyticsViewModel> logger)
+    public ShiftAnalyticsViewModel(
+        IOrderReporting reporting,
+        IShiftLedger ledger,
+        ILogger<ShiftAnalyticsViewModel> logger)
     {
-        this.orders = orders;
+        this.reporting = reporting;
+        this.ledger = ledger;
         this.logger = logger;
         LoadCommand = new AsyncRelayCommand(LoadAsync, options: AsyncRelayCommandOptions.AllowConcurrentExecutions);
         AnalyzeCommand = new AsyncRelayCommand(AnalyzeAsync);
@@ -785,7 +798,7 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
         try
         {
             var previousId = SelectedShift?.Id;
-            var shifts = await orders.GetShiftsAsync();
+            var shifts = await ledger.GetShiftsAsync();
 
             Shifts.SyncWith(
                 shifts.Select(shift => new ShiftChoice(shift.Id,
@@ -858,7 +871,7 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
 
         try
         {
-            var stats = await orders.GetShiftStatsAsync(SelectedShift.Id);
+            var stats = await reporting.GetShiftStatsAsync(SelectedShift.Id);
             AllOrdersCount = stats.AllOrdersCount;
             CancelledOrdersCount = stats.CancelledCount;
             Revenue = stats.Revenue;
@@ -901,7 +914,7 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
             OnPropertyChanged(nameof(AveragePreparationTime));
             OnPropertyChanged(nameof(AverageCompletionTime));
 
-            ApplyAnalytics(await orders.GetProductAnalyticsAsync(SelectedShift.Id));
+            ApplyAnalytics(await reporting.GetProductAnalyticsAsync(SelectedShift.Id));
 
             Message = string.Empty;
         }

@@ -15,7 +15,7 @@ public sealed class BackupService(
     SchemaMigrator migrator,
     ICatalogService catalog,
     IReportExportService reports,
-    IOrderService orders,
+    IShiftLedger orders,
     TimeProvider timeProvider,
     ILogger<BackupService> logger) : IBackupService
 {

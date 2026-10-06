@@ -26,7 +26,7 @@ namespace CafePosApp.ViewModels;
 /// </para>
 /// </remarks>
 public partial class OpenShiftViewModel(
-    IOrderService orders,
+    IShiftLedger orders,
     IShiftSession session,
     INavigationService navigation,
     IDialogService dialogs) : ObservableObject

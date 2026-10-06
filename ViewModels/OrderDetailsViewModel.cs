@@ -225,7 +225,7 @@ public partial class OrderEditItemViewModel : ObservableObject
 
 public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributable
 {
-    private readonly IOrderService orders;
+    private readonly IOrderOperations orders;
     private readonly ICatalogService catalog;
     private readonly IComboService combos;
     private readonly IComboEditor comboEditor;
@@ -246,7 +246,7 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
     private Order? order;
 
     public OrderDetailsViewModel(
-        IOrderService orders,
+        IOrderOperations orders,
         ICatalogService catalog,
         IComboService combos,
         IComboEditor comboEditor,

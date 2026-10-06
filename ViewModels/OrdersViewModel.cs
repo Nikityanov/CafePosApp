@@ -563,7 +563,7 @@ public sealed record OrderItemLine(string Name, int Quantity);
 
 public partial class OrdersViewModel : ObservableObject
 {
-    private readonly IOrderService orders;
+    private readonly IOrderOperations orders;
     private readonly AppSettings settings;
     private readonly INavigationService navigation;
     private readonly IDialogService dialogs;
@@ -578,7 +578,7 @@ public partial class OrdersViewModel : ObservableObject
     private Task? refreshTask;
 
     public OrdersViewModel(
-        IOrderService orders,
+        IOrderOperations orders,
         AppSettings settings,
         INavigationService navigation,
         IDialogService dialogs,

@@ -36,7 +36,19 @@ public static class CoreServiceCollectionExtensions
 
         services.AddSingleton<ICatalogService, CatalogService>();
         services.AddSingleton<IComboService, ComboService>();
-        services.AddSingleton<IOrderService, OrderService>();
+        // One OrderService registered as the concrete singleton and re-published under each port it
+// satisfies, rather than seven separate registrations that would each try to construct their own.
+// OrderService is a primary-constructor class over one DbContext: sharing the instance is the
+// point, and a scoped DbContext behind seven transient wrappers would be a worse bug than the flat
+// interface was.
+services.AddSingleton<OrderService>();
+services.AddSingleton<IOrderService>(sp => sp.GetRequiredService<OrderService>());
+services.AddSingleton<IOrderOperations>(sp => sp.GetRequiredService<OrderService>());
+services.AddSingleton<IOrderQueries>(sp => sp.GetRequiredService<OrderService>());
+services.AddSingleton<IOrderCommands>(sp => sp.GetRequiredService<OrderService>());
+services.AddSingleton<IOrderPayments>(sp => sp.GetRequiredService<OrderService>());
+services.AddSingleton<IShiftLedger>(sp => sp.GetRequiredService<OrderService>());
+services.AddSingleton<IOrderReporting>(sp => sp.GetRequiredService<OrderService>());
         services.AddSingleton<ICheckoutService, CheckoutService>();
         services.AddSingleton<IInventoryService, InventoryService>();
         services.AddSingleton<IContactDataService, ContactDataService>();
