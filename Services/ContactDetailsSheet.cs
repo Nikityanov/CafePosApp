@@ -63,6 +63,3 @@ public sealed class ContactDetailsSheet : IContactDetailsSheet
         return result.Result;
     }
 }
-
-/// <summary>
-
