@@ -18,6 +18,11 @@ public sealed class DraftOrderService(
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         var draft = await db.DraftOrders.AsNoTracking()
             .Include(order => order.Items)
+            // A bundle's slots, or the restored line prints with nothing under it AND loses its merge
+            // signature: the cart merges on OrderLineKey, which carries the composition. A restored
+            // bundle would then split from the identical bundle the cashier adds next, and the cart
+            // would show the same bundle twice at the same price. See MenuViewModel.RestoreDraftAsync.
+            .ThenInclude(item => item.Components)
             .FirstOrDefaultAsync(order => order.IsActiveCart, cancellationToken);
 
         return draft is null
@@ -122,6 +127,9 @@ public sealed class DraftOrderService(
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         var draft = await db.DraftOrders
             .Include(order => order.Items)
+            // Same reason as LoadActiveCartAsync: without the slots a parked bundle loses its
+            // composition, so it comes back as a different line.
+            .ThenInclude(item => item.Components)
             .FirstOrDefaultAsync(order => order.Id == draftId, cancellationToken)
             ?? throw new EntityNotFoundException("Отложенный чек не найден.");
 
@@ -140,18 +148,61 @@ public sealed class DraftOrderService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// A parked line as the cart reads it. The slots come last and in <c>SortOrder</c>, because the
+    /// merge key is order-sensitive: two bundles whose slots arrived in a different sequence are
+    /// different compositions as far as <c>OrderLineKey</c> is concerned.
+    /// </summary>
     private static CheckoutLine ToLine(DraftOrderItem item) => new(
-        item.ProductId, item.ProductName, item.Price, item.Quantity, item.SelectedModifierName, item.SelectedVariantName);
+        item.ProductId,
+        item.ProductName,
+        item.Price,
+        item.Quantity,
+        item.SelectedModifierName,
+        item.SelectedVariantName,
+        [.. item.Components
+            .OrderBy(component => component.SortOrder)
+            .Select(component => new CheckoutComponent(
+                component.ProductId,
+                component.ProductName,
+                component.QuantityPerUnit,
+                component.UnitPriceKopecks,
+                component.ReferencePriceKopecks))]);
 
-    private DraftOrderItem ToItem(CheckoutLine line, Guid draftId) => new()
+    private DraftOrderItem ToItem(CheckoutLine line, Guid draftId)
     {
-        Id = Guid.NewGuid(),
-        DraftOrderId = draftId,
-        ProductId = line.ProductId,
-        ProductName = line.ProductName,
-        Price = line.Price,
-        Quantity = line.Quantity,
-        SelectedModifierName = line.ModifierName,
-        SelectedVariantName = line.VariantName
-    };
+        var item = new DraftOrderItem
+        {
+            Id = Guid.NewGuid(),
+            DraftOrderId = draftId,
+            ProductId = line.ProductId,
+            ProductName = line.ProductName,
+            Price = line.Price,
+            Quantity = line.Quantity,
+            SelectedModifierName = line.ModifierName,
+            SelectedVariantName = line.VariantName
+        };
+
+        // The slots are what make a bundle restorable AS a bundle. Left out, a parked bundle came back
+        // as a bare line: nothing printed under it, and its merge key no longer matched the identical
+        // bundle the cashier added next, so the cart grew a second copy instead of a quantity of 2.
+        // SortOrder is the slot's index on the cart, which is what CheckoutComponent does not carry.
+        var order = 0;
+        foreach (var component in line.Components ?? [])
+        {
+            item.Components.Add(new DraftOrderItemComponent
+            {
+                Id = Guid.NewGuid(),
+                DraftOrderItemId = item.Id,
+                ProductId = component.ProductId,
+                ProductName = component.ProductName,
+                QuantityPerUnit = component.QuantityPerUnit,
+                UnitPriceKopecks = component.UnitPriceKopecks,
+                ReferencePriceKopecks = component.ReferencePriceKopecks,
+                SortOrder = order++
+            });
+        }
+
+        return item;
+    }
 }
