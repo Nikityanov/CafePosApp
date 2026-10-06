@@ -226,7 +226,7 @@ public partial class OrderDetailsViewModel
                          .OrderBy(component => component.Product?.Name, StringComparer.CurrentCulture)
                          .ThenBy(component => component.ProductId))
             {
-                var sold = SellableDish(slot);
+                var sold = BundlePlan.SellableDish(slot);
                 if (sold is null)
                 {
                     blocked = slot.Product?.Name ?? slot.ProductId.ToString();
@@ -314,26 +314,6 @@ public partial class OrderDetailsViewModel
             Message = UserMessages.Describe(exception, "Не удалось изменить состав комбо");
             haptics.Warn();
         }
-    }
-
-    /// <summary>
-    /// The dish a slot will actually be sold for, or <c>null</c> when neither it nor its substitute is
-    /// available. The same rule the sale-side resolver applies — see ComboService.ResolveSlot.
-    /// </summary>
-    private static (Product Product, string Label)? SellableDish(ComboComponent slot)
-    {
-        static bool Sellable(Product? product) => product is { IsAvailable: true, IsDeleted: false };
-
-        if (Sellable(slot.Product)) return (slot.Product!, slot.Product!.Name);
-
-        if (Sellable(slot.SubstituteProduct))
-        {
-            var substitute = slot.SubstituteProduct!;
-            var replaced = slot.Product?.Name;
-            return (substitute, replaced is null ? substitute.Name : $"{substitute.Name} (замена: {replaced})");
-        }
-
-        return null;
     }
 
     private async Task SaveAsync()

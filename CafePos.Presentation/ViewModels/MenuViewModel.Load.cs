@@ -147,7 +147,7 @@ public partial class MenuViewModel
     /// </summary>
     private static MenuComboViewModel BuildComboTile(Combo template)
     {
-        var plan = DescribeBundle(template);
+        var plan = BundlePlan.Describe(template);
         return new MenuComboViewModel(
             template,
             template.PriceKopecks,
@@ -262,112 +262,6 @@ public partial class MenuViewModel
     // ── Bundles ──────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// A bundle's slots in the shape both consumers need: what the composition sheet may offer, what
-    /// it opens with, and the à la carte reference — or the dish that stops it being sold at all.
-    /// </summary>
-    private sealed record BundlePlan(
-        IReadOnlyList<ComboSlotOption> Options,
-        IReadOnlyList<ComboSlotChoice> Selection,
-        long ReferenceKopecks,
-        string? BlockedDishName);
-
-    /// <summary>
-    /// Reads a catalogue bundle against what is on the shelf right now.
-    /// </summary>
-    /// <remarks>
-    /// The dish each slot offers is what would ACTUALLY be sold for it — its own, or the declared
-    /// substitute when its own has run out. Substitution rather than blocking is what every serious
-    /// vendor does (Simphony substitution groups, D365 product substitutes). The authoritative answer
-    /// is still <see cref="IComboService.ResolveSaleCompositionsAsync"/>, called again on the tap: this
-    /// is what the tile and the sheet are built from, not a second verdict that could disagree.
-    /// <para>
-    /// <b>WHY AN OPTION'S ProductId IS THE SLOT'S DISH AND NOT THE SUBSTITUTE'S.</b>
-    /// <c>ResolveOne</c> matches an incoming component to a catalogue slot by the slot's
-    /// <c>ProductId</c> and refuses anything it cannot match, so a cart carrying the substitute's
-    /// identifier would be refused as "a dish that is no longer part of this bundle". The identifier is
-    /// therefore the slot's; only the label and the two prices describe the substitute. Every vendor
-    /// states this rule; nothing else needs saying about it.
-    /// </para>
-    /// <para>
-    /// <b>THE SUM IS THE À LA CARTE REFERENCE, NOT THE PRICE.</b> The bundle's own price is
-    /// <see cref="Combo.PriceKopecks"/>, read off the template by the caller. This sum is what the
-    /// discount is measured against — it never reaches the customer.
-    /// </para>
-    /// </remarks>
-    private static BundlePlan DescribeBundle(Combo template)
-    {
-        var options = new List<ComboSlotOption>();
-        var selection = new List<ComboSlotChoice>();
-        var reference = 0L;
-
-        // Ordered through ComboComposition, which owns the rule, so the tile's composition line and
-        // this sheet cannot disagree about which dish comes first. ComboComponent carries no SortOrder
-        // and the query behind GetComboAsync applies no ORDER BY, so the collection's own order is
-        // whatever the join produced.
-        foreach (var slot in ComboComposition.CatalogueOrder(template.Components))
-        {
-            var sold = SellableDish(slot);
-            if (sold is null)
-                return new BundlePlan([], [], 0, SoldOutName(slot));
-
-            // Unwrapped explicitly rather than through `sold.Product`: Nullable<ValueTuple<>> exposes no
-            // members, so every read off it has to go through .Value.
-            var (product, label) = sold.Value;
-            var quantity = Math.Max(1, slot.QuantityPerUnit);
-            // The dish's price, not the slot's stored override — see ComboFormViewModel.UnitKopecks.
-            // `reference` below is the «по отдельноcти» figure the discount is quoted from, so a
-            // stored price the operator can no longer see or change must not feed it. This is the
-            // fourth and last of these call sites to agree.
-            var unit = product.PriceKopecks;
-
-            options.Add(new ComboSlotOption(slot.ProductId, label, unit, product.PriceKopecks));
-            selection.Add(new ComboSlotChoice(slot.ProductId, quantity));
-            reference += (long)quantity * unit;
-        }
-
-        return new BundlePlan(options, selection, reference, null);
-    }
-
-    /// <summary>
-    /// The dish a slot will actually be sold for, or <c>null</c> when neither it nor its substitute is
-    /// available — in which case the sale is refused naming the dish.
-    /// </summary>
-    /// <remarks>
-    /// "Sellable" means available AND not soft-deleted, which is the same pair
-    /// <c>ComboService.IsSellable</c> checks: a soft-deleted dish is off the menu while its row — and
-    /// therefore its price — is still there, so treating it as sellable keeps selling something that
-    /// can no longer be printed.
-    /// </remarks>
-    private static (Product Product, string Label)? SellableDish(ComboComponent slot)
-    {
-        if (IsSellable(slot.Product)) return (slot.Product!, slot.Product!.Name);
-
-        if (IsSellable(slot.SubstituteProduct))
-        {
-            var substitute = slot.SubstituteProduct!;
-            var replaced = slot.Product?.Name;
-            // The label says what is being sold AND what it stands in for. A substitution is a
-            // decision the operator never made, and a sheet that silently showed another dish's name
-            // would sell something the cashier never looked at.
-            return (substitute, replaced is null
-                ? substitute.Name
-                : $"{substitute.Name} (замена: {replaced})");
-        }
-
-        return null;
-    }
-
-    private static bool IsSellable(Product? product) => product is { IsAvailable: true, IsDeleted: false };
-
-    /// <summary>
-    /// The dish that blocks a bundle, named. Falls back to the identifier when the product row is gone
-    /// — which a Restrict FK should make impossible from the app and a hand-edited database can still
-    /// produce. An identifier in a refusal is read by nobody, but it is traceable to a catalogue row,
-    /// where "a dish from the bundle" would not be.
-    /// </summary>
-    private static string SoldOutName(ComboComponent slot) => slot.Product?.Name ?? slot.ProductId.ToString();
-
-    /// <summary>
     /// Opens the one composition sheet for a catalogue bundle and puts the result on the cart.
     /// </summary>
     /// <remarks>
@@ -398,7 +292,7 @@ public partial class MenuViewModel
                 return;
             }
 
-            var plan = DescribeBundle(template);
+            var plan = BundlePlan.Describe(template);
             if (plan.BlockedDishName is not null)
             {
                 // Read again rather than trusting the tile: the shelf changed since the last load.
@@ -451,7 +345,7 @@ public partial class MenuViewModel
                 return;
             }
 
-            var plan = DescribeBundle(template);
+            var plan = BundlePlan.Describe(template);
             if (plan.BlockedDishName is not null)
             {
                 Message = $"Комбо «{template.Name}» нельзя продать: нет в наличии: {plan.BlockedDishName}.";

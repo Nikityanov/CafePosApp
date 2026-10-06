@@ -1,9 +1,9 @@
+using CafePos.Core.Common;
 using CafePosApp.Views;
 using CommunityToolkit.Maui;
 using CommunityToolkit.Maui.Extensions;
 using CommunityToolkit.Maui.Views;
 using Microsoft.Maui.Controls.Shapes;
-using Microsoft.Maui.Graphics;
 
 namespace CafePosApp.Services;
 
