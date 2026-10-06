@@ -1,5 +1,10 @@
 namespace CafePosApp.Services;
 
+// The seams the ViewModels take live in CafePos.Presentation, which references only
+// Microsoft.Maui.Graphics — so this file implements interfaces from there, not declares them.
+using CafePosApp.Services;
+using CafePos.Presentation.Services;
+
 public sealed class DialogService : IDialogService
 {
     private static Page? CurrentPage =>
@@ -33,3 +38,4 @@ public sealed class DialogService : IDialogService
         return await page.DisplayActionSheetAsync(title, cancel, null, options);
     }
 }
+

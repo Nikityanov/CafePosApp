@@ -79,25 +79,40 @@
 	</PropertyGroup>
 
 	<!--
-	  CafePos.Core (platform independent, unit tested) and CafePos.Tests live in subfolders of this
-	  project folder, so they must be excluded from the MAUI compile globs.
+	  CafePos.Core (platform independent, unit tested), CafePos.Presentation (the ViewModels, on
+	  plain net10.0) and CafePos.Tests live in subfolders of this project folder, so they must be
+	  excluded from the MAUI compile globs — otherwise their .cs files are compiled TWICE, once here
+	  as part of the app and once in their own assembly, and the XAML would resolve bindings against
+	  whichever type identity the XamlC pass happened to see first.
+
+	  CafePos.Presentation is what made this necessary: moving the ViewModels out means the
+	  tests reference them (see CafePos.Tests.csproj), which they could not do while the only copy
+	  of them lived inside the MAUI project.
 	-->
 	<ItemGroup>
 		<Compile Remove="Core\**" />
 		<Compile Remove="Tests\**" />
+		<Compile Remove="CafePos.Presentation\**" />
 		<None Remove="Core\**" />
 		<None Remove="Tests\**" />
+		<None Remove="CafePos.Presentation\**" />
 		<EmbeddedResource Remove="Core\**" />
 		<EmbeddedResource Remove="Tests\**" />
+		<EmbeddedResource Remove="CafePos.Presentation\**" />
 		<MauiXaml Remove="Core\**" />
 		<MauiXaml Remove="Tests\**" />
+		<MauiXaml Remove="CafePos.Presentation\**" />
 		<MauiAsset Remove="Core\**" />
 		<MauiAsset Remove="Tests\**" />
+		<MauiAsset Remove="CafePos.Presentation\**" />
 		<MauiImage Remove="Core\**" />
 		<MauiImage Remove="Tests\**" />
+		<MauiImage Remove="CafePos.Presentation\**" />
 		<MauiFont Remove="Core\**" />
 		<MauiFont Remove="Tests\**" />
+		<MauiFont Remove="CafePos.Presentation\**" />
 		<ProjectReference Include="Core\CafePos.Core.csproj" />
+		<ProjectReference Include="CafePos.Presentation\CafePos.Presentation.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

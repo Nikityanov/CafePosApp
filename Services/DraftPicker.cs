@@ -5,6 +5,11 @@ using CafePos.Core.Models;
 
 namespace CafePosApp.Services;
 
+// The seams the ViewModels take live in CafePos.Presentation, which references only
+// Microsoft.Maui.Graphics — so this file implements interfaces from there, not declares them.
+using CafePosApp.Services;
+using CafePos.Presentation.Services;
+
 public sealed class DraftPicker : IDraftPicker
 {
     public async Task<Guid?> PickAsync(IReadOnlyList<DraftOrder> drafts, CancellationToken cancellationToken = default)
@@ -20,3 +25,4 @@ public sealed class DraftPicker : IDraftPicker
         return result.Result is { Length: > 0 } value && Guid.TryParse(value, out var id) ? id : null;
     }
 }
+

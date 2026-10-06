@@ -1,7 +1,8 @@
-﻿using CafePos.Core.Data;
+using CafePos.Core.Data;
 using CafePos.Core.Services;
 using CafePosApp.Diagnostics;
 using CafePosApp.Services;
+using CafePos.Presentation.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CafePosApp
@@ -15,7 +16,7 @@ namespace CafePosApp
 
         public App(
             IServiceProvider services,
-            AppSettings settings,
+            IAppSettings settings,
             DatabaseBootstrapper bootstrapper,
             IShiftSession shiftSession,
             INavigationService navigation)

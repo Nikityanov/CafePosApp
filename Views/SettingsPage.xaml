@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:backup="clr-namespace:CafePos.Core.Services;assembly=CafePos.Core" x:Class="CafePosApp.Views.SettingsPage" x:DataType="vm:SettingsViewModel" Title="Настройки"
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePos.Presentation.ViewModels;assembly=CafePos.Presentation" xmlns:backup="clr-namespace:CafePos.Core.Services;assembly=CafePos.Core" x:Class="CafePosApp.Views.SettingsPage" x:DataType="vm:SettingsViewModel" Title="Настройки"
              Shell.NavBarIsVisible="False">
     <ScrollView>
         <VerticalStackLayout Padding="16" Spacing="12">

@@ -1,6 +1,7 @@
 using CafePos.Core.Common;
 using CafePosApp.Diagnostics;
 using CafePosApp.Services;
+using CafePos.Presentation.Services;
 using CommunityToolkit.Maui.Views;
 using Microsoft.Maui.Controls.Xaml;
 

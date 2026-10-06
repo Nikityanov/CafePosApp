@@ -1,6 +1,6 @@
 using CafePos.Core.Data;
 using CafePosApp.Diagnostics;
-using CafePosApp.ViewModels;
+using CafePos.Presentation.ViewModels;
 
 namespace CafePosApp.Views;
 

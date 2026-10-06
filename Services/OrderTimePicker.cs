@@ -7,6 +7,11 @@ using Microsoft.Maui.Graphics;
 
 namespace CafePosApp.Services;
 
+// The seams the ViewModels take live in CafePos.Presentation, which references only
+// Microsoft.Maui.Graphics — so this file implements interfaces from there, not declares them.
+using CafePosApp.Services;
+using CafePos.Presentation.Services;
+
 /// <summary>
 /// Shows the "when" sheet. Same mechanism as <see cref="CatalogActionSheet"/> and
 /// <see cref="PaymentSheet"/> — a toolkit <c>Popup</c> with a dimmed, tappable backdrop and rounded
@@ -43,3 +48,4 @@ public sealed class OrderTimePicker : IOrderTimePicker
         return result.Result;
     }
 }
+

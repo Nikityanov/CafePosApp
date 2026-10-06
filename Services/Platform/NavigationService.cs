@@ -1,5 +1,10 @@
 namespace CafePosApp.Services;
 
+// The seams the ViewModels take live in CafePos.Presentation, which references only
+// Microsoft.Maui.Graphics — so this file implements interfaces from there, not declares them.
+using CafePosApp.Services;
+using CafePos.Presentation.Services;
+
 public sealed class NavigationService : INavigationService
 {
     public Task GoToOrderDetailsAsync(Guid orderId) =>
@@ -30,3 +35,4 @@ public sealed class NavigationService : INavigationService
         await Shell.Current.GoToAsync("///menu");
     }
 }
+

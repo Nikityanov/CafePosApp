@@ -8,6 +8,11 @@ using Microsoft.Maui.Graphics;
 
 namespace CafePosApp.Services;
 
+// The seams the ViewModels take live in CafePos.Presentation, which references only
+// Microsoft.Maui.Graphics — so this file implements interfaces from there, not declares them.
+using CafePosApp.Services;
+using CafePos.Presentation.Services;
+
 /// <summary>
 /// Shows the row overflow menu. Same mechanism as the variant/modifier/draft pickers, so it goes
 /// through the proven popup path rather than a new overlay.
@@ -41,3 +46,4 @@ public sealed class CatalogActionSheet : ICatalogActionSheet
         return result.Result;
     }
 }
+

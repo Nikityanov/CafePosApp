@@ -1,5 +1,10 @@
 namespace CafePosApp.Services;
 
+// The seams the ViewModels take live in CafePos.Presentation, which references only
+// Microsoft.Maui.Graphics — so this file implements interfaces from there, not declares them.
+using CafePosApp.Services;
+using CafePos.Presentation.Services;
+
 public sealed class HapticService : IHapticService
 {
     public void Click()
@@ -32,3 +37,4 @@ public sealed class HapticService : IHapticService
         }
     }
 }
+

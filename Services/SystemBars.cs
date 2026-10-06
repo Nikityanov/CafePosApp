@@ -6,6 +6,11 @@ using CommunityToolkit.Maui.Core.Platform;
 
 namespace CafePosApp.Services;
 
+// The seams the ViewModels take live in CafePos.Presentation, which references only
+// Microsoft.Maui.Graphics — so this file implements interfaces from there, not declares them.
+using CafePosApp.Services;
+using CafePos.Presentation.Services;
+
 /// <summary>
 /// Makes the OS-drawn status bar content — clock, battery, signal — legible against whatever
 /// the app has actually painted behind it.
@@ -95,3 +100,4 @@ public static class SystemBars
 #endif
     }
 }
+

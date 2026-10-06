@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls" x:Class="CafePosApp.Views.OrdersPage" x:DataType="vm:OrdersViewModel" Title="Заказы"
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePos.Presentation.ViewModels;assembly=CafePos.Presentation" xmlns:conv="clr-namespace:CafePosApp.Converters" xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls" x:Class="CafePosApp.Views.OrdersPage" x:DataType="vm:OrdersViewModel" Title="Заказы"
              Shell.NavBarIsVisible="False">
     <ContentPage.Resources>
+        <conv:PathDataToGeometryConverter x:Key="PathDataToGeometry" />
         <DataTemplate x:Key="OrderCardTemplate" x:DataType="vm:OrderRowViewModel">
             <!-- The template root is the card itself again. It used to be a stack wrapping a section
                  heading above the card, because the board was ONE list grouped by a time-derived
@@ -108,7 +109,7 @@
                                         HorizontalOptions="Center" VerticalOptions="Center"
                                         InputTransparent="True" Stroke="Transparent" StrokeThickness="0"
                                         Fill="{Binding PaymentColor}"
-                                        Data="{Binding PaymentGlyph}" />
+                                        Data="{Binding PaymentGlyph, Converter={StaticResource PathDataToGeometry}}" />
                             <Button Style="{StaticResource RowOverflowButton}"
                                     IsVisible="{Binding CanCollectPayment}"
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CollectPaymentCommand}"

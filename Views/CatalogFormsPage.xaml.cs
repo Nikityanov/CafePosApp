@@ -1,7 +1,8 @@
 using CafePosApp.Controls;
 using CafePosApp.Converters;
 using CafePosApp.Services;
-using CafePosApp.ViewModels;
+using CafePos.Presentation.Services;
+using CafePos.Presentation.ViewModels;
 
 namespace CafePosApp.Views;
 

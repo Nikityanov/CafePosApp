@@ -1,8 +1,9 @@
-﻿using Android.App;
+using Android.App;
 using Android.Content.PM;
 using Android.OS;
 using CafePosApp.Diagnostics;
 using CafePosApp.Services;
+using CafePos.Presentation.Services;
 
 namespace CafePosApp
 {

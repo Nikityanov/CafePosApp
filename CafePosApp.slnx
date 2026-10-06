@@ -2,6 +2,9 @@
   <Folder Name="/Core/">
     <Project Path="Core/CafePos.Core.csproj" />
   </Folder>
+  <Folder Name="/Presentation/">
+    <Project Path="CafePos.Presentation/CafePos.Presentation.csproj" />
+  </Folder>
   <Folder Name="/Tests/">
     <Project Path="Tests/CafePos.Tests.csproj" />
   </Folder>

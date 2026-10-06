@@ -8,6 +8,11 @@ using Microsoft.Maui.Graphics;
 
 namespace CafePosApp.Services;
 
+// The seams the ViewModels take live in CafePos.Presentation, which references only
+// Microsoft.Maui.Graphics — so this file implements interfaces from there, not declares them.
+using CafePosApp.Services;
+using CafePos.Presentation.Services;
+
 /// <summary>
 /// Shows the stock disposition of a cancellation. Same toolkit <c>Popup</c> as the payment sheet
 /// and the catalogue action sheet, so the choice is presented by the mechanism the app already
@@ -39,3 +44,4 @@ public sealed class StockDispositionSheet : IStockDispositionSheet
         return result.Result?.Value;
     }
 }
+

@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using CafePos.Core.Data;
 using CafePos.Core.Models;
 using CafePosApp.Diagnostics;
-using CafePosApp.ViewModels;
+using CafePos.Presentation.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CafePosApp.Views;

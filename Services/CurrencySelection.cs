@@ -3,6 +3,11 @@ using Microsoft.Maui.Storage;
 
 namespace CafePosApp.Services;
 
+// The seams the ViewModels take live in CafePos.Presentation, which references only
+// Microsoft.Maui.Graphics — so this file implements interfaces from there, not declares them.
+using CafePosApp.Services;
+using CafePos.Presentation.Services;
+
 /// <summary>
 /// The currency the till is currently displaying, and the one place that persists it.
 /// </summary>
@@ -74,3 +79,4 @@ public static class CurrencySelection
         Currencies.Default = current;
     }
 }
+

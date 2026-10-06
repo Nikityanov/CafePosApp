@@ -55,7 +55,7 @@ internal static class ThemeColors
 }
 
 /// <summary>
-/// Colour for a <see cref="ViewModels.CatalogManagementViewModel.NoticeLevel"/>.
+/// Colour for a <see cref="CafePos.Presentation.ViewModels.CatalogManagementViewModel.NoticeLevel"/>.
 /// </summary>
 /// <remarks>
 /// The catalogue notice label used to hard-wire <c>Danger</c>, so "Скопировано: …" rendered in
@@ -72,7 +72,7 @@ public sealed class NoticeSeverityToColorConverter : IValueConverter
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         value switch
         {
-            ViewModels.CatalogManagementViewModel.NoticeLevel.Success => ThemeColors.Resolve("Success", "SuccessDark"),
+            CafePos.Presentation.ViewModels.CatalogManagementViewModel.NoticeLevel.Success => ThemeColors.Resolve("Success", "SuccessDark"),
             _ => ThemeColors.Resolve("Danger", "DangerDark")
         };
 
@@ -81,7 +81,7 @@ public sealed class NoticeSeverityToColorConverter : IValueConverter
 }
 
 /// <summary>
-/// Leading icon for a <see cref="ViewModels.CatalogManagementViewModel.NoticeLevel"/>:
+/// Leading icon for a <see cref="CafePos.Presentation.ViewModels.CatalogManagementViewModel.NoticeLevel"/>:
 /// a check mark for a success, an exclamation for an error. The pair is what makes the notice
 /// readable without relying on colour.
 /// </summary>
@@ -90,7 +90,7 @@ public sealed class NoticeSeverityToIconConverter : IValueConverter
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         value switch
         {
-            ViewModels.CatalogManagementViewModel.NoticeLevel.Success => SuccessGlyph,
+            CafePos.Presentation.ViewModels.CatalogManagementViewModel.NoticeLevel.Success => SuccessGlyph,
             _ => ErrorGlyph
         };
 

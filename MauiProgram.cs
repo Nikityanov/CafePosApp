@@ -2,7 +2,10 @@ using CafePos.Core.Data;
 using CafePos.Core.DependencyInjection;
 using CafePosApp.Diagnostics;
 using CafePosApp.Services;
-using CafePosApp.ViewModels;
+using CafePos.Presentation;
+using CafePos.Presentation.Services;
+using CafePos.Presentation.ViewModels;
+using CafePosApp.Controls;
 using CafePosApp.Views;
 using CommunityToolkit.Maui;
 using Microsoft.Extensions.Logging;
@@ -61,7 +64,19 @@ namespace CafePosApp
             builder.Services.AddSingleton<IDialogService, DialogService>();
             builder.Services.AddSingleton<IFileService, FileService>();
             builder.Services.AddSingleton<IHapticService, HapticService>();
+            // Settings, the palette and the UI-thread hop: three ports whose implementations are
+            // MAUI calls (Preferences, Application.Current.Resources, MainThread) and which are
+            // therefore registered HERE rather than in Core's AddCoreServices — Core does not know
+            // these types exist.
             builder.Services.AddSingleton<AppSettings>();
+            builder.Services.AddSingleton<IAppSettings>(sp => sp.GetRequiredService<AppSettings>());
+            builder.Services.AddSingleton<IPalette, MauiPalette>();
+            builder.Services.AddSingleton<IMainThread, MauiMainThread>();
+
+            // The palette locator, for the two places that resolve a colour with no instance to inject
+            // through (the category chips are built by static factories). Set from the container below
+            // rather than by a ViewModel, so nothing has to remember to do it before the menu opens.
+            PaletteAccess.Set(new MauiPalette());
             builder.Services.AddSingleton<IModifierPicker, ModifierPicker>();
             builder.Services.AddSingleton<IVariantPicker, VariantPicker>();
             builder.Services.AddSingleton<IDraftPicker, DraftPicker>();

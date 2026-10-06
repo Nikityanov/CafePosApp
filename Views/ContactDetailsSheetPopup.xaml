@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:toolkit="clr-namespace:CommunityToolkit.Maui.Views;assembly=CommunityToolkit.Maui"
              xmlns:views="clr-namespace:CafePosApp.Views"
-             xmlns:services="clr-namespace:CafePosApp.Services"
+             xmlns:services="clr-namespace:CafePos.Presentation.Services;assembly=CafePos.Presentation"
              x:Class="CafePosApp.Views.ContactDetailsSheetPopup"
              x:DataType="views:ContactDetailsSheetPopup"
              x:Name="Sheet"

@@ -7,6 +7,11 @@ using Microsoft.Maui.Graphics;
 
 namespace CafePosApp.Services;
 
+// The seams the ViewModels take live in CafePos.Presentation, which references only
+// Microsoft.Maui.Graphics — so this file implements interfaces from there, not declares them.
+using CafePosApp.Services;
+using CafePos.Presentation.Services;
+
 /// <summary>
 /// Shows the composition sheet for a bundle. Same popup path as the other three sheets, so there is
 /// one way a sheet is presented in this app and one set of measured fixes behind it.
@@ -45,3 +50,4 @@ public sealed class ComboEditor : IComboEditor
         return result.Result?.Slots;
     }
 }
+

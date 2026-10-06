@@ -1,6 +1,6 @@
 using CafePos.Core.Data;
 using CafePosApp.Diagnostics;
-using CafePosApp.ViewModels;
+using CafePos.Presentation.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CafePosApp.Views;
@@ -57,6 +57,12 @@ public partial class OrderDetailsPage : ContentPage, IQueryAttributable
             return;
         }
 
-        viewModel.ApplyQueryAttributes(query);
+        // The page, not the ViewModel, reads Shell's dictionary. The ViewModel used to implement
+        // IQueryAttributable itself, which meant a MAUI interface in a class that now lives in a
+        // project referencing only Microsoft.Maui.Graphics. The dictionary is a routing detail; what
+        // the ViewModel actually needs is a Guid — so that is what it takes.
+        if (!query.TryGetValue("OrderId", out var value) || value is not Guid id) return;
+
+        viewModel.ShowOrder(id);
     }
 }

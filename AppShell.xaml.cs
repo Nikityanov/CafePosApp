@@ -1,4 +1,4 @@
-﻿using CafePos.Core.Services;
+using CafePos.Core.Services;
 using CafePosApp.Diagnostics;
 using CafePosApp.Views;
 using Microsoft.Extensions.DependencyInjection;

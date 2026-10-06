@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls" x:Class="CafePosApp.Views.OrderDetailsPage" x:DataType="vm:OrderDetailsViewModel" Title="Детали заказа"
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePos.Presentation.ViewModels;assembly=CafePos.Presentation" xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls" x:Class="CafePosApp.Views.OrderDetailsPage" x:DataType="vm:OrderDetailsViewModel" Title="Детали заказа"
              Shell.NavBarIsVisible="True"><!-- Explicit, not inherited: this page is pushed from
              OrdersPage, which sets the property False to drop its duplicate tab title, and the
              back arrow on this page depends on the bar being there. Verified on the emulator. -->

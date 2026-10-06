@@ -24,6 +24,17 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Core\CafePos.Core.csproj" />
+		<!--
+		  The ViewModels, so the tests can finally reach them. Before this the only reference was
+		  Core, which left all 6,501 lines of presentation untestable — the gap that made the combo
+		  stepper's "never below one" rule verifiable only by tapping a device.
+
+		  CafePos.Presentation targets plain net10.0 and references only Microsoft.Maui.Graphics
+		  (a value-type assembly, no UI), so this does not drag the MAUI framework into the test
+		  host. If that ever changes, this reference is what would break first, and it should break
+		  here rather than at the first test that happens to touch a colour.
+		-->
+		<ProjectReference Include="..\CafePos.Presentation\CafePos.Presentation.csproj" />
 	</ItemGroup>
 
 </Project>

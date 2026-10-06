@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<!--
+			NOT CafePosApp, deliberately, for the reason CafePos.Core.csproj gives: a shared root
+			namespace would let a genuine Presentation -> MAUI-app reference compile silently, because
+			both assemblies would expose CafePosApp.*. Distinct roots turn that accidental cross-layer
+			reference into a compile error instead of a working build nobody meant.
+		-->
+		<RootNamespace>CafePos.Presentation</RootNamespace>
+		<AssemblyName>CafePos.Presentation</AssemblyName>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!--
+			Microsoft.Maui.Graphics ALONE, not Microsoft.Maui.Controls, and the distinction is the whole
+			reason this project can exist.
+
+			Color is a value type in a graphics assembly with no UI, no platform and no renderer. It
+			compiles and runs on plain net10.0 — verified by building a probe that calls
+			Colors.CornflowerBlue.ToHex() against this package alone with no MAUI workload.
+
+			Microsoft.Maui.Controls would drag in the whole framework: handlers, XAML compiler,
+			platform targets. Referencing THAT is what would make this project a lie.
+
+			So the ViewModels keep returning Color and the boundary stays honest, instead of 35 call
+			sites being rewritten to a "tone" abstraction that buys less than it costs: the colour
+			genuinely belongs in the presentation layer, and this IS the presentation layer.
+		-->
+		<PackageReference Include="Microsoft.Maui.Graphics" Version="10.0.101" />
+		<!-- ObservableObject and RelayCommand, no MAUI dependency. -->
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Core\CafePos.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="CafePos.Tests" />
+	</ItemGroup>
+
+</Project>

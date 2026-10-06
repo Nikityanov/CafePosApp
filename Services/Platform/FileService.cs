@@ -1,5 +1,10 @@
 namespace CafePosApp.Services;
 
+// The seams the ViewModels take live in CafePos.Presentation, which references only
+// Microsoft.Maui.Graphics — so this file implements interfaces from there, not declares them.
+using CafePosApp.Services;
+using CafePos.Presentation.Services;
+
 /// <summary>
 /// File picking / sharing. Previously the catalogue ViewModel called FilePicker directly
 /// (untestable, platform code in the ViewModel) and the photo was copied in the page code-behind.
@@ -77,6 +82,21 @@ public sealed class FileService : IFileService
         return true;
     }
 
+    /// <summary>
+    /// The app's log file, or <c>null</c> when it is not there yet.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than a bare filename: <c>AppLog.LogPath</c> falls back to <c>"cafe-pos.log"</c>
+    /// with no directory before the writer starts, which would resolve against the process working
+    /// directory — somewhere the operator's share sheet could never reach. The path is only useful
+    /// once it is a real one, and until then there is nothing to send.
+    /// </remarks>
+    public string? GetLogFilePath()
+    {
+        var path = Diagnostics.AppLog.LogPath;
+        return File.Exists(path) ? path : null;
+    }
+
     public async Task<string> SaveTextReportAsync(string fileName, string content, CancellationToken cancellationToken = default)
     {
         var directory = Path.Combine(FileSystem.AppDataDirectory, "reports");
@@ -86,3 +106,4 @@ public sealed class FileService : IFileService
         return path;
     }
 }
+
