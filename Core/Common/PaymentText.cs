@@ -1,6 +1,6 @@
 using CafePos.Core.Models;
 
-namespace CafePos.Presentation.Services;
+namespace CafePos.Core.Common;
 
 /// <summary>
 /// Shared Russian wording for payment methods. Used in the checkout confirmation, the orders
@@ -12,3 +12,6 @@ public static class PaymentText
     public static string Method(PaymentMethod method) =>
         method == PaymentMethod.Cash ? "наличными" : "картой";
 }
+
+// MOVED HERE from CafePos.Presentation/Services/PaymentText.cs. It is a wording table with no UI in it,
+// and PaymentBooking - the rule about what an order records about money - needs it from Core.

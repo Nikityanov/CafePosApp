@@ -48,9 +48,7 @@ public partial class MenuViewModel
 
         if (shortages.Count > 0)
         {
-            throw new InsufficientStockException(shortages
-                .Select(shortage => $"{shortage.IngredientName}: нужно {shortage.Required:0.##} {shortage.Unit}, есть {shortage.Available:0.##} {shortage.Unit}")
-                .ToList());
+            throw new InsufficientStockException(PaymentBooking.DescribeAll(shortages));
         }
 
         return lines;
@@ -99,18 +97,16 @@ public partial class MenuViewModel
                 new PaymentSheetRequest("Оплата заказа", Total, 0, AllowDeferredPayment: true));
             if (payment is null) return;
 
-            // The deferred branch books the order with NO PaymentIntent at all — the same call
-            // CreateWithoutPaymentAsync used to make, and the same overload, so the two paths write an
-            // identical order and differ only in whether a payment row exists. Nothing is clamped,
-            // defaulted or invented: payment.IsDeferred means the operator declined to take money.
-            var order = payment.IsDeferred
-                ? await checkout.CheckoutAsync(lines, BuildOrderDetails())
-                : await checkout.CheckoutAsync(
-                    lines, new PaymentIntent(payment.Amount, payment.Method), BuildOrderDetails());
+            // One decision, taken once: what the order records about money AND what the operator is told.
+            // Two independent ternaries over the same flag is how an unpaid order ends up announced as
+            // paid. See PaymentBooking.
+            var intent = PaymentBooking.IntentFor(payment.Method, payment.Amount, payment.IsDeferred);
 
-            await FinishOrderCreatedAsync(
-                order,
-                payment.IsDeferred ? "оплата не получена" : $"оплачено {PaymentText.Method(payment.Method)}");
+            var order = intent is null
+                ? await checkout.CheckoutAsync(lines, BuildOrderDetails())
+                : await checkout.CheckoutAsync(lines, intent, BuildOrderDetails());
+
+            await FinishOrderCreatedAsync(order, PaymentBooking.ReceiptText(payment.Method, payment.IsDeferred));
             haptics.Click();
         }
         catch (Exception exception)
