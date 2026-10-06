@@ -42,18 +42,16 @@ public static class PaletteAccess
     private static IPalette? current;
 
     /// <summary>
-    /// The registered palette. Throws rather than returning null when unset, so a missing
-    /// registration is a loud failure at the first colour read instead of a screen that quietly
-    /// renders in the fallback grey.
-    /// </summary>
     /// The registered palette. Named <c>Current</c> rather than <c>Resolve</c> so it does not
-    /// collide with the <c>Resolve(lightKey, darkKey)</c> below — a class cannot have both, and the
-    /// compiler says so.
-    /// <para>
-    /// Throws rather than returning null when unset, so a missing registration is a loud failure at
-    /// the first colour read instead of a screen that quietly renders in the fallback grey.
-    /// </para>
+    /// collide with the <c>Resolve(lightKey, darkKey)</c> below - a class cannot have both.
     /// </summary>
+    /// <remarks>
+    /// Throws rather than returning null when unset, so a missing registration is a loud failure at
+    /// the first colour read instead of a screen that quietly renders in the fallback grey. That
+    /// loudness costs something, and the cost is named here rather than left for whoever hits it
+    /// next: registering the palette is part of standing up a ViewModel, which is why
+    /// <c>MenuHarness</c> does it once instead of leaving it to every test that constructs one.
+    /// </remarks>
     public static IPalette Current =>
         current ?? throw new InvalidOperationException(
             $"{nameof(PaletteAccess)}.{nameof(Set)} was never called. The MAUI project must register " +

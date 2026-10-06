@@ -578,11 +578,21 @@ public sealed class CategoryMenuItemViewModel : ObservableObject
         ["Category1", "Category2", "Category3", "Category4", "Category5", "Category6", "Category7", "Category8"];
 
     /// <summary>
-    /// The pastel fills, read once from the palette. A key that is missing degrades to a neutral
-    /// tone rather than throwing from a type initialiser, so a palette rename cannot stop the menu
-    /// from loading.
+    /// The pastel fills, read once from the palette and then cached.
     /// </summary>
-    private static readonly Color[] Palette = ReadPalette();
+    /// <remarks>
+    /// <b>LAZILY, AND THAT IS NOT A MICRO-OPTIMISATION.</b> This used to be a
+    /// <c>static readonly Color[] Palette = ReadPalette()</c>. A static field initialiser that throws
+    /// poisons its type for the LIFETIME OF THE PROCESS: the CLR caches the
+    /// <see cref="TypeInitializationException"/> and every later access re-throws it, even after the
+    /// cause is fixed. The app happened to survive because the palette is registered before any
+    /// ViewModel is built — but a test that constructed one first would have found a type that could
+    /// never work again in that run, with an error pointing at the initialiser rather than at the
+    /// missing registration. The first test to build a MenuViewModel did exactly that.
+    /// </remarks>
+    private static Color[]? palette;
+
+    private static Color[] Palette => palette ??= ReadPalette();
 
     private static Color[] ReadPalette() =>
     [
