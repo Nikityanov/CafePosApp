@@ -574,20 +574,19 @@ public partial class MenuViewModel
     /// </remarks>
     private void SelectOrderType(OrderType value)
     {
-        if (OrderType == value) return;
+        // The decision is FulfilmentSwitch's; this applies it. See that type for why the phone is read
+        // before it is dropped and why silence means not touching Message at all.
+        var change = FulfilmentSwitch.Decide(OrderType, value, !string.IsNullOrWhiteSpace(CustomerPhone));
+        if (!change.Changed) return;
 
-        // Read BEFORE the drop below. After `CustomerPhone = null` there is nothing left to ask about,
-        // which is the whole reason the guard has to come first.
-        var dropsPhone = value == OrderType.CounterService && !string.IsNullOrWhiteSpace(CustomerPhone);
-
-        OrderType = value;
-        if (value == OrderType.CounterService) CustomerPhone = null;
+        OrderType = change.OrderType;
+        if (change.ClearsPhone) CustomerPhone = null;
 
         // Assigned ONLY on the loss. Setting Message to an empty string would still retire a pending
         // undo (its setter calls ClearPendingUndo), so a silent switch must not touch the property at
         // all rather than clearing it — «Отменить» armed by a removal has to survive a tap on the
-        // fulfilment button.
-        if (dropsPhone) Message = "Телефон удалён: заказ в зале, номер не сохраняем.";
+        // fulfilment button. Hence `is not null` and not `!= string.Empty`.
+        if (change.Announce is not null) Message = change.Announce;
         haptics.Click();
     }
 
@@ -708,47 +707,18 @@ public partial class MenuViewModel
         if (choice.IsAsSoonAsPossible)
         {
             RequestedAt = null;
-            Message = "Как можно скорее — время по умолчанию.";
+            Message = OrderPromise.AsSoonAsPossibleMessage;
             haptics.Click();
             return;
         }
 
-        RequestedAt = ResolveRequestedTime(choice.TimeOfDay);
+        RequestedAt = OrderPromise.At(choice.TimeOfDay, timeProvider.GetLocalNow(), timeProvider.LocalTimeZone);
 
         // Overdue is stated, because it is not obvious from the figure. «Заказ к 14:20» at 15:05 is a
         // different order from «Заказ к 14:20» at 13:00 and the sentence has to say which one this is —
         // otherwise the operator reads their own confirmation as a mistake.
-        Message = IsRequestedTimeLate
-            ? $"Заказ к {RequestedTimeText} — время уже прошло, заказ просрочен."
-            : $"Заказ к {RequestedTimeText}.";
+        Message = OrderPromise.Describe(RequestedAt!.Value, timeProvider.GetLocalNow(), timeProvider.LocalTimeZone);
         haptics.Click();
-    }
-
-    /// <summary>
-    /// The clock time the cashier picked, placed on TODAY at that wall-clock time.
-    /// </summary>
-    /// <remarks>
-    /// <b>AND A TIME THAT HAS ALREADY PASSED STAYS ON TODAY.</b> It used to roll forward to tomorrow,
-    /// which silently rewrote the operator's decision: they picked 14:20 at 15:00 and got an order
-    /// promised for tomorrow, which is not what anyone said, and which also made an OVERDUE order
-    /// inexpressible — the board knows how to show one (<c>Order.IsScheduledAt</c> is false for a past
-    /// <c>RequestedAt</c>), and there was no way to create it. A customer who said «в 14:20» and is
-    /// still waiting at 15:00 is the ordinary reason this control exists. So the time is taken at
-    /// face value, the sheet marks it
-    /// (<c>TimePickerPopup.LateNoteLabel</c>) and the cart row carries it
-    /// (<see cref="IsRequestedTimeLate"/>), and nothing refuses it.
-    /// <para>
-    /// Built through <see cref="DateTimeOffset(DateTime)"/> on an unspecified-kind value so the local
-    /// offset is resolved for that wall-clock time rather than for now: across a daylight-saving change
-    /// the two differ by an hour, and an order promised for a time that does not exist on its day is an
-    /// order nobody can keep.
-    /// </para>
-    /// </remarks>
-    private DateTimeOffset ResolveRequestedTime(TimeSpan timeOfDay)
-    {
-        var now = timeProvider.GetLocalNow();
-        var target = DateTime.SpecifyKind(now.DateTime.Date + timeOfDay, DateTimeKind.Unspecified);
-        return new DateTimeOffset(target);
     }
 
     private void AddItem(CartItemViewModel? item)

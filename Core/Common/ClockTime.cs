@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace CafePos.Presentation.Services;
+namespace CafePos.Core.Common;
 
 /// <summary>
 /// Formats a clock time of day — «14:20» — from the two things this app holds one as: a
@@ -29,8 +29,10 @@ namespace CafePos.Presentation.Services;
 /// </para>
 /// <para>
 /// One method for both shapes rather than two call sites, so the escaping is decided once. It is here,
-/// beside <see cref="TimePickResult"/>, because that record is where a chosen clock time first exists
-/// as a value in this app.
+/// It is in Core rather than beside the sheet because the ORDER PROMISED TIME NEEDS IT, not the sheet:
+/// <c>OrderPromise</c> describes an order's promise in the same words the sheet offers, and that is a
+/// domain rule with no UI in it.
+/// a rule a test can reach.
 /// </para>
 /// </remarks>
 public static class ClockTime
@@ -51,7 +53,20 @@ public static class ClockTime
     /// really does accept «HH:mm». Both overloads exist so the two call sites read alike and nobody has
     /// to remember which type they are holding.
     /// </remarks>
-    public static string Format(DateTimeOffset moment) => Format(moment.ToLocalTime().TimeOfDay);
+    public static string Format(DateTimeOffset moment) => Format(moment, TimeZoneInfo.Local);
+
+    /// <summary>
+    /// «14:20» for a timestamp read in a named zone.
+    /// </summary>
+    /// <remarks>
+    /// Exists so a promise PLACED in one zone can be READ BACK in the same one. The default overload
+    /// converts with <see cref="DateTimeOffset.ToLocalTime"/>, which uses the machine's zone — fine in
+    /// production where there is only ever one zone, and wrong in a test where the ViewModel's clock is
+    /// pinned elsewhere: the message the operator reads back would be an hour out from the time they
+    /// chose.
+    /// </remarks>
+    public static string Format(DateTimeOffset moment, TimeZoneInfo? zone) =>
+        Format(TimeZoneInfo.ConvertTime(moment, zone ?? TimeZoneInfo.Local).TimeOfDay);
 
     /// <summary>
     /// The next moment on the <paramref name="gridMinutes"/> grid at or after <paramref name="timeOfDay"/>,

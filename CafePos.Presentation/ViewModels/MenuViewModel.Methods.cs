@@ -732,12 +732,12 @@ public partial class MenuViewModel : ObservableObject
     /// Shell drives on every return to the tab, and by every change to <see cref="RequestedAt"/>.
     /// </para>
     /// </remarks>
-    public bool IsRequestedTimeLate => requestedAt is { } at && at <= timeProvider.GetLocalNow();
+    public bool IsRequestedTimeLate => OrderPromise.IsLate(requestedAt, timeProvider.GetLocalNow());
 
     /// <summary>What the "когда" control currently reads: «сейчас», or the chosen clock time.</summary>
     public string RequestedTimeText => requestedAt is null
         ? "сейчас"
-        : ClockTime.Format(requestedAt.Value);
+        : ClockTime.Format(requestedAt.Value, timeProvider.LocalTimeZone);
 
     /// <summary>
     /// The promise, as the CUSTOMER reads it. A range when the time is the till's to estimate, a clock
