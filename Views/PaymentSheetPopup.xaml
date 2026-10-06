@@ -42,73 +42,216 @@
             <Label x:Name="RefundNoteLabel" FontSize="12" Margin="0,0,0,6" IsVisible="False" LineBreakMode="WordWrap"
                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
 
-            <!-- The amount being entered. The largest text on the sheet: it is what the operator
-                 reads back to the customer before confirming. -->
-            <Label x:Name="EnteredLabel" FontSize="32" FontAttributes="Bold" Margin="0,0,0,2"
-                   HorizontalOptions="Center" SemanticProperties.Description="Введённая сумма" />
+            <!-- ═══ ONE TAP: THE COMMON SALE ═══
+                 Two full-width tender buttons, each naming the amount it charges and the method it
+                 charges it by — «160,00 ₽ наличными» / «160,00 ₽ картой». Tapping one records that
+                 payment for exactly AmountDue and closes the sheet. No keypad in the way.
 
-            <!-- Shown only when the entered amount exceeds the balance. The service clamps the
-                 payment to the balance, but the change the operator must hand back is
-                 entered − balance, so that is what is displayed.
+                 THE AMOUNT IS ON THE BUTTON ON PURPOSE. Baymard's 2024 study captured a tester
+                 asking, of a «Next» button, verbatim: "I'm not sure if I click the 'Next' button,
+                 will it charge?" A button naming only a METHOD repeats that ambiguity, because the
+                 amount it would charge is somewhere else on the screen and has to be re-read. A
+                 button naming the amount it charges answers the question from its own label, so the
+                 button is complete on its own and the two are equal in what they state.
 
-                 Static value, so an AppThemeBinding on the attribute is the whole fix and needs no
-                 ViewModel change. A bare {StaticResource Warning} declared the light token in both
-                 themes, on this popup's own Surface fill (#FFFFFF / #1E1E1E): 3.11:1 in light and
-                 5.36:1 in dark. The dark branch now reads WarningDark #FFB74D at 9.63:1.
+                 BOTH ARE FILLED PRIMARY, and neither is the "primary" one. Cash and card each
+                 complete the sale and the sheet has no acquirer behind the card path at all
+                 (PaymentSheetResult.Method records only what the operator says happened), so making
+                 one of them quieter would be an opinion the app does not have. They are a genuine
+                 fork, and both sides of it look like the thing you do — which is the opposite of
+                 what the deferred button below must not be.
 
-                 THE LIGHT BRANCH IS NO LONGER BLOCKED, because Colors.xaml now carries
-                 WarningText #A35B00 — the light-theme text counterpart of WarningDark, which is the
-                 pair this attribute has wanted since the dark-theme pass. Warning could not be
-                 darkened from here (it is the palette's only warm token and 3.11:1 on pure white is
-                 the ceiling it can reach on ANY light background), so the fix belongs to the
-                 palette, not to this file; it does, and this label uses it:
-                   WarningText #A35B00 on Surface #FFFFFF   5.18:1  (light, was 3.11:1)
-                   WarningDark #FFB74D on SurfaceDark #1E1E1E 9.63:1 (dark, unchanged)
-                 14pt bold owes 4.5:1 as body text; 5.18:1 clears it. The hue is the same warning
-                 family (33.5deg between Warning's 27.1 and WarningDark's 35.7), so «Сдача» still
-                 reads as amber — and «Сдача» is the word that states the state, the tint is the
-                 second cue. Nothing about the message changed. -->
-            <Label x:Name="ChangeLabel" FontSize="14" FontAttributes="Bold" Margin="0,0,0,6"
-                   HorizontalOptions="Center" LineBreakMode="WordWrap"
-                   TextColor="{AppThemeBinding Light={StaticResource WarningText}, Dark={StaticResource WarningDark}}" />
+                 HIDDEN on a refund: quick pay is COLLECT-only. A cash/card choice on a return is
+                 meaningless (see MethodGrid) and the operator must choose how much to give back,
+                 so a one-tap «return everything the ceiling allows» would be the most dangerous
+                 button in the app. The refund path keeps the keypad it always had.
 
-            <!-- The keypad is buttons, not an Entry: the OS keyboard covers half the screen and is
-                 slow, and an Entry would bring it up on every tap. Every key is 48dp tall, the
-                 floor the whole app honours. -->
-            <Grid x:Name="KeypadGrid" ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto,Auto"
-                  ColumnSpacing="8" RowSpacing="8" Margin="0,0,0,10">
-                <Button Text="1" Grid.Row="0" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="1" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 1" />
-                <Button Text="2" Grid.Row="0" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="2" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 2" />
-                <Button Text="3" Grid.Row="0" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="3" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 3" />
-                <Button Text="4" Grid.Row="1" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="4" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 4" />
-                <Button Text="5" Grid.Row="1" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="5" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 5" />
-                <Button Text="6" Grid.Row="1" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="6" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 6" />
-                <Button Text="7" Grid.Row="2" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="7" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 7" />
-                <Button Text="8" Grid.Row="2" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="8" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 8" />
-                <Button Text="9" Grid.Row="2" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="9" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 9" />
-                <Button Text="Сброс" Grid.Row="3" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="clear" Clicked="OnKeyClicked" SemanticProperties.Description="Очистить введённую сумму" />
-                <Button Text="0" Grid.Row="3" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="0" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 0" />
-                <Button Text="Стереть" Grid.Row="3" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="backspace" Clicked="OnKeyClicked" SemanticProperties.Description="Стереть последнюю цифру" />
-            </Grid>
+                 ITS TEXT IS WRITTEN FROM CODE, not bound, for the same reason AmountDueLabel is:
+                 PaymentSheetRequest is not this popup's binding context (see ApplyMode), and the
+                 figure has to come from TextFormat.Money so it reads in the operator's currency.
 
-            <!-- Cash or card, single select. The selected one is filled Primary so the choice is
-                 visible at a glance; the unselected one is the tonal secondary. -->
-            <!-- The whole grid is hidden on a refund, not merely ignored: a refund has no method, because
-                 the domain mirrors the payments it reverses so the drawer and the terminal each
-                 balance against what they were actually credited. A visible-but-ignored choice
-                 would be worse than none — the operator would reasonably believe the return was
-                 booked the way they picked. -->
-            <Grid x:Name="MethodGrid" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,0,0,10">
-                <Button x:Name="CashButton" Grid.Column="0" Text="Наличные" Style="{StaticResource PaymentMethodButton}"
-                        CommandParameter="cash" Clicked="OnMethodClicked" SemanticProperties.Description="Оплата наличными" />
-                <Button x:Name="CardButton" Grid.Column="1" Text="Карта" Style="{StaticResource PaymentMethodButton}"
-                        CommandParameter="card" Clicked="OnMethodClicked" SemanticProperties.Description="Оплата картой" />
-            </Grid>
+                 «Другая сумма» lives INSIDE this panel, so hiding quick pay hides the way back into
+                 the keypad with it. That is deliberate: a «Другая сумма» link left on screen while
+                 the keypad is up would be a second button offering to open the keypad again, one
+                 tap from the keys it opened.
 
-            <!-- Disabled while the entered amount is 0: there is nothing to take payment for. -->
-            <Button x:Name="ConfirmButton" Text="Принять оплату" HeightRequest="48" MinimumHeightRequest="48"
-                    FontAttributes="Bold" Padding="0" Clicked="OnConfirmClicked"
-                    SemanticProperties.Description="Принять оплату и продолжить" />
+                 8dp ABOVE the first tender button, and it is a measured gap, not a guess: with none
+                 the sheet put the «160,00 ₽ наличными» button ~4dp under «К оплате: 160,00 ₽»,
+                 tighter than the 8dp between the two tender buttons — so the amount and the
+                 buttons read as one crowded block instead of a figure and the action on it. The
+                 figure is the thing the operator is reading; the buttons are the thing they do. -->
+            <VerticalStackLayout x:Name="QuickPayPanel" Spacing="0" Margin="0,8,0,0">
+                <Button x:Name="QuickPayCashButton" HeightRequest="48" MinimumHeightRequest="48"
+                        FontSize="16" FontAttributes="Bold" CornerRadius="8" Padding="0"
+                        Clicked="OnTenderClicked" CommandParameter="cash" />
+                <Button x:Name="QuickPayCardButton" HeightRequest="48" MinimumHeightRequest="48"
+                        Margin="0,8,0,0" FontSize="16" FontAttributes="Bold" CornerRadius="8" Padding="0"
+                        Clicked="OnTenderClicked" CommandParameter="card" />
+
+                <!-- The partial-payment exit, and it is BELOW the tender row on purpose. Partial
+                     payment is real and supported (Order.BalanceKopecks and
+                     PaymentState.PartiallyPaid exist for it: a deposit against an order), so it
+                     stays; but it is not the common sale and it must not look like it.
+                     SecondaryButton rather than a filled Primary, and 48dp tall like everything
+                     else — a 30dp text link would be below the touch floor (.opencode-rules.md §6
+                     calls 48dp the floor and notes it is already under the ergonomic minimum) and
+                     would be the one control here an operator aiming at the card button misses. -->
+                <Button x:Name="OtherAmountButton" Text="Другая сумма" Style="{StaticResource SecondaryButton}"
+                        HeightRequest="48" MinimumHeightRequest="48" Margin="0,10,0,0"
+                        Clicked="OnOtherAmountClicked"
+                        SemanticProperties.Description="Ввести другую сумму оплаты" />
+            </VerticalStackLayout>
+
+            <!-- NOTHING OWED. No tender buttons at all — there is nothing to charge, so the sheet
+                 must not offer to charge it, and a keypad over a zero balance would be asking the
+                 operator to decide something that cannot be decided (the same defect as offering a
+                 keypad on the card path). The label is here so the sheet is not a title and a
+                 figure with no way forward: an operator who opens a payment sheet with 0 ₽ owed
+                 deserves to be told the reason, not left to work it out from missing buttons.
+
+                 The «Оплата при выдаче» exit below is NOT hidden along with the tender buttons: it
+                 takes no money, so it is not one, and on a nil cart total it is the only way to
+                 complete the checkout. -->
+            <Label x:Name="NothingDueLabel" IsVisible="False" FontSize="14" Margin="0,8,0,0"
+                   LineBreakMode="WordWrap"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+
+            <!-- ═══ THE KEYPAD: OFF THE MAIN PATH, NOT GONE ═══
+                 EnteredLabel, ChangeLabel, the twelve keys, the method row and the confirm button,
+                 together in one panel that is hidden while the tender buttons are up. It is a panel
+                 rather than a set of per-element visibilities so the two states cannot disagree:
+                 RefreshPanels owns the swap and there is exactly one thing to be wrong.
+
+                 On a REFUND this panel is what the sheet is, unchanged — the refund path has no
+                 quick pay and never had a «Другая сумма» link. -->
+            <VerticalStackLayout x:Name="KeypadPanel" Spacing="0">
+                <!-- The amount being entered. The largest text on the keypad panel: it is what the
+                     operator reads back to the customer before confirming. -->
+                <Label x:Name="EnteredLabel" FontSize="32" FontAttributes="Bold" Margin="0,0,0,2"
+                       HorizontalOptions="Center" SemanticProperties.Description="Введённая сумма" />
+
+                <!-- Shown only when the entered amount exceeds the balance. The service clamps the
+                     payment to the balance, but the change the operator must hand back is
+                     entered − balance, so that is what is displayed.
+
+                     Static value, so an AppThemeBinding on the attribute is the whole fix and needs no
+                     ViewModel change. A bare {StaticResource Warning} declared the light token in both
+                     themes, on this popup's own Surface fill (#FFFFFF / #1E1E1E): 3.11:1 in light and
+                     5.36:1 in dark. The dark branch now reads WarningDark #FFB74D at 9.63:1.
+
+                     THE LIGHT BRANCH IS NO LONGER BLOCKED, because Colors.xaml now carries
+                     WarningText #A35B00 — the light-theme text counterpart of WarningDark, which is the
+                     pair this attribute has wanted since the dark-theme pass. Warning could not be
+                     darkened from here (it is the palette's only warm token and 3.11:1 on pure white is
+                     the ceiling it can reach on ANY light background), so the fix belongs to the
+                     palette, not to this file; it does, and this label uses it:
+                       WarningText #A35B00 on Surface #FFFFFF   5.18:1  (light, was 3.11:1)
+                       WarningDark #FFB74D on SurfaceDark #1E1E1E 9.63:1 (dark, unchanged)
+                     14pt bold owes 4.5:1 as body text; 5.18:1 clears it. The hue is the same warning
+                     family (33.5deg between Warning's 27.1 and WarningDark's 35.7), so «Сдача» still
+                     reads as amber — and «Сдача» is the word that states the state, the tint is the
+                     second cue. Nothing about the message changed. -->
+                <Label x:Name="ChangeLabel" FontSize="14" FontAttributes="Bold" Margin="0,0,0,6"
+                       HorizontalOptions="Center" LineBreakMode="WordWrap"
+                       TextColor="{AppThemeBinding Light={StaticResource WarningText}, Dark={StaticResource WarningDark}}" />
+
+                <!-- The keypad is buttons, not an Entry: the OS keyboard covers half the screen and is
+                     slow, and an Entry would bring it up on every tap. Every key is 48dp tall, the
+                     floor the whole app honours. The whole-rubles cap is in OnKeyClicked and its
+                     comment there explains it. -->
+                <Grid x:Name="KeypadGrid" ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                      ColumnSpacing="8" RowSpacing="8" Margin="0,0,0,10">
+                    <Button Text="1" Grid.Row="0" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="1" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 1" />
+                    <Button Text="2" Grid.Row="0" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="2" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 2" />
+                    <Button Text="3" Grid.Row="0" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="3" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 3" />
+                    <Button Text="4" Grid.Row="1" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="4" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 4" />
+                    <Button Text="5" Grid.Row="1" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="5" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 5" />
+                    <Button Text="6" Grid.Row="1" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="6" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 6" />
+                    <Button Text="7" Grid.Row="2" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="7" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 7" />
+                    <Button Text="8" Grid.Row="2" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="8" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 8" />
+                    <Button Text="9" Grid.Row="2" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="9" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 9" />
+                    <Button Text="Сброс" Grid.Row="3" Grid.Column="0" Style="{StaticResource KeypadButton}" CommandParameter="clear" Clicked="OnKeyClicked" SemanticProperties.Description="Очистить введённую сумму" />
+                    <Button Text="0" Grid.Row="3" Grid.Column="1" Style="{StaticResource KeypadButton}" CommandParameter="0" Clicked="OnKeyClicked" SemanticProperties.Description="Цифра 0" />
+                    <Button Text="Стереть" Grid.Row="3" Grid.Column="2" Style="{StaticResource KeypadButton}" CommandParameter="backspace" Clicked="OnKeyClicked" SemanticProperties.Description="Стереть последнюю цифру" />
+                </Grid>
+
+                <!-- Cash or card, single select. The selected one is filled Primary so the choice is
+                     visible at a glance; the unselected one is the tonal secondary. It exists only on
+                     the keyed path: the two tender buttons above settle a card payment without ever
+                     asking, because a card is ALWAYS the balance — there is nothing to choose, and a
+                     keypad there would be asking the operator to decide something that cannot be
+                     decided. Here the operator has chosen «Другая сумма», so the method is a real
+                     question and the row reappears. -->
+                <!-- The whole grid is hidden on a refund, not merely ignored: a refund has no method, because
+                     the domain mirrors the payments it reverses so the drawer and the terminal each
+                     balance against what they were actually credited. A visible-but-ignored choice
+                     would be worse than none — the operator would reasonably believe the return was
+                     booked the way they picked. -->
+                <Grid x:Name="MethodGrid" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,0,0,10">
+                    <Button x:Name="CashButton" Grid.Column="0" Text="Наличные" Style="{StaticResource PaymentMethodButton}"
+                            CommandParameter="cash" Clicked="OnMethodClicked" SemanticProperties.Description="Оплата наличными" />
+                    <Button x:Name="CardButton" Grid.Column="1" Text="Карта" Style="{StaticResource PaymentMethodButton}"
+                            CommandParameter="card" Clicked="OnMethodClicked" SemanticProperties.Description="Оплата картой" />
+                </Grid>
+
+                <!-- It USED TO BE DISABLED at an entered amount of 0, and that is what changed. A greyed
+                     button states that the action is unavailable and says nothing about why; «оплатить
+                     ноль» is refused because a zero-value row in OrderPayment would still be written,
+                     would not move PaidKopecks, and would leave the shift reconciliation off by that
+                     row. None of that is an operator's problem to infer, so the button stays live and
+                     the refusal below NAMES it.
+
+                     It is also why the refusal sits UNDER the confirm button rather than above it: the
+                     sheet grows by a couple of lines when the message appears, and the control the
+                     operator's thumb is already on must not move out from under it. -->
+                <Button x:Name="ConfirmButton" Text="Принять оплату" HeightRequest="48" MinimumHeightRequest="48"
+                        FontAttributes="Bold" Padding="0" Clicked="OnConfirmClicked"
+                        SemanticProperties.Description="Принять оплату и продолжить" />
+
+                <!-- Shown only after a confirm attempt at 0. WarningText/WarningDark for the same
+                     measured reason ChangeLabel uses them (5.18:1 light / 9.63:1 dark on this popup's
+                     Surface), and the amber is the second cue, not the only one: the sentence below
+                     states the state in words, so nothing here is carried by colour. -->
+                <Label x:Name="ZeroRefusalLabel" IsVisible="False" FontSize="13" FontAttributes="Bold"
+                       Margin="0,8,0,0" LineBreakMode="WordWrap"
+                       TextColor="{AppThemeBinding Light={StaticResource WarningText}, Dark={StaticResource WarningDark}}" />
+            </VerticalStackLayout>
+
+            <!-- ═══ «ОПЛАТА ПРИ ВЫДАЧЕ» — THE OTHER ANSWER TO THE SAME QUESTION ═══
+                 This button used to sit on the cart, beside «Оплатить и создать». It is here now
+                 because it is not a second kind of checkout — it is a decision about WHEN money moves,
+                 so it belongs at the moment money moves, beside the button that takes it.
+
+                 ONE ROW, ONE SEPARATOR, and it is the LAST thing in the sheet so the primary action is
+                 the one the thumb lands on first. SecondaryButton rather than a filled Primary: the
+                 two filled buttons above it DO look like the thing you do, because taking the money
+                 is the thing you do, and this one must not share that look. One tap did not change
+                 the argument, it sharpened it — with «160,00 ₽ наличными» sitting above, a filled
+                 «Оплата при выдаче» would be claiming to charge when it charges nothing, which is
+                 the one claim on this sheet that would be outright false.
+
+                 VISIBLE ONLY WHEN THE CALLER ASKED FOR IT, and that is load-bearing rather than
+                 cosmetic. This sheet is also the payment step for an order that already exists: the
+                 board's top-up and «Принять оплату» on the details page both open it, and on those
+                 paths the order is already on the board with a balance outstanding. Offering to
+                 CREATE one there, or to defer a payment for a sale already made, would put a
+                 create-order action on the collect-payment path. Set from code, never bound —
+                 PaymentSheetRequest is not the binding context here — see ApplyMode.
+
+                 It is NOT disabled at 0 entered, and never was: the amount is irrelevant on this
+                 path precisely because no money is being taken, so a disabled confirm beside it
+                 would be the only control on the sheet that knows something the operator cannot
+                 see. It stays live in BOTH panel states — deferring is not a fallback for being
+                 unable to pay the balance, it is the other answer to the same question. -->
+            <!-- A 1px rule, the same idiom MenuPage.xaml uses between the cart and its footer. NOT the
+                 BottomSheetHandle style: that one is a 40dp centred grab bar, and reusing it here would
+                 draw a second handle halfway down the sheet. -->
+            <BoxView x:Name="DeferredSeparator" IsVisible="False" HeightRequest="1" Margin="0,12,0,10"
+                     Color="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
+            <Button x:Name="DeferredButton" IsVisible="False" Text="Оплата при выдаче"
+                    Style="{StaticResource SecondaryButton}" HeightRequest="48" MinimumHeightRequest="48"
+                    FontAttributes="Bold" Clicked="OnDeferredClicked"
+                    SemanticProperties.Description="Создать заказ и записать оплату, когда клиент заберёт его" />
         </VerticalStackLayout>
     </ScrollView>
 </toolkit:Popup>

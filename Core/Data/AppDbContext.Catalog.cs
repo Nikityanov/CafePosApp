@@ -57,6 +57,52 @@ public partial class AppDbContext
                 .HasForeignKey(product => product.ModifierGroupId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
+
+        modelBuilder.Entity<Combo>(entity =>
+        {
+            entity.HasKey(combo => combo.Id);
+            entity.Property(combo => combo.Name).IsRequired().HasMaxLength(160);
+            // PriceKopecks keeps the default INTEGER mapping with no converter, like Product's: it is
+            // money the catalogue already speaks in kopecks, and a conversion would only be a second way
+            // to spell the same integer. It is NOT NULL, and SaveComboAsync refuses zero — a sellable
+            // item at no price is a catalogue error, and a NULL here would have to become 0 at every
+            // read, i.e. a second silent place where a missing price turns into a free meal.
+            entity.HasMany(combo => combo.Components)
+                .WithOne(component => component.Combo)
+                .HasForeignKey(component => component.ComboId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // No index on IsDeleted, unlike Product: a catalogue of bundles is a handful of rows
+            // where the menu screen reads all of them anyway, and a second single-column index here
+            // would be a column SQLite has to keep in step with one it never chooses.
+            // And no index on PriceKopecks for the same reason stated there: nothing queries a bundle
+            // BY its price, so an index on it would be a second column SQLite keeps in step with one
+            // it never chooses. Migration012 therefore creates no index at all — the model declares
+            // none for Combos, and the parity test reads columns, so nothing would ever notice.
+        });
+
+        modelBuilder.Entity<ComboComponent>(entity =>
+        {
+            entity.HasKey(component => component.Id);
+            // Two references to Products, so both navigations are named: the slot's dish and its
+            // substitute. ComponentPriceKopecks keeps the default nullable long? mapping — its three
+            // states (null = the dish price, 0 = free, a number = this price) are exactly what makes
+            // it usable, and a non-nullable default of 0 would collapse "free" into "the dish is
+            // free", which is a different statement about the catalogue.
+            entity.HasOne(component => component.Product)
+                .WithMany()
+                .HasForeignKey(component => component.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(component => component.SubstituteProduct)
+                .WithMany()
+                .HasForeignKey(component => component.SubstituteProductId);
+            // Every write-off of this slot starts from the dish, and an 86 report has to find the
+            // slots that use a dish without loading the bundles themselves — hence both indexes.
+            entity.HasIndex(component => component.ComboId);
+            entity.HasIndex(component => component.ProductId);
+            // SubstituteProductId gets EF's conventional index as a foreign key, and Migration010
+            // creates it by name: it is never queried on its own (a sale loads the bundle's slots),
+            // but a fresh install would have it and an upgraded one would not.
+        });
     }
 
     private static void ConfigureOrders(ModelBuilder modelBuilder)
@@ -66,10 +112,19 @@ public partial class AppDbContext
             entity.HasKey(order => order.Id);
             entity.Property(order => order.Status).HasConversion<string>().HasMaxLength(30);
             entity.Property(order => order.CancellationReason).HasMaxLength(300);
+            // TEXT like Status and OrderPayment.Method, so an order's fulfilment mode is readable
+            // straight out of SQLite during an investigation. 24 characters is the E.164 cap plus
+            // room for the '+', and the value is written by PhoneNumber.Normalize, never typed free.
+            entity.Property(order => order.OrderType).HasConversion<string>().HasMaxLength(30);
+            entity.Property(order => order.CustomerPhone).HasMaxLength(24);
             entity.HasIndex(order => new { order.ShiftId, order.OrderNumber }).IsUnique();
             entity.HasIndex(order => order.Status);
             entity.HasIndex(order => order.CreatedAt);
             entity.HasIndex(order => order.ShiftId);
+            // The schedule section reads this column, and it is also what makes a later move to SQL
+            // ordering possible without a migration. Useless on its own today: SQLite cannot ORDER BY
+            // a DateTimeOffset, so the queue sorts in memory over a materialised projection.
+            entity.HasIndex(order => order.RequestedAt);
             entity.HasMany(order => order.Items)
                 .WithOne(item => item.Order)
                 .HasForeignKey(item => item.OrderId)
@@ -95,6 +150,25 @@ public partial class AppDbContext
             entity.Property(item => item.SelectedModifierName).HasMaxLength(120);
             entity.Property(item => item.SelectedVariantName).HasMaxLength(120);
             entity.HasIndex(item => item.OrderId);
+            entity.HasMany(item => item.Components)
+                .WithOne(component => component.OrderItem)
+                .HasForeignKey(component => component.OrderItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // ListPriceKopecks keeps the default INTEGER mapping with no converter, like
+            // DraftOrder.IsActiveCart: it is money the product price already wrote, so a conversion
+            // would only be a second way to spell the same integer.
+            // OrderItemComponent.ProductId is deliberately NOT a foreign key. The snapshot has to
+            // outlive the catalogue entry it names — a sale does not stop having happened because the
+            // dish was later renamed or removed.
+        });
+
+        modelBuilder.Entity<OrderItemComponent>(entity =>
+        {
+            entity.HasKey(component => component.Id);
+            entity.Property(component => component.ProductName).IsRequired().HasMaxLength(160);
+            // Every read of this table is "one line's composition" — the receipt, the reprint and
+            // the shift report's bundle section — so the index is on the foreign key alone.
+            entity.HasIndex(component => component.OrderItemId);
         });
 
         modelBuilder.Entity<OrderPayment>(entity =>

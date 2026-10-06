@@ -18,8 +18,8 @@ namespace CafePosApp.ViewModels;
 /// <param name="DisplayName">«Текущая» / «Завершённая» plus the local times.</param>
 /// <param name="IsClosed">
 /// Whether the shift has an end time. Carried as data rather than re-derived from the name because
-/// the picker's default selection IS this flag: it is what makes «Анализировать смену» land on the
-/// shift that was just closed instead of on the empty one the close just opened.
+/// the picker's default selection IS this flag: «Анализировать смену» opens on the shift still
+/// running, and falls back to the newest closed one only when nothing is open.
 /// </param>
 public sealed record ShiftChoice(Guid Id, string DisplayName, bool IsClosed);
 
@@ -794,14 +794,27 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
                     shift.EndTime.HasValue)),
                 choice => choice.Id);
 
-            // PREFER A CLOSED SHIFT over Shifts.FirstOrDefault(). GetShiftsAsync puts the active
-            // shift first, so the old default opened this page on the shift that just started: the
-            // operator who closed a shift, tapped «Анализировать смену» to check that the count was
-            // recorded, and was shown an empty hour instead. EndTime is the closed test rather than
-            // !IsActive, because the domain's own definition of "this shift ended" is the moment it
-            // ended, not the flag that happened to be flipped at the time. GetShiftsAsync orders
-            // closed shifts newest first, so the first one is the shift just closed.
+            // THE DEFAULT IS THE SHIFT THAT IS OPEN RIGHT NOW — the owner's instruction, and it
+            // reverses the previous "prefer a closed shift" default. The reasoning for the reversal
+            // is that the closed-first rule fixed a real case and created a larger one: during a
+            // shift, the number an operator actually wants is today's live hour, and a page that
+            // opens on yesterday forces a manual pick every single time.
+            //
+            // WHAT THE REVERSAL COSTS, stated plainly rather than discovered later. The old comment
+            // recorded a genuine complaint: an operator who closes a shift, taps «Анализировать
+            // смену» to check the count landed, and is shown an empty hour. That regresses — but only
+            // on FIRST open after a close. The common path is covered by `previousId`: the page
+            // holds the open shift while the shift runs, so closing it and coming back keeps the
+            // same selection, now marked «Завершённая». Shell keeps one page per tab, so this
+            // ViewModel instance usually survives the close. The uncovered case is a cold open of
+            // this tab straight after closing, which shows the new shift rather than the old one.
+            //
+            // EndTime is the closed test rather than !IsActive, because the domain's own definition
+            // of "this shift ended" is the moment it ended, not a flag that happened to be flipped
+            // at the time — the same reasoning as before, and it is what makes "is it open now" a
+            // question about the data instead of about bookkeeping.
             var next = Shifts.FirstOrDefault(choice => choice.Id == previousId)
+                ?? Shifts.FirstOrDefault(choice => !choice.IsClosed)
                 ?? Shifts.FirstOrDefault(choice => choice.IsClosed)
                 ?? Shifts.FirstOrDefault();
             var switched = next?.Id != previousId;

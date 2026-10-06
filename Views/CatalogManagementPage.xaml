@@ -131,7 +131,7 @@
             </Grid>
 
             <!-- ═══ CONTENT ═══ -->
-            <!-- The four sections sit directly in a Grid, not a ScrollView: a ScrollView would measure
+            <!-- The five sections sit directly in a Grid, not a ScrollView: a ScrollView would measure
                  every CollectionView to its full content height and defeat recycling. Each list owns the
                  remaining space and virtualises normally.
                  This Grid is a direct child of the root Grid with HorizontalOptions="Fill". Its
@@ -142,7 +142,7 @@
                  operator nudges it out from under by scrolling. -->
         <Grid x:Name="ContentGrid" Grid.Row="2" HorizontalOptions="Fill">
                 <!-- Why there is no pull-to-refresh anywhere on this page, and why there was a
-                     «Обновить» button instead: the four sections are four independently-scrolling
+                     «Обновить» button instead: the sections are independently-scrolling
                      CollectionViews, not one scrollable surface. A RefreshView whose child is a Grid
                      never fires the pull gesture on Android, and its IsRefreshing was bound OneWay to
                      IsBusy, so the control could write true and nothing wrote the false that stopped
@@ -450,11 +450,88 @@
                         </CollectionView>
                     </Grid>
 
+                    <!-- ── COMBOS ── -->
+                    <!-- A peer of the other four, not a sub-list of «Товары». A bundle is not a
+                         product (it has no stock of its own and no 86 — its slots do), so folding it
+                         into the product grid would imply it can be priced, deleted or toggled the
+                         way a dish is. It gets its own section and its own form.
+
+                         THE PRICE ON THE ROW IS THE BUNDLE'S OWN PRICE, and the discount beside it
+                         is the standing safeguard: if a component's price moves and nobody
+                         re-prices the bundle, the operator sees it here. The discount is computed
+                         on every catalogue load from the freshly read components, so editing a
+                         dish's price in «Товары» and coming back updates this row with nothing to
+                         refresh. -->
+                    <Grid RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsCombosSectionVisible}">
+                        <Label Grid.Row="0" Text="{Binding CombosCountText}" Style="{StaticResource CountLabel}" />
+                        <Label Grid.Row="1" Style="{StaticResource Caption}" LineBreakMode="WordWrap"
+                               Text="Цена комбо задаётся в карточке. Скидка считается от суммы компонентов — поменяете цену блюда, и здесь это видно." />
+                        <CollectionView Grid.Row="2" ItemsSource="{Binding Combos}" SelectionMode="None">
+                            <CollectionView.EmptyView>
+                                <Label Text="Комбо пока нет." Style="{StaticResource EmptyLabel}" />
+                            </CollectionView.EmptyView>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ComboRowViewModel">
+                                    <controls:CatalogRow
+                                        LongPressCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ComboActionsCommand}"
+                                        OverflowCommand="{Binding Source={x:Reference CatalogPage}, Path=BindingContext.ComboActionsCommand}"
+                                        CommandParameter="{Binding Model}"
+                                        OverflowDescription="{Binding Name, StringFormat='Действия с комбо {0}'}">
+                                        <controls:CatalogRow.RowContent>
+                                            <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="4">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                    <Label Text="{Binding Name}" Style="{StaticResource RowTitle}" />
+                                                    <!-- The figure this row exists for, in the same place
+                                                         and style as a dish's price so the two lists are
+                                                         scanned the same way. -->
+                                                    <Label Grid.Column="1" Text="{Binding PriceText}"
+                                                           Style="{StaticResource RowPrice}" MinimumWidthRequest="60"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+                                                </Grid>
+                                                <!-- What it is made of. TailTruncation rather than a
+                                                     wrap: this is a reminder of the composition, and the
+                                                     form is one tap away for the full list. -->
+                                                <Label Grid.Row="1" Text="{Binding ComponentsText}"
+                                                       Style="{StaticResource Caption}" LineBreakMode="TailTruncation" />
+                                                <!-- The discount, in words. The standing safeguard: if a
+                                                     component's price moves and nobody re-prices the
+                                                     bundle, this line is where the operator sees it.
+                                                     Empty when there is nothing to compare against. -->
+                                                <Label Grid.Row="2" Text="{Binding DiscountText}"
+                                                       Style="{StaticResource Caption}" FontAttributes="Bold"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}"
+                                                       IsVisible="{Binding DiscountText, Converter={StaticResource IsPresent}}" />
+                                                <FlexLayout Grid.Row="3" Direction="Row" Wrap="Wrap"
+                                                            VerticalOptions="Center">
+                                                    <Border Style="{StaticResource Tag}" Margin="2,2">
+                                                        <Label Text="{Binding SlotCountText}" Style="{StaticResource TagText}" />
+                                                    </Border>
+                                                    <!-- Two facts worth the pills: a bundle that still
+                                                         sells when a dish runs out, and one whose total
+                                                         cannot be trusted because a slot's dish is gone. -->
+                                                    <Border Style="{StaticResource TagInfo}" Margin="2,2"
+                                                            IsVisible="{Binding HasSubstitutes}">
+                                                        <Label Text="{Binding SubstituteText}" Style="{StaticResource TagTextInfo}" />
+                                                    </Border>
+                                                    <Border Style="{StaticResource TagWarning}" Margin="2,2"
+                                                            IsVisible="{Binding HasMissingDish}">
+                                                        <Label Text="{Binding MissingDishText}" Style="{StaticResource TagTextWarning}" />
+                                                    </Border>
+                                                </FlexLayout>
+                                            </Grid>
+                                        </controls:CatalogRow.RowContent>
+                                    </controls:CatalogRow>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </Grid>
+
                 </Grid>
 
                 <!-- ═══ FAB ═══ -->
                 <!-- An extended FAB: the "add" mark plus a label naming what it will add, because the
-                     four sections mean four different things and a bare "+" says none of them. The
+                     sections mean different things and a bare "+" says none of them. The
                      label is also the screen-reader name, so it is a real phrase rather than a shape.
                      It is a true overlay — a child of the content Grid, VerticalOptions=End /
                      HorizontalOptions=End. It floats over the list; the list scrolls underneath it.

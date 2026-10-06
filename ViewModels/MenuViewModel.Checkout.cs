@@ -11,15 +11,41 @@ namespace CafePosApp.ViewModels;
 public partial class MenuViewModel
 {
     /// <summary>
+    /// The order-level facts this cart carries, gathered above the cart and passed as one value.
+    /// </summary>
+    /// <remarks>
+    /// One parameter rather than three, because they are facts about the ORDER and not about any line:
+    /// a customer either takes the whole thing away or eats all of it on the premises. Carrying them
+    /// per line would allow one order to be half takeaway.
+    /// <para>
+    /// The phone goes in as typed and is normalised by the service, which also DROPS it for counter
+    /// service — so passing one here for a counter order would be pointless as well as unlawful. The
+    /// control makes that unreachable, and the service makes it enforced.
+    /// </para>
+    /// </remarks>
+    private OrderDetailsIntent BuildOrderDetails() => new(OrderType, CustomerPhone, RequestedAt);
+
+    /// <summary>
     /// Snapshots the cart and pre-flights the stock check shared by both checkout paths, so the
     /// operator gets an actionable shortage message before any payment is taken.
     /// </summary>
+    /// <remarks>
+    /// The pre-flight runs over <see cref="ComboExpander.Expand"/> rather than over the lines
+    /// themselves. A bundle is a rollup with no recipe of its own, so asking the planner about the
+    /// bundle finds no ingredients and reports no shortage — the exact "checked and fine" that lets an
+    /// order through and then fails at the till. Expanded, the pre-flight sees the same demands the
+    /// real write-off will produce, which is the whole point of expanding rather than teaching the
+    /// planner about bundles.
+    /// </remarks>
     private async Task<IReadOnlyList<CheckoutLine>> PrepareCheckoutAsync()
     {
         var lines = Cart.Select(item => item.ToCheckoutLine()).ToList();
 
-        // Pre-flight check so the operator gets an actionable message before the transaction.
-        var shortages = await inventory.PreviewShortagesAsync(lines.Select(line => (line.ProductId, line.Quantity)).ToList());
+        var shortages = await inventory.PreviewShortagesAsync(
+            ComboExpander.Expand(lines)
+                .Select(demand => (demand.ProductId, demand.Quantity))
+                .ToList());
+
         if (shortages.Count > 0)
         {
             throw new InsufficientStockException(shortages
@@ -31,9 +57,31 @@ public partial class MenuViewModel
     }
 
     /// <summary>
-    /// «Оплатить и создать»: take the payment first, then book the order paid. The sheet is opened
-    /// before the checkout so a dismissed sheet leaves the cart untouched.
+    /// «Оплатить {total}»: open the payment sheet, then book the order — paid, or to be paid on
+    /// collection, whichever the operator chose in the sheet. The sheet is opened before the checkout
+    /// so a dismissed sheet leaves the cart untouched.
     /// </summary>
+    /// <remarks>
+    /// <b>«Оплата при выдаче» USED TO BE A SECOND BUTTON HERE AND IS NOW A SECOND EXIT FROM THE
+    /// SHEET.</b> Customers very often pay when they collect rather than when they order, so the
+    /// choice is real and has to stay — but it is a choice about WHEN money moves, so it now lives at
+    /// the moment money moves. Two buttons became one, and this method absorbed the branch: it is the
+    /// only place that books an order, so the decision cannot be taken anywhere else.
+    /// <para>
+    /// The sheet is the right place for it rather than merely a tidier one. On the cart, the two
+    /// buttons were a fork the operator had to remember; in the sheet, «Принять оплату» and «Оплата при
+    /// выдаче» answer the same question in the same place, and the one that does not take the money
+    /// cannot be mistaken for the one that does. Baymard's 2024 study caught a tester asking, of a
+    /// «Next» button, verbatim: «I'm not sure if I click the 'Next' button, will it charge?» — the
+    /// sheet's own buttons answer that by naming what each does.
+    /// </para>
+    /// <para>
+    /// <b>ONLY THIS PATH OFFERS IT</b>, and the reason is that the same sheet is also the payment step
+    /// for an order that already exists (the board's top-up, «Принять оплату» on the details page).
+    /// There is nothing to create on that path and nothing to defer. See
+    /// <see cref="PaymentSheetRequest.AllowDeferredPayment"/>.
+    /// </para>
+    /// </remarks>
     private async Task PayAndCreateAsync()
     {
         if (Cart.Count == 0)
@@ -47,17 +95,27 @@ public partial class MenuViewModel
         {
             var lines = await PrepareCheckoutAsync();
 
-            var payment = await paymentSheet.CollectAsync(new PaymentSheetRequest("Оплата заказа", Total, 0));
+            var payment = await paymentSheet.CollectAsync(
+                new PaymentSheetRequest("Оплата заказа", Total, 0, AllowDeferredPayment: true));
             if (payment is null) return;
 
-            var order = await checkout.CheckoutAsync(lines, new PaymentIntent(payment.Amount, payment.Method));
+            // The deferred branch books the order with NO PaymentIntent at all — the same call
+            // CreateWithoutPaymentAsync used to make, and the same overload, so the two paths write an
+            // identical order and differ only in whether a payment row exists. Nothing is clamped,
+            // defaulted or invented: payment.IsDeferred means the operator declined to take money.
+            var order = payment.IsDeferred
+                ? await checkout.CheckoutAsync(lines, BuildOrderDetails())
+                : await checkout.CheckoutAsync(
+                    lines, new PaymentIntent(payment.Amount, payment.Method), BuildOrderDetails());
 
-            await FinishOrderCreatedAsync(order, $"оплачено {PaymentText.Method(payment.Method)}");
+            await FinishOrderCreatedAsync(
+                order,
+                payment.IsDeferred ? "оплата не получена" : $"оплачено {PaymentText.Method(payment.Method)}");
             haptics.Click();
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Checkout with payment failed");
+            logger.LogError(exception, "Checkout failed");
             await HandleCheckoutFailureAsync(exception);
             haptics.Warn();
         }
@@ -115,45 +173,26 @@ public partial class MenuViewModel
     }
 
     /// <summary>
-    /// «Создать без оплаты»: book the order unpaid. It shows as unpaid on the board and payment
-    /// can be collected later from its card or the details page.
-    /// </summary>
-    private async Task CreateWithoutPaymentAsync()
-    {
-        if (Cart.Count == 0)
-        {
-            Message = "Добавьте товары в заказ.";
-            return;
-        }
-
-        IsBusy = true;
-        try
-        {
-            var lines = await PrepareCheckoutAsync();
-            var order = await checkout.CheckoutAsync(lines);
-            await FinishOrderCreatedAsync(order, "оплата не получена");
-            haptics.Click();
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "Checkout failed");
-            await HandleCheckoutFailureAsync(exception);
-            haptics.Warn();
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    /// <summary>
     /// Clears the cart and reports what happened. The message names the outcome — paid by which
     /// method, or unpaid — so the operator does not have to open the board to find out.
     /// </summary>
+    /// <remarks>
+    /// The order-level facts are cleared with the cart, and that is a privacy requirement rather than
+    /// tidiness: a phone left on an emptied screen would be carried into the NEXT order and written to
+    /// it by <see cref="BuildOrderDetails"/> with nobody having entered it for that sale. The fulfilment
+    /// type goes back to counter service for the same reason — the default is the sale that stores the
+    /// least personal data, so a phone can never reach an order by inertia.
+    /// </remarks>
     private async Task FinishOrderCreatedAsync(Order order, string paymentText)
     {
         Cart.Clear();
         Recalculate();
+        OrderType = OrderType.CounterService;
+        CustomerPhone = null;
+        RequestedAt = null;
+        // The cart is no longer the restored draft; it is a new, unstarted one. Left in place it
+        // would head an empty «Корзина» with a note about an order that has now been paid for.
+        DraftNotice = string.Empty;
         await drafts.ClearActiveCartAsync();
         Message = $"Заказ #{order.OrderNumber} создан на {TextFormat.Money(order.TotalPrice)}, {paymentText}.";
     }
@@ -175,6 +214,23 @@ public partial class MenuViewModel
             var parked = await drafts.ParkAsync(name, Cart.Select(item => item.ToCheckoutLine()).ToList());
             Cart.Clear();
             Recalculate();
+            // The lines now belong to a parked receipt with its own name, so the header has no
+            // unsaved-draft fact left to state.
+            DraftNotice = string.Empty;
+
+            // The order-level facts are dropped with the cart, and this is a KNOWN GAP rather than a
+            // decision: DraftOrder has OrderType / CustomerPhone / RequestedAt columns and
+            // DraftOrderItem has its Components table, but IDraftOrderService takes only a line list and
+            // hands back a CartSnapshot of lines — there is no parameter to write those three columns
+            // through and none in the shape returned to read them back. So parking a cart that has a
+            // phone and a chosen time loses both, and this reset is what keeps them from being carried
+            // into the next order instead. The Core side needed is: an OrderDetailsIntent parameter on
+            // ParkAsync/SaveActiveCartAsync and on CartSnapshot, plus a ThenInclude on Components in
+            // LoadActiveCartAsync/TakeAsync.
+            OrderType = OrderType.CounterService;
+            CustomerPhone = null;
+            RequestedAt = null;
+
             await drafts.ClearActiveCartAsync();
             Message = $"Чек отложен: {parked.Name}.";
         }
@@ -203,8 +259,12 @@ public partial class MenuViewModel
 
             var snapshot = await drafts.TakeAsync(draftId.Value);
             Cart.Clear();
-            foreach (var line in snapshot.Lines) Cart.Add(CartItemViewModel.FromLine(line));
+            // WithComponents, so a parked bundle comes back with its slots — see RestoreDraftAsync.
+            foreach (var line in snapshot.Lines) Cart.Add(CartItemViewModel.FromLine(line).WithComponents(line.Components));
             Recalculate();
+            // A parked receipt is not an unsaved one: the header note is specifically about lines
+            // recovered from a draft after the app went away, and would be a false statement here.
+            DraftNotice = string.Empty;
             Message = "Отложенный чек загружен.";
             haptics.Click();
         }

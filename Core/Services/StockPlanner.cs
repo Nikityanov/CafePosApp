@@ -1,3 +1,4 @@
+using CafePos.Core.Common;
 using CafePos.Core.Data;
 using CafePos.Core.Errors;
 using CafePos.Core.Models;
@@ -173,12 +174,34 @@ internal sealed record StockPlan(
 /// <summary>Builds stock plans from recipes. All quantity math stays in memory (see Ingredient).</summary>
 internal static class StockPlanner
 {
+    /// <summary>
+    /// What has to be written off for a cart, as dishes rather than as cart lines.
+    /// <para>
+    /// <b>THE INPUT IS EXPANDED, NOT A LIST OF LINES.</b> It used to be
+    /// <c>(ProductId, Quantity)</c> pairs taken straight from the cart, which meant a bundle arrived
+    /// here as itself — and a bundle has no recipe, because it is a rollup rather than a dish, so its
+    /// ingredients were never looked up and never written off. Taking the expanded demands instead
+    /// (see <c>ComboExpander</c>) is what lets a bundle's slots reach the same recipe lookup as any
+    /// other dish, with no second write-off engine and no change to anything below this line.
+    /// </para>
+    /// <para>
+    /// <c>ProductDemand</c> rather than a bare pair because the shortage message needs the dish's name,
+    /// and a shortage a cashier cannot name is a shortage they have to go and look up.
+    /// </para>
+    /// <para>
+    /// Duplicates are expected and are summed below: two lines of the same dish, or two slots of the
+    /// same dish inside one bundle, are one ingredient demand and must add up rather than overwrite
+    /// each other.
+    /// </para>
+    /// </summary>
     public static async Task<StockPlan> BuildAsync(
         AppDbContext db,
-        IReadOnlyList<(Guid ProductId, int Quantity)> lines,
+        IReadOnlyList<ProductDemand> demands,
         CancellationToken cancellationToken)
     {
-        var productIds = lines.Select(line => line.ProductId).Distinct().ToList();
+        ArgumentNullException.ThrowIfNull(demands);
+
+        var productIds = demands.Select(demand => demand.ProductId).Distinct().ToList();
         if (productIds.Count == 0) return new StockPlan(new Dictionary<Guid, decimal>(), [], []);
 
         var recipe = await db.RecipeItems.AsNoTracking()
@@ -189,11 +212,14 @@ internal static class StockPlanner
         if (recipe.Count == 0) return new StockPlan(new Dictionary<Guid, decimal>(), [], []);
 
         var required = new Dictionary<Guid, decimal>();
-        foreach (var line in lines)
+        foreach (var demand in demands)
         {
-            foreach (var item in recipe.Where(entry => entry.ProductId == line.ProductId))
+            foreach (var item in recipe.Where(entry => entry.ProductId == demand.ProductId))
             {
-                required[item.IngredientId] = required.GetValueOrDefault(item.IngredientId) + item.Quantity * line.Quantity;
+                // "+=" and not "=": the same ingredient reached through two dishes, or through the same
+                // dish twice, is two withdrawals from the shelf. Overwriting here would deduct one of
+                // them and the stock would drift up by exactly the amount of the one that vanished.
+                required[item.IngredientId] = required.GetValueOrDefault(item.IngredientId) + item.Quantity * demand.Quantity;
             }
         }
 

@@ -7,7 +7,7 @@ namespace CafePosApp.ViewModels;
 /// action, and the validation message shown above them.
 /// </summary>
 /// <remarks>
-/// The four form ViewModels each grew these members independently, and the footer used to be a
+/// The five form ViewModels each grew these members independently, and the footer used to be a
 /// <c>DataTemplate</c> instantiated four times — which is not possible in .NET MAUI 10, because no
 /// cross-platform control has a <c>ContentTemplate</c> (see Views/CatalogFormsPage.xaml). The
 /// footer is built in code now, and a Binding resolves by name at run time: a ViewModel missing

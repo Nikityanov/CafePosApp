@@ -82,6 +82,123 @@ public interface IVariantPicker
 }
 
 /// <summary>
+/// What came back from the "when" control: no time at all (as soon as possible), or a clock time.
+/// </summary>
+/// <remarks>
+/// A discriminant and not a bare <see cref="DateTimeOffset"/>: "the order is ASAP" and "the sheet
+/// was dismissed" are both an absent time, and collapsing them would mean a tap on the scrim silently
+/// moved the order to the ASAP promise. <see cref="Order.RequestedAt"/> being null is the ASAP state,
+/// so the two are genuinely different facts and they have to be told apart on the way in.
+/// </remarks>
+public sealed record TimePickResult(bool IsAsSoonAsPossible, TimeSpan TimeOfDay)
+{
+    /// <summary>The order is wanted as soon as possible — the promise falls back to the lead time.</summary>
+    public static readonly TimePickResult AsSoonAsPossible = new(true, TimeSpan.Zero);
+
+    /// <summary>The customer named a clock time.</summary>
+    public static TimePickResult At(TimeSpan timeOfDay) => new(false, timeOfDay);
+}
+
+/// <summary>
+/// Asks the operator when the order should be ready, and can express "now" as well as a clock time.
+/// </summary>
+/// <remarks>
+/// <b>WHY A NEW SEAM AND NOT A Prompt.</b> <see cref="IDialogService"/> has Prompt, Confirm, Alert and
+/// Choose, and none of them can express «14:20» — the operator would type it, and a typed time is
+/// parsed by string comparison, which is exactly the kind of free text that produces an order promised
+/// for "вчера". The third option has to exist too: an empty time IS «сейчас»
+/// (<see cref="Order.RequestedAt"/> is null), so the control is a single choice with two faces, not
+/// a checkbox beside a field.
+/// <para>
+/// The seam is a seam because the SHEET had to change shape, not because the caller needed a different
+/// type: on Android a MAUI <c>TimePicker</c> opens the system dial in a second window over the popup,
+/// and formatting the value it returned killed the process (<c>TimeSpan.ToString("HH:mm")</c> throws —
+/// see <see cref="ClockTime"/> and <c>Views/TimePickerPopup</c>). Neither fact is visible from here,
+/// and both were only findable on the device; what stays visible is that the caller names a time of day
+/// and gets one back, and that a null result is a dismissal rather than an answer.
+/// </para>
+/// </remarks>
+public interface IOrderTimePicker
+{
+    /// <param name="title">Sheet title, e.g. «Когда приготовить».</param>
+    /// <param name="initial">
+    /// The clock time already chosen, or <c>null</c> when the order is as soon as possible — which is
+    /// also what the sheet opens on, so the operator sees the current state rather than a blank form.
+    /// </param>
+    /// <returns>The choice, or <c>null</c> when the sheet was dismissed and nothing changed.</returns>
+    Task<TimePickResult?> PickAsync(string title, TimeSpan? initial, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// A dish a bundle slot may be filled with, as the composition sheet offers it.
+/// </summary>
+/// <param name="ProductId">The dish.</param>
+/// <param name="Label">
+/// What the sheet prints. Pre-composed by the caller rather than assembled here, because the only case
+/// that needs composing is a substitution — the slot's dish ran out and this is the replacement — and
+/// the words for that belong next to the rule that decides it.
+/// </param>
+/// <param name="UnitKopecks">
+/// What one of this dish is charged inside the bundle, in kopecks, already resolved by
+/// <see cref="CafePos.Core.Common.ComboPricing.ResolveUnitKopecks"/>: a slot priced explicitly keeps that
+/// price, otherwise the dish's own price is used. The sheet shows a running total from these, and the
+/// price that is actually charged is recomputed from the catalogue at checkout.
+/// </param>
+/// <param name="ReferenceKopecks">
+/// What this dish costs on its own, in kopecks — Simphony's "Prep Cost", and the figure
+/// <see cref="CafePos.Core.Models.OrderItemComponent.ReferencePriceKopecks"/> keeps beside
+/// <c>UnitPriceKopecks</c> so that one sale can answer two reports. The sheet shows what the bundle
+/// saves against it.
+/// </param>
+public sealed record ComboSlotOption(Guid ProductId, string Label, long UnitKopecks, long ReferenceKopecks);
+
+/// <summary>One slot of a bundle as the cashier left it: which dish, and how many of it per unit.</summary>
+public sealed record ComboSlotChoice(Guid ProductId, int QuantityPerUnit);
+
+/// <summary>
+/// What the composition sheet opens on: the dishes it may offer, what is in the sheet already, and
+/// the bundle's own price.
+/// </summary>
+/// <remarks>
+/// ONE REQUEST SHAPE FOR BOTH CASES, and that is the whole point: a catalogue bundle arrives with a
+/// filled <see cref="Selection"/> and <see cref="Empty"/> arrives with none. They are the
+/// same sheet, the same rows and the same confirm — a custom build is not a second mechanic, it is
+/// this one started empty.
+/// </remarks>
+/// <param name="Title">Sheet title, naming the bundle.</param>
+/// <param name="Options">The dishes a slot may hold. See <see cref="ComboSlotOption"/>.</param>
+/// <param name="Selection">The slots already in the bundle; empty for a custom build.</param>
+/// <param name="PriceKopecks">
+/// The bundle's own price, in kopecks — what the till charges. Shown as the sheet's main figure,
+/// with the à la carte sum of the slots as the reference it is measured against. Zero when the
+/// caller does not know it (a custom build from scratch), in which case the sheet shows the sum
+/// alone.
+/// </param>
+public sealed record ComboEditorRequest(
+    string Title,
+    IReadOnlyList<ComboSlotOption> Options,
+    IReadOnlyList<ComboSlotChoice> Selection,
+    long PriceKopecks = 0)
+{
+    /// <summary>An empty build: the sheet with nothing chosen yet.</summary>
+    public static ComboEditorRequest Empty { get; } = new("Состав комбо", [], []);
+}
+
+/// <summary>
+/// Opens the one composition sheet that serves both a catalogue bundle and a custom build.
+/// </summary>
+public interface IComboEditor
+{
+    /// <returns>
+    /// The slots the cashier settled on, or <c>null</c> when the sheet was dismissed — a dismissal is
+    /// not an empty composition, and treating it as one would drop a bundle off the cart on a stray tap.
+    /// </returns>
+    Task<IReadOnlyList<ComboSlotChoice>?> ComposeAsync(
+        ComboEditorRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Shows the overflow menu of a list row and reports the chosen action.
 /// </summary>
 /// <remarks>

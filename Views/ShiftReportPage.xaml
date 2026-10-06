@@ -28,7 +28,7 @@
          Do not remove this ScrollView a third time without knowing the verdict above.
          ═══════════════════════════════════════════════════════════════════════════════════════ -->
     <ScrollView>
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
             <!-- No toolbar row. «Обновить» is gone by the owner's decision, and it was the only
              thing this row held — it duplicated leaving and re-entering the page. Nothing is
              lost by removing it: this page has no polling, and OnAppearing reloads, so
@@ -420,6 +420,115 @@
                 <Label Grid.Row="8" Text="Закрытых заказов пока нет." Style="{StaticResource EmptyLabel}"
                        HorizontalTextAlignment="Start"
                        IsVisible="{Binding HasNoShiftHistory}" />
+                <!-- ═══════════════════════════════════════════════════════════════════════════
+                     «СКИДКИ» — THE PRICE CONTROL, AND THE WHOLE OF IT.
+
+                     This section is the feature plan 4.2 asks for, at Tier 1: DETECTION, not
+                     prevention. Nothing on this page prevents anything, nothing was refused at the
+                     till, and there is deliberately no reason code and no manager PIN here or
+                     anywhere else — a justification collected at the till becomes the first option
+                     clicked and controls nothing, and this project has no operator entity to hold an
+                     approval yet. What it does is make the override VISIBLE to whoever reads the
+                     shift afterwards, at zero friction during the sale itself.
+
+                     IT IS NOT PART OF ANY TOTAL ABOVE, and the note under the heading says so on
+                     screen rather than leaving it to be inferred from the layout. Two orders' worth
+                     of this cannot be added together even in principle: a cancelled order's money
+                     went back, so its line is here and its discount is not money anyone kept.
+                     Summing it would report a figure that describes nothing.
+
+                     VOIDED ROWS ARE INCLUDED ON PURPOSE and carry a «отменён» pill. A voided sale is
+                     precisely where an overridden price is worth seeing — the price was touched and
+                     then the sale was undone, which is a mistake twice over — and the domain filters
+                     on the price mismatch rather than on the order status for the same reason.
+
+                     WHAT IS DELIBERATELY NOT HERE, so it is not rediscovered as a bug: bundles that
+                     are cheaper than their parts ON PURPOSE. The filter is a price mismatch, so a
+                     legitimately discounted bundle does not appear. That is documented on
+                     IOrderService.GetDiscountedLinesAsync and it is a decision, not an omission.
+
+                     The rows are cards, like the two lists above, and every figure is LABELLED —
+                     «Разрешено», «Взимается», «Скидка» — rather than left to three numbers in a row
+                     to be told apart. An audit list whose columns have to be guessed at is not an
+                     audit list, and on a 360dp card a four-column grid would have had to clip.
+                     ═══════════════════════════════════════════════════════════════════════════ -->
+                <VerticalStackLayout Grid.Row="9" Spacing="4" IsVisible="{Binding HasOpenShift}">
+                    <Label Text="Скидки" Style="{StaticResource SectionTitle}" />
+                    <Label Text="{Binding DiscountsNote}" Style="{StaticResource Caption}"
+                           LineBreakMode="WordWrap" />
+                    <!-- Left-aligned for the same reason as the two empty states above, and by the
+                         same local override: EmptyLabel centres every empty state in the app and this
+                         page aligns its text to the left everywhere else.
+                         The whole section is bound to HasOpenShift, like the movements list above:
+                         with no shift there is nothing to detect, and an empty «Скидок не было» on a
+                         screen that says «Смена не открыта» would claim a shift had none. -->
+                    <Label Text="Скидок и пересмотров цены не было." Style="{StaticResource EmptyLabel}"
+                           HorizontalTextAlignment="Start"
+                           IsVisible="{Binding HasNoDiscountedLines}" />
+
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding DiscountedLines}" Spacing="0">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DiscountedLineRow">
+                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
+                                    <VerticalStackLayout Spacing="4">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <Label Text="{Binding OrderTitle}" FontAttributes="Bold" />
+                                            <!-- The voided marker. A plain Tag, NOT TagWarning: a void is
+                                                 a FACT about the ledger, and an orange pill would claim it
+                                                 is a warning. The word carries the state; the pill only
+                                                 marks it. Same right edge as the amounts below, so a pill
+                                                 appearing cannot shift them out from under the eye. -->
+                                            <Border Grid.Column="1" Style="{StaticResource Tag}"
+                                                    VerticalOptions="Center" IsVisible="{Binding IsVoided}"
+                                                    SemanticProperties.Description="{Binding VoidedHint}">
+                                                <Label Text="{Binding VoidedText}" Style="{StaticResource TagText}" />
+                                            </Border>
+                                        </Grid>
+
+                                        <Label Text="{Binding LineTitle}" LineBreakMode="WordWrap" />
+                                        <!-- Variant and modifier ride along on their own line, hidden when
+                                             there is neither. A label that printed «Без модификатора» on
+                                             every row would be telling the operator something the row
+                                             does not know. -->
+                                        <Label Text="{Binding ModifierText}" Style="{StaticResource Caption}"
+                                               LineBreakMode="WordWrap"
+                                               IsVisible="{Binding HasModifierText}" />
+
+                                        <!-- Labelled figures, one per line: quantity, the allowed
+                                             price, the price actually charged, and the difference.
+                                             Auto,* so the labels keep their width and the amounts align
+                                             down the section — which is what makes a column of them
+                                             addable by eye, the same reason CashMovementRow signs its
+                                             amounts. -->
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" RowSpacing="1">
+                                            <Label Text="Количество" Style="{StaticResource Caption}" />
+                                            <Label Grid.Column="1" Text="{Binding QuantityText}" />
+                                            <Label Grid.Row="1" Text="Разрешено" Style="{StaticResource Caption}" />
+                                            <Label Grid.Row="1" Grid.Column="1" Text="{Binding AllowedPriceText}" />
+                                            <Label Grid.Row="2" Text="Взимается" Style="{StaticResource Caption}" />
+                                            <Label Grid.Row="2" Grid.Column="1" Text="{Binding ChargedPriceText}" />
+                                            <!-- The label is bound, not literal: a price can be RAISED as
+                                                 well as lowered, and a section that can only say «Скидка»
+                                                 would misname the half of the changes that raise. -->
+                                            <Label Grid.Row="3" Text="{Binding DifferenceLabel}" Style="{StaticResource Caption}" />
+                                            <Label Grid.Row="3" Grid.Column="1" Text="{Binding DifferenceText}"
+                                                   FontAttributes="Bold" />
+                                        </Grid>
+
+                                        <!-- THE SECOND, INDEPENDENT SIGNAL. Only on a bundle line, and
+                                             labelled as what it is: what the same dishes cost on their own.
+                                             It is NOT the same figure as the difference above — a bundle
+                                             priced at exactly the sum of its slots has nothing to report
+                                             here and everything to report there. -->
+                                        <Label Text="{Binding BundleText}" Style="{StaticResource Caption}"
+                                               LineBreakMode="WordWrap" IsVisible="{Binding HasBundleText}" />
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+
                 <!-- No reconciliation block on THIS page, and that is a decision rather than an
                      omission: the page rebinds to whichever shift is open and its route
                      carries no shift id, so it can only ever display the open shift — which by
@@ -427,7 +536,7 @@
                      the analytics page is the one screen that can read a closed shift.
                      The description carries the one thing the operator must know before pressing it:
                      the count is asked for and the shift does not close without one. -->
-                <Button Grid.Row="9" Text="Закрыть смену" Style="{StaticResource DangerButton}"
+                <Button Grid.Row="10" Text="Закрыть смену" Style="{StaticResource DangerButton}"
                         Command="{Binding CloseShiftCommand}"
                         SemanticProperties.Description="Закрыть смену и пересчитать кассу. Будет запрошена сумма, и без неё смена не закроется." />
         </Grid>

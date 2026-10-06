@@ -1,0 +1,80 @@
+<toolkit:Popup x:TypeArguments="services:ContactDetailsSheetResult"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="clr-namespace:CommunityToolkit.Maui.Views;assembly=CommunityToolkit.Maui"
+             xmlns:views="clr-namespace:CafePosApp.Views"
+             xmlns:services="clr-namespace:CafePosApp.Services"
+             x:Class="CafePosApp.Views.ContactDetailsSheetPopup"
+             x:DataType="views:ContactDetailsSheetPopup"
+             x:Name="Sheet"
+             VerticalOptions="End"
+             HorizontalOptions="Fill"
+             Margin="0"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+    <!-- VerticalOptions="Start" on the ScrollView is what makes this a sheet and not a panel, for the
+         same measured reason as PaymentSheetPopup: a ScrollView inside a Popup fills whatever height it
+         is offered, so without Start a two-field form came out filling most of the screen. -->
+    <ScrollView VerticalOptions="Start">
+        <VerticalStackLayout x:Name="SheetContent" Padding="16,8,16,16" Spacing="0">
+            <BoxView Style="{StaticResource BottomSheetHandle}" />
+
+            <Label x:Name="TitleLabel" FontSize="15" Margin="0,12,0,8"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"
+                   LineBreakMode="TailTruncation" />
+
+            <!-- THE PHONE. Optional in the field itself and refused by Core for a counter-service order
+                 unless the operator agrees below — the field does not know about the contour, because
+                 the contour is not the field's to decide. -->
+            <Label Text="Телефон" Style="{StaticResource FieldLabel}" />
+            <Entry x:Name="PhoneEntry" Style="{StaticResource FormField}" Keyboard="Telephone"
+                   Placeholder="+7 916 123-45-67" Margin="0,2,0,4"
+                   SemanticProperties.Description="Телефон клиента" />
+
+            <!-- THE WHOLE ROW IS THE TAP TARGET, and that is not a styling choice.
+                 A bare MAUI CheckBox is about 24dp, which is under the app's own touch-target floor — so
+                 the checkbox ALONE left the operator aiming at a small square, and on the emulator the tap
+                 kept missing it. The CheckBox is kept as a state holder and a visual, made
+                 non-interactive, and the row around it carries the gesture: 48dp tall by construction,
+                 and a target whose text can be found by a test instead of by pixel arithmetic.
+                 The reason it is a deliberate confirmation rather than an implied rule is unchanged:
+                 changing the fulfilment mode of a closed sale is a decision the operator makes knowingly. -->
+            <Border x:Name="PromoteBorder" Style="{StaticResource CardBorder}" Padding="12,10" Margin="0,0,0,6"
+                    StrokeThickness="1">
+                <VerticalStackLayout Spacing="4">
+                    <CheckBox x:Name="PromoteCheck" IsEnabled="False" />
+                    <Label x:Name="PromoteLabel" FontSize="13" LineBreakMode="WordWrap"
+                           SemanticProperties.Description="Сменить заказ на «С собой»" />
+                </VerticalStackLayout>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnPromoteTapped" />
+                </Border.GestureRecognizers>
+            </Border>
+
+            <!-- THE TIME. One row, not a field: the value is a clock time chosen from the app's own
+                 picker, and a free-text box would be parsed by string comparison — which is how an order
+                 ends up promised for «вчера». Tapping opens the same IOrderTimePicker the cart uses. -->
+            <Label Text="Время выдачи" Style="{StaticResource FieldLabel}" Margin="0,4,0,2" />
+            <Border x:Name="TimeRow" Style="{StaticResource CardBorder}" Padding="12,10" StrokeThickness="1">
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label x:Name="TimeLabel" FontSize="16" VerticalTextAlignment="Center" />
+                    <Label Grid.Column="1" Text="›" FontSize="20" VerticalTextAlignment="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray500}}" />
+                </Grid>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnTimeTapped" />
+                </Border.GestureRecognizers>
+            </Border>
+
+            <!-- BOTH BUTTONS CARRY A Clicked HANDLER, and that is written here rather than attached in
+                 code because their omission was a real defect this sheet shipped with: with no Clicked
+                 on either, the sheet could not be confirmed at all — the only way out was tapping outside
+                 it — and it looked like a tap-targeting problem on the emulator rather than two dead
+                 buttons. A sheet whose primary action is wired to nothing is not a sheet. -->
+            <Button x:Name="ConfirmButton" Text="Дописать" Margin="0,14,0,0" MinimumHeightRequest="48"
+                    Clicked="OnConfirmClicked"
+                    SemanticProperties.Description="Записать телефон и время в заказ" />
+            <Button x:Name="CancelButton" Text="Отмена" Style="{StaticResource SecondaryButton}"
+                    Margin="0,6,0,0" MinimumHeightRequest="48" Clicked="OnCancelClicked" />
+        </VerticalStackLayout>
+    </ScrollView>
+</toolkit:Popup>

@@ -1,4 +1,5 @@
 using CafePos.Core.Data;
+using CafePos.Core.Models;
 using CafePos.Core.Schema;
 using CafePos.Core.Services;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,12 @@ public static class CoreServiceCollectionExtensions
         services.AddSingleton(options);
         services.TryAddSingleton(TimeProvider.System);
 
+        // One assignment, once, at startup: the promise an order without a requested time is given.
+        // It is ambient (see Order.LeadTimeMinutes) rather than injected because PromisedAt is read
+        // straight from markup with nowhere to receive a parameter, and it is read at startup so that
+        // a promise computed later cannot disagree with the menu that quoted it.
+        Order.LeadTimeMinutes = options.LeadTimeMinutes;
+
         services.AddDbContextFactory<AppDbContext>(builder => builder
             .UseSqlite(options.ConnectionString)
             .EnableDetailedErrors());
@@ -28,9 +35,11 @@ public static class CoreServiceCollectionExtensions
         services.AddSingleton<DatabaseBootstrapper>();
 
         services.AddSingleton<ICatalogService, CatalogService>();
+        services.AddSingleton<IComboService, ComboService>();
         services.AddSingleton<IOrderService, OrderService>();
         services.AddSingleton<ICheckoutService, CheckoutService>();
         services.AddSingleton<IInventoryService, InventoryService>();
+        services.AddSingleton<IContactDataService, ContactDataService>();
         services.AddSingleton<ICashLedgerService, CashLedgerService>();
         services.AddSingleton<IShiftSession, ShiftSession>();
         services.AddSingleton<IDraftOrderService, DraftOrderService>();

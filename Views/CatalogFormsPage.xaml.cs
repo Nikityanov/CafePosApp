@@ -6,9 +6,9 @@ using CafePosApp.ViewModels;
 namespace CafePosApp.Views;
 
 /// <summary>
-/// Modal sheet hosting the catalogue forms (product / category / modifier group / ingredient).
+/// Modal sheet hosting the catalogue forms (product / category / modifier group / ingredient / combo).
 /// All behaviour lives in <see cref="CatalogFormViewModel"/> and its sub-ViewModels;
-/// the page only pushes/pops itself, fills in the four shared footers, and reports whether
+/// the page only pushes/pops itself, fills in the shared footers, and reports whether
 /// anything was saved.
 /// </summary>
 public partial class CatalogFormsPage : ContentPage
@@ -25,11 +25,12 @@ public partial class CatalogFormsPage : ContentPage
         this.dialogs = dialogs;
         viewModel.CloseRequested += OnCloseRequested;
 
-        // One footer definition, four slots — see BuildFormFooter for why this is not a DataTemplate.
+        // One footer definition, five slots — see BuildFormFooter for why this is not a DataTemplate.
         ProductFooterHost.Children.Add(BuildFormFooter(viewModel.Product));
         CategoryFooterHost.Children.Add(BuildFormFooter(viewModel.Category));
         ModifierFooterHost.Children.Add(BuildFormFooter(viewModel.Modifier));
         IngredientFooterHost.Children.Add(BuildFormFooter(viewModel.Ingredient));
+        ComboFooterHost.Children.Add(BuildFormFooter(viewModel.Combo));
 
         // The ScrollView used to ask for KeyboardDismissMode="WhileScrolling", which is an iOS
         // UIScrollView member no MAUI control exposes. Unfocus is the mechanism MAUI does have, and
@@ -97,7 +98,7 @@ public partial class CatalogFormsPage : ContentPage
     }
 
     /// <summary>
-    /// Builds the footer shared by all four forms: the validation message over Save / Отмена.
+    /// Builds the footer shared by all five forms: the validation message over Save / Отмена.
     /// </summary>
     /// <remarks>
     /// This used to be a <c>DataTemplate</c> in the page's resources, instantiated through

@@ -31,8 +31,13 @@ public partial class ShiftReportViewModel
                 shiftId = Guid.Empty;
                 ShiftHistory.Clear();
                 CashMovements.Clear();
+                // Cleared on this path too, not left holding the previous shift's rows: after a
+                // close this ViewModel rebinds to nothing, and a «Скидки» list still showing the
+                // shift that just ended would look like it belonged to the next one.
+                DiscountedLines.Clear();
                 OnPropertyChanged(nameof(HasNoShiftHistory));
                 OnPropertyChanged(nameof(HasNoCashMovements));
+                OnPropertyChanged(nameof(HasNoDiscountedLines));
                 OnPropertyChanged(nameof(StartTimeText));
                 Message = "Смена не открыта.";
                 return;
@@ -81,14 +86,28 @@ public partial class ShiftReportViewModel
             // GetShiftOrderHistoryAsync (Completed AND Cancelled), not GetCompletedOrdersAsync.
             // Cancelling a paid order flips it to Cancelled, so under the old query the one sale a
             // manager most needs to see after a bad void vanished from the only list they read.
+            //
+            // ONE `now`, taken here and handed to every row. OrderRowViewModel judges each order
+            // against the instant it was given rather than reading a clock of its own, so that two
+            // orders promised for the same minute cannot land in different sections because their
+            // rows were built microseconds apart. The loader is the only place that knows what
+            // "now" means for a whole list, which is why it is passed in rather than derived.
+            var now = DateTimeOffset.Now;
             var history = await orders.GetShiftOrderHistoryAsync(shift.Id);
-            ShiftHistory.SyncWith(history.Select(order => new OrderRowViewModel(order, settings)), row => row.Model.Id);
+            ShiftHistory.SyncWith(history.Select(order => new OrderRowViewModel(order, settings, now)), row => row.Model.Id);
             // BindableLayout has no EmptyView, so «Закрытых заказов пока нет.» is a label bound to
             // this flag. The flag is derived from the count and therefore notifies itself when it
             // has to — but only if something asks it to, and SyncWith raises collection changes
             // without consulting the ViewModel. This is the one line that keeps a shift with no
             // closed orders from rendering a bare section heading.
             OnPropertyChanged(nameof(HasNoShiftHistory));
+
+            // The price control. Read from the domain rather than derived here, and deliberately
+            // NOT folded into any of the figures above: a voided order's line is in this list and
+            // its money is not in the revenue, so a total computed over the two would be a figure
+            // that describes nothing. Read after the history so a failure in the extra query still
+            // leaves the report above it populated.
+            SyncDiscountedLines(await orders.GetDiscountedLinesAsync(shift.Id));
 
             Message = string.Empty;
         }
@@ -150,6 +169,26 @@ public partial class ShiftReportViewModel
         }
 
         OnPropertyChanged(nameof(HasNoCashMovements));
+    }
+
+    /// <summary>
+    /// Brings the «Скидки» list in line with the domain.
+    /// </summary>
+    /// <remarks>
+    /// Clear + Add, and NOT <c>ObservableCollectionSync.SyncWith</c>, for one reason:
+    /// <see cref="DiscountedLine"/> carries no identifier of its own, so any key would have to be
+    /// assembled out of the values themselves — and two overridden lines that agree on every value
+    /// would then collapse into a single row. In an audit list a silently missing row is a worse
+    /// defect than a list that is re-created on load, and this list is re-read only when the page
+    /// appears or a reload is asked for.
+    /// </remarks>
+    private void SyncDiscountedLines(List<DiscountedLine> lines)
+    {
+        DiscountedLines.Clear();
+        foreach (var line in lines)
+            DiscountedLines.Add(new DiscountedLineRow(line, settings.OrderPrefix));
+
+        OnPropertyChanged(nameof(HasNoDiscountedLines));
     }
 
     /// <summary>

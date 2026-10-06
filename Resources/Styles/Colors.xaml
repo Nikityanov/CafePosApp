@@ -186,6 +186,12 @@
     <Color x:Key="Category7">#FFF8E1</Color>  <!-- Amber -->
     <Color x:Key="Category8">#E8EAF6</Color>  <!-- Indigo -->
 
+    <!-- The "Комбо" filter chip. NOT a ninth category pastel: a bundle is not a section and
+         borrows no CategoryId, it is the other KIND of thing on this page. It lives here so the
+         chip has a real token to read instead of a literal in C#, which AppThemeBinding would
+         never reach. Placed between Category4 and Category8 in tone. -->
+    <Color x:Key="Combo">#EDE7F6</Color>
+
     <!-- ═══════════════════════════════════════════ -->
     <!--  BASIC COLORS                               -->
     <!-- ═══════════════════════════════════════════ -->

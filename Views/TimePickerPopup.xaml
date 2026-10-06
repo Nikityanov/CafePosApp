@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- The "when" control. A BOTTOM SHEET rather than the centred pill ModifierPickerPopup uses,
+     because this one carries two steppers, three presets and a running caption — the shape
+     PaymentSheetPopup is built from, down to the handle, the dimmed backdrop and the
+     full-width sizing. -->
+<toolkit:Popup x:TypeArguments="services:TimePickResult"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="clr-namespace:CommunityToolkit.Maui.Views;assembly=CommunityToolkit.Maui"
+             xmlns:views="clr-namespace:CafePosApp.Views"
+             xmlns:services="clr-namespace:CafePosApp.Services"
+             x:Class="CafePosApp.Views.TimePickerPopup"
+             x:DataType="views:TimePickerPopup"
+             x:Name="Sheet"
+             VerticalOptions="End"
+             HorizontalOptions="Fill"
+             Margin="0"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+    <ScrollView x:Name="SheetScroll" VerticalOptions="Start">
+        <VerticalStackLayout x:Name="SheetContent" Padding="16,8,16,16" Spacing="0">
+            <BoxView Style="{StaticResource BottomSheetHandle}" />
+
+            <Label x:Name="TitleLabel" FontSize="15" Margin="0,12,0,4"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"
+                   LineBreakMode="TailTruncation" />
+
+            <!-- WHAT "СЕЙЧАС" COSTS, said on the sheet itself. "Сейчас" is not the absence of a
+                 promise: it is the lead-time promise, and an operator who reads it as "ignore me"
+                 quotes a time they cannot keep. The figure is the domain's own lead time, read
+                 through Order.LeadTimeMinutes rather than hard-coded here. -->
+            <Label x:Name="AsapNoteLabel" FontSize="12" Margin="0,0,0,10" LineBreakMode="WordWrap"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+
+            <!-- ═══ THE TIME, AS A READ-BACK ═══
+                 The largest thing on the sheet, and the only place the chosen time is printed as a
+                 time: the two stepper rows below name their UNIT («Часы», «Минуты») and their STEP
+                 («−1 ч», «+5 мин») rather than repeating the digits, so this label is the single
+                 answer to "what time did I just set" and there is nothing to reconcile.
+
+                 IT REPLACES A TimePicker, AND THE REASON IS MEASURED. On Android MAUI's TimePicker is
+                 an EditText that opens the SYSTEM dial (android.widget.RadialTimePickerView with its
+                 own OK/Cancel) in a second window above this Popup — confirmed on the emulator. The
+                 sheet's whole input path therefore depended on a native dialog stealing focus from a
+                 toolkit Popup, and the app also died on that path: the dialog's onTimeSet callback
+                 assigns Clock.Time, which raised PropertyChanged into SetMode, which formatted the
+                 value with TimeSpan.ToString("HH:mm") — a FormatException, on the UI thread, in an
+                 event handler. See Services/ClockTime for the whole incident. In-sheet controls have
+                 no second window, so there is nothing left to go wrong between the tap and the value. -->
+            <Label x:Name="ChosenLabel" FontSize="40" FontAttributes="Bold" Margin="0,0,0,4"
+                   HorizontalOptions="Center" HorizontalTextAlignment="Center"
+                   SemanticProperties.Description="Выбранное время готовности заказа" />
+
+            <!-- Overdue ordering is a REAL ORDER, so it is offered and marked rather than refused.
+                 A time already past today is a customer waiting past when they said they would come
+                 back, and the sheet must let the operator write that down: rolling it to tomorrow (what
+                 this did) makes the overdue order inexpressible, and refusing it makes the cashier
+                 apologise for the truth. The order then books with a PromisedAt in the past, which is
+                 what the board already knows how to show as overdue. -->
+            <Label x:Name="LateNoteLabel" IsVisible="False" FontSize="12" Margin="0,0,0,10"
+                   LineBreakMode="WordWrap" TextColor="{AppThemeBinding Light={StaticResource WarningText}, Dark={StaticResource WarningDark}}" />
+
+            <!-- THE TWO STEPPERS. Every target is 48dp — the floor every control in this app honours,
+                 and a floor nobody may go below to save space (.opencode-rules.md §6): the space comes
+                 from what is on the sheet, not from the size of what is on the sheet.
+
+                 The buttons name the STEP they make rather than a bare «−»/«+», so a mis-tap is
+                 predictable and a disabled-looking control is never in play: the hour stepper wraps
+                 23 → 00 and the minute stepper 55 → 00, and both are always live. -->
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="8" Margin="0,6,0,10">
+                <Grid Grid.Row="0" ColumnDefinitions="Auto,*,*" ColumnSpacing="6">
+                    <Label Grid.Column="0" Text="Часы" Style="{StaticResource FieldLabel}"
+                           VerticalOptions="Center" Margin="0,0,2,0" />
+                    <Button Grid.Column="1" Text="−1 ч" Style="{StaticResource PaymentMethodButton}"
+                            Clicked="OnHourDown" SemanticProperties.Description="На час раньше" />
+                    <Button Grid.Column="2" Text="+1 ч" Style="{StaticResource PaymentMethodButton}"
+                            Clicked="OnHourUp" SemanticProperties.Description="На час позже" />
+                </Grid>
+                <Grid Grid.Row="1" ColumnDefinitions="Auto,*,*" ColumnSpacing="6">
+                    <Label Grid.Column="0" Text="Минуты" Style="{StaticResource FieldLabel}"
+                           VerticalOptions="Center" Margin="0,0,2,0" />
+                    <Button Grid.Column="1" Text="−5 мин" Style="{StaticResource PaymentMethodButton}"
+                            Clicked="OnMinuteDown" SemanticProperties.Description="На пять минут раньше" />
+                    <Button Grid.Column="2" Text="+5 мин" Style="{StaticResource PaymentMethodButton}"
+                            Clicked="OnMinuteUp" SemanticProperties.Description="На пять минут позже" />
+                </Grid>
+            </Grid>
+
+            <!-- THREE ONE-TAP ANSWERS, because the steppers alone cannot do the common job. Getting
+                 from "now" to "in half an hour" on a 1-hour and a 5-minute stepper is seven taps, and
+                 «через 15 минут» and «через полчаса» are what a coffee counter is actually asked. Each
+                 snaps UP to the next five-minute mark, so a preset can never land on a time the minute
+                 stepper cannot also reach — and never on "now", which would book an order that is late
+                 the moment it is created. -->
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6" Margin="0,0,0,10">
+                <Button Grid.Column="0" Text="+15 мин" Style="{StaticResource PaymentMethodButton}"
+                        Clicked="OnPresetClicked" CommandParameter="15"
+                        SemanticProperties.Description="Готово через 15 минут" />
+                <Button Grid.Column="1" Text="+30 мин" Style="{StaticResource PaymentMethodButton}"
+                        Clicked="OnPresetClicked" CommandParameter="30"
+                        SemanticProperties.Description="Готово через 30 минут" />
+                <Button Grid.Column="2" Text="+1 час" Style="{StaticResource PaymentMethodButton}"
+                        Clicked="OnPresetClicked" CommandParameter="60"
+                        SemanticProperties.Description="Готово через час" />
+            </Grid>
+
+            <!-- ONE CHOICE WITH TWO FACES, never two independent states. «Сейчас» and the steppers are
+                 the same control wearing different clothes, and the sheet switches between them
+                 (TimePickerPopup.SetMode): touching either stepper or a preset makes it a named time,
+                 and «Сейчас» puts it back to the lead-time promise. There is no checkbox, because a
+                 checked box beside the dial used to be a second state the operator had to reconcile
+                 against the first.
+
+                 The two buttons wear the PaymentMethod pair for the same reason the payment sheet's
+                 cash/card row does: one control shape for "pick one of two", already measured. -->
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,0,0,10">
+                <Button x:Name="AsapButton" Grid.Column="0" Text="Сейчас" Style="{StaticResource PaymentMethodButton}"
+                        Clicked="OnAsapClicked" SemanticProperties.Description="Приготовить как можно скорее" />
+                <Button x:Name="NamedTimeButton" Grid.Column="1" Text="К выбранному времени" Style="{StaticResource PaymentMethodButton}"
+                        Clicked="OnNamedTimeClicked" SemanticProperties.Description="Приготовить к указанному времени" />
+            </Grid>
+
+            <Button x:Name="ConfirmButton" Text="Готово" HeightRequest="48" MinimumHeightRequest="48"
+                    FontAttributes="Bold" Padding="0" Clicked="OnConfirmClicked"
+                    SemanticProperties.Description="Сохранить выбранное время" />
+
+            <!-- An explicit way out. Without it the only exit is the scrim, which nothing advertises. -->
+            <Button Text="Отмена" Style="{StaticResource SecondaryButton}" Clicked="OnCancelClicked" />
+        </VerticalStackLayout>
+    </ScrollView>
+</toolkit:Popup>

@@ -28,7 +28,11 @@ public sealed class SchemaMigrator(
         new Migration006_OrderPayments(),
         new Migration007_Refunds(),
         new Migration008_CashReconciliation(),
-        new Migration009_CashMovements()
+        new Migration009_CashMovements(),
+        new Migration010_CombosAndOrderFields(),
+        new Migration011_DraftComboComponents(),
+        new Migration012_ComboOwnPrice(),
+        new Migration013_OrderSeenAt()
     ];
 
     public int LatestVersion => AllMigrations.Max(migration => migration.Version);

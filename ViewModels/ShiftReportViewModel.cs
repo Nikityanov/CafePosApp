@@ -127,6 +127,43 @@ public partial class ShiftReportViewModel : ObservableObject
     /// </remarks>
     public bool HasNoShiftHistory => ShiftHistory.Count == 0;
 
+    // ── Price control: «Скидки» ───────────────────────────────────────────────────────────────
+    // The shift's lines whose charged price differed from the price they were allowed to be sold
+    // at. This section IS the price-control feature (plan 4.2), and it is deliberately detection
+    // only: nothing is refused at the till, no reason code is collected and no PIN is asked for —
+    // research is explicit that a justification captured at the till becomes the first option
+    // clicked and controls nothing, and there is no operator entity in this project to hold an
+    // approval. A manager reads this after the shift instead, at zero friction during the sale.
+
+    /// <summary>
+    /// The mismatched lines, VOIDED ORDERS INCLUDED. A voided sale is exactly where an overridden
+    /// price is worth seeing, and it is absent from the revenue precisely because the money went
+    /// back — which is why each row carries its status and why none of this may be added up.
+    /// </summary>
+    public ObservableCollection<DiscountedLineRow> DiscountedLines { get; } = [];
+
+    /// <summary>BindableLayout has no EmptyView, so the empty state is a label bound to this.</summary>
+    public bool HasNoDiscountedLines => DiscountedLines.Count == 0;
+
+    /// <summary>
+    /// What the section is and is not, in the operator's own terms: it is a list of lines, it is not
+    /// part of the revenue above it, and the voided rows in it are not part of it either.
+    /// </summary>
+    /// <remarks>
+    /// Spelled out on the screen rather than left to be inferred from where the section sits. A
+    /// report that adds a real sale's discount to a voided one's reports money nobody kept, and a
+    /// section under «Выручка» with no wording on it invites exactly that reading.
+    /// <para>
+    /// What this section deliberately does NOT contain is documented on
+    /// <see cref="IOrderService.GetDiscountedLinesAsync"/> rather than here: a bundle that is
+    /// correctly priced but deliberately cheaper than its parts, because the filter is the price
+    /// mismatch and that is the question this section answers.
+    /// </para>
+    /// </remarks>
+    public string DiscountsNote =>
+        "Строки, где взимаемая цена отличалась от разрешённой. В выручку они не входят и здесь не "
+        + "суммируются: у отменённых заказов деньги вернулись.";
+
     private Guid shiftId;
     private decimal revenue;
     public decimal Revenue { get => revenue; private set => SetProperty(ref revenue, value); }

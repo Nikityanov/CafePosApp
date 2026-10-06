@@ -258,6 +258,248 @@
                     <VerticalStackLayout x:Name="IngredientFooterHost" />
                 </VerticalStackLayout>
 
+                <!-- ═══ COMBO FORM ═══ -->
+                <!-- A combo has its OWN PRICE, typed here by the owner. The à la carte sum of the
+                     slots is shown beside it as a read-only reference — it is what the discount is
+                     measured against, never a second price. The discount line under the field is
+                     the point: the owner decides the price and sees immediately what it means as
+                     a saving or a surcharge, computed from ComboPricing.DiscountPercent/Compare.
+
+                     The price is required: SaveComboAsync refuses a bundle at zero or less, and
+                     the form says so where the mistake is rather than at the button. -->
+                <VerticalStackLayout IsVisible="{Binding IsComboForm}" Spacing="10">
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Основное" Style="{StaticResource SectionTitle}" />
+                            <Entry Style="{StaticResource FormField}" Placeholder="Название комбо"
+                                   Text="{Binding Combo.ComboName}" ClearButtonVisibility="WhileEditing" />
+
+                            <!-- The price field. Required, numeric, and the owner's decision — the
+                                 domain refuses a bundle at zero or less. The placeholder names the
+                                 currency's unit so the field is self-describing. -->
+                            <Entry Style="{StaticResource FormField}" Placeholder="Цена комбо"
+                                   Text="{Binding Combo.ComboPriceText}" Keyboard="Numeric"
+                                   SemanticProperties.Description="Цена комбо — сколько касса берёт за один набор" />
+
+                            <!-- The à la carte reference: what the same dishes would cost separately.
+                                 Read-only, recomputed on every slot change. This is the figure the
+                                 discount is measured against — never a second price. -->
+                            <Border Style="{StaticResource TagInfo}" StrokeShape="RoundRectangle 8" Padding="10,8">
+                                <VerticalStackLayout Spacing="2">
+                                    <Label Text="{Binding Combo.ReferenceText}" FontSize="20" FontAttributes="Bold"
+                                           SemanticProperties.Description="{Binding Combo.ReferenceText, StringFormat='По отдельности: {0}. Это сумма компонентов, а не цена комбо.'}" />
+                                    <Label Text="{Binding Combo.SlotCountText}" Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+                            </Border>
+
+                            <!-- The discount, in words. Empty when there is nothing to compare
+                                 against — a bundle whose parts cost nothing has no percentage, and
+                                 «0%» would be a false statement about a bundle the customer pays
+                                 for. The hint states why the percentage is or is not shown. -->
+                            <Label Text="{Binding Combo.DiscountText}" Style="{StaticResource Caption}"
+                                   FontAttributes="Bold" LineBreakMode="WordWrap"
+                                   IsVisible="{Binding Combo.DiscountText, Converter={StaticResource IsPresent}}" />
+                            <!-- Hidden when empty. DiscountHint returns string.Empty for the
+                                 ordinary case now (a bundle priced below its parts is what a bundle
+                                 is), and a Label bound to an empty string still occupies its line
+                                 in the stack — so without this the cut would buy nothing. -->
+                            <Label Text="{Binding Combo.DiscountHint}" Style="{StaticResource Caption}"
+                                   LineBreakMode="WordWrap"
+                                   IsVisible="{Binding Combo.DiscountHint, Converter={StaticResource IsPresent}}" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Состав" Style="{StaticResource SectionTitle}" />
+                            <!-- Stated before the first slot is added, not in the save's failure
+                                 message. ComboService.SaveComboAsync REPLACES the whole slot set —
+                                 that is the only safe shape, because a partial write silently
+                                 destroys the children it did not mention — so removing a slot here
+                                 really does delete it, and an operator who does not know that will
+                                 remove it twice and then trust the screen even less. -->
+                            <Label Text="{Binding Combo.ReplacementNote}" Style="{StaticResource Caption}"
+                                   LineBreakMode="WordWrap" />
+
+                            <!-- BindableLayout for the same reason as the variant and recipe lists: a
+                                 CollectionView inside this page's ScrollView is a second scroller
+                                 fighting the outer one over the drag gesture. -->
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Combo.Components}" Spacing="6">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ComboSlotRow">
+                                        <!-- CardBorderCompact, not a bare Grid: one slot is several
+                                             fields plus a destructive action, and a set of loose
+                                             entries on the page fill would read as a paragraph that
+                                             happens to contain pickers. -->
+                                        <!-- ═══ ONE SLOT LOOKS LIKE ONE CART LINE ═══
+                                             The owner's rule: a combo is assembled the way an order is
+                                             assembled, with the single difference that the price typed at the
+                                             top is the price of the whole bundle.
+
+                                             TWO LINES, not three, and the first attempt was three. It had a
+                                             dish picker on one row, a stepper on the next and a full-width
+                                             destructive button below that — which replaced two text fields
+                                             with two button rows and came out TALLER than what it replaced.
+                                             Height is what costs space on a form, so the slot is now two
+                                             rows: the dish and what it contributes stacked on the left, the
+                                             cart's − / count / + on the right. The remove control moves to a
+                                             compact × on that same row, because three full-width red bars
+                                             stacked down a bundle read as alarm rather than as three
+                                             ordinary rows.
+
+                                             WHAT CAME OUT, each on the owner's instruction rather than on a
+                                             judgement of mine:
+                                               · the quantity Entry and its "1 × 220,00 ₿ = 220,00 ₿" caption,
+                                                 which the cart's stepper replaces and which cannot be typed
+                                                 into nonsense;
+                                               · the separate "Цена блюда" row — the same figure the line
+                                                 contribution now carries, so it was printed twice;
+                                               · the price-mode picker, the own-price field and the substitute
+                                                 picker. Their values are still WRITTEN on save (see
+                                                 ComboFormViewModel.BuildSlots), because the save replaces the
+                                                 whole component set and a form that stopped displaying them
+                                                 would erase them.
+
+                                             The dish stays a Picker because it is how a slot is CHANGED once
+                                             it exists, not only added: behind a summary there would be no way
+                                             to swap a dish without deleting the slot and rebuilding it, and
+                                             deleting a slot really does delete it. -->
+                                        <Border Style="{StaticResource CardBorderCompact}" Padding="10,8">
+                                            <!-- A BORDER TAKES EXACTLY ONE CHILD, and this one started as two: the
+                                                 grid and the warning label below it. Only the LAST child is
+                                                 rendered, so the grid vanished and every slot came out as an
+                                                 empty card — three of them, with the components still counted
+                                                 as present. A single VerticalStackLayout is what the
+                                                 original slot had, and putting it back is the whole fix. It
+                                                 reads like a platform quirk that cannot bite again, but it
+                                                 can: the same trap is one extra sibling away in any card. -->
+                                            <VerticalStackLayout Spacing="4">
+                                            <!-- THE DISH GETS A LINE OF ITS OWN — a bug fix, not a layout
+                                                 preference. Sharing one row with the stepper, the Android
+                                                 Spinner that backs a MAUI Picker is measured WIDER THAN ITS
+                                                 STAR COLUMN, and its native touch target spilled across the +
+                                                 beside it. The + rendered in exactly the right place and never
+                                                 once answered a press; the × survived only because it sits one
+                                                 column further from the spill, which is what made this look
+                                                 like a broken command rather than a stolen touch.
+
+                                                 Proven by removal, not by argument: with the Picker deleted the
+                                                 + went live at once — 1 → 2, «1 × 160.00 ₿» → «2 × 160.00 ₿»,
+                                                 «По отдельноcти» 660 → 820, скидка 24.24% → 39.02%.
+
+                                                 Given the whole card width there is nothing to spill into, the
+                                                 row is no taller than the two lines it already was, and long
+                                                 dish names finally have somewhere to go. -->
+                                            <Picker Style="{StaticResource FormFieldPicker}" Title="Блюдо"
+                                                    ItemsSource="{Binding ProductOptions}"
+                                                    ItemDisplayBinding="{Binding Name}"
+                                                    SelectedItem="{Binding SelectedProductOption}"
+                                                    SemanticProperties.Description="Блюдо в составе комбо" />
+
+                                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                                <!-- What the slot adds to «по отдельноcти», beside the control
+                                                     that changes it: the operator is checking the TOTAL, and
+                                                     this is the one figure that lets them check it without
+                                                     multiplying out loud. -->
+                                                <Label Text="{Binding LineTotalText}" FontSize="12"
+                                                       Style="{StaticResource SecondaryLabel}"
+                                                       VerticalTextAlignment="Center"
+                                                       LineBreakMode="TailTruncation"
+                                                       SemanticProperties.Description="{Binding LineTotalText, StringFormat='Вклад в состав: {0}'}" />
+
+                                                <!-- THE CART'S STEPPER, AT THE CART'S SIZES. StepperButton and
+                                                     not a new style, so a bundle is assembled with the same
+                                                     control under the same thumb as an order is — which is the
+                                                     point of the change.
+
+                                                     THE COMMANDS COME FROM THE FORM, with the row as
+                                                     CommandParameter, which is the cart's arrangement and
+                                                     not an accident. Bound straight to a RelayCommand on
+                                                     the row, these two buttons rendered in exactly the
+                                                     right place and did nothing when pressed — same
+                                                     style, same coordinates, and the × beside them,
+                                                     which resolves through the page, fired every time.
+                                                     The cart's own stepper, wired this way, was verified
+                                                     live on the device. One mechanism for the same
+                                                     gesture across the app, and it is the one that works.
+
+                                                     No CanExecute on either: − at one unit is refused by
+                                                     StepQuantity, the same rule every caller obeys, so the
+                                                     − is left looking as it does in the cart rather than
+                                                     inventing a second way of saying "already at one". -->
+                                                <Grid Grid.Column="1" ColumnDefinitions="40,40,40" ColumnSpacing="0"
+                                                      VerticalOptions="Center">
+                                                    <Button Text="−" Style="{StaticResource StepperButton}"
+                                                            Command="{Binding Source={x:Reference FormsPage}, Path=BindingContext.Combo.StepComponentQuantityDownCommand}"
+                                                            CommandParameter="{Binding .}"
+                                                            SemanticProperties.Description="Убрать одну штуку" />
+                                                    <Label Grid.Column="1" Text="{Binding QuantityPerUnit}"
+                                                           FontSize="19" FontAttributes="Bold" WidthRequest="40"
+                                                           HorizontalTextAlignment="Center" VerticalTextAlignment="Center"
+                                                           SemanticProperties.Description="Сколько этого блюда в комбо" />
+                                                    <Button Grid.Column="2" Text="+" Style="{StaticResource StepperButton}"
+                                                            Command="{Binding Source={x:Reference FormsPage}, Path=BindingContext.Combo.StepComponentQuantityCommand}"
+                                                            CommandParameter="{Binding .}"
+                                                            SemanticProperties.Description="Добавить одну штуку" />
+                                                </Grid>
+
+                                                <!-- A compact × rather than a full-width bar. The store still
+                                                     says what it does — the label, the accessible
+                                                     description and the note above the list all state that
+                                                     removal DELETES the component — and the row stops being
+                                                     three rows tall. 48dp square so it is not a small target
+                                                     for the sake of a tidy layout. -->
+                                                <Button Grid.Column="2" Text="×" Style="{StaticResource RowActionDanger}"
+                                                        WidthRequest="48" HeightRequest="48" MinimumWidthRequest="48" MinimumHeightRequest="48"
+                                                        FontSize="22" Padding="0"
+                                                        Command="{Binding Source={x:Reference FormsPage}, Path=BindingContext.Combo.RemoveSlotCommand}"
+                                                        CommandParameter="{Binding .}"
+                                                        SemanticProperties.Description="Убрать этот компонент из состава комбо. При сохранении он будет удалён." />
+                                            </Grid>
+
+                                            <!-- Wording, not a red border: the row is still editable and the
+                                                 problem is a sentence the operator can act on. Kept because the
+                                                 stepper cannot produce an invalid quantity, but a slot can
+                                                 still be EMPTY. -->
+                                            <Label Text="{Binding WarningText}" Style="{StaticResource Caption}"
+                                                   LineBreakMode="WordWrap"
+                                                   TextColor="{AppThemeBinding Light={StaticResource WarningText}, Dark={StaticResource WarningDark}}"
+                                                   IsVisible="{Binding WarningText, Converter={StaticResource IsPresent}}" />
+                                            </VerticalStackLayout>
+                                        </Border>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+
+                            <!-- BindableLayout has no EmptyView, hence the label. It says the
+                                 CONSEQUENCE rather than "the list is empty": a bundle with no slots
+                                 cannot be saved, and the domain refuses one. -->
+                            <Label Text="Компонентов пока нет. Добавьте хотя бы один — без них комбо сохранить нельзя."
+                                   Style="{StaticResource EmptyLabel}" LineBreakMode="WordWrap"
+                                   IsVisible="{Binding Combo.HasNoComponents}" />
+
+                            <!-- The add row mirrors the recipe row above it: dish, quantity, "+".
+                                 A bundle with no slots cannot be saved, so the add row is the only
+                                 way forward and it is the last thing on the form for that reason. -->
+                            <Grid ColumnDefinitions="*,100,Auto" ColumnSpacing="6">
+                                <Picker Style="{StaticResource FormFieldPicker}" Title="Блюдо для компонента"
+                                        ItemsSource="{Binding Combo.ProductOptions}"
+                                        ItemDisplayBinding="{Binding Name}"
+                                        SelectedItem="{Binding Combo.NewSlotProductOption}" />
+                                <Entry Style="{StaticResource FormField}" Grid.Column="1" Placeholder="Кол-во"
+                                       Text="{Binding Combo.NewSlotQuantityText}" Keyboard="Numeric" />
+                                <Button Grid.Column="2" Text="+" WidthRequest="48" HeightRequest="48" MinimumWidthRequest="48" MinimumHeightRequest="48" FontSize="18"
+                                        SemanticProperties.Description="Добавить компонент в комбо"
+                                        Command="{Binding Combo.AddSlotCommand}" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Footer slot. Same shape as the four above: the Save / Отмена pair and the
+                         validation message, built in the code-behind by BuildFormFooter. -->
+                    <VerticalStackLayout x:Name="ComboFooterHost" />
+                </VerticalStackLayout>
+
             </VerticalStackLayout>
         </ScrollView>
     </Grid>

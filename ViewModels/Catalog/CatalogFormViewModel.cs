@@ -10,14 +10,15 @@ public enum CatalogFormKind
     Product,
     Category,
     ModifierGroup,
-    Ingredient
+    Ingredient,
+    Combo
 }
 
 /// <summary>What the catalogue list asks the form sheet to open.</summary>
 public sealed record CatalogFormRequest(CatalogFormKind Kind, Guid? EntityId = null);
 
 /// <summary>
-/// Hosts the four catalogue form ViewModels and routes a <see cref="CatalogFormRequest"/>
+/// Hosts the five catalogue form ViewModels and routes a <see cref="CatalogFormRequest"/>
 /// to the right one. The sheet page binds to the sub-ViewModels through the properties below.
 /// </summary>
 public class CatalogFormViewModel : ObservableObject
@@ -29,12 +30,14 @@ public class CatalogFormViewModel : ObservableObject
         CategoryFormViewModel category,
         ModifierFormViewModel modifier,
         IngredientFormViewModel ingredient,
+        ComboFormViewModel combo,
         ILogger<CatalogFormViewModel> logger)
     {
         Product = product;
         Category = category;
         Modifier = modifier;
         Ingredient = ingredient;
+        Combo = combo;
         this.logger = logger;
 
         // A save or a cancel in any sub-form closes the sheet.
@@ -43,10 +46,12 @@ public class CatalogFormViewModel : ObservableObject
         Category.Saved += () => CloseRequested?.Invoke(true);
         Modifier.Saved += () => CloseRequested?.Invoke(true);
         Ingredient.Saved += () => CloseRequested?.Invoke(true);
+        Combo.Saved += () => CloseRequested?.Invoke(true);
         Product.CancelRequested += () => CloseRequested?.Invoke(false);
         Category.CancelRequested += () => CloseRequested?.Invoke(false);
         Modifier.CancelRequested += () => CloseRequested?.Invoke(false);
         Ingredient.CancelRequested += () => CloseRequested?.Invoke(false);
+        Combo.CancelRequested += () => CloseRequested?.Invoke(false);
 
         CancelCommand = new RelayCommand(Cancel);
 
@@ -56,6 +61,7 @@ public class CatalogFormViewModel : ObservableObject
         Category.PropertyChanged += (_, _) => IsDirty = true;
         Modifier.PropertyChanged += (_, _) => IsDirty = true;
         Ingredient.PropertyChanged += (_, _) => IsDirty = true;
+        Combo.PropertyChanged += (_, _) => IsDirty = true;
     }
 
     private void Cancel() => CloseRequested?.Invoke(false);
@@ -80,6 +86,7 @@ public class CatalogFormViewModel : ObservableObject
     public CategoryFormViewModel Category { get; }
     public ModifierFormViewModel Modifier { get; }
     public IngredientFormViewModel Ingredient { get; }
+    public ComboFormViewModel Combo { get; }
 
     private CatalogFormKind kind;
     public CatalogFormKind Kind
@@ -93,6 +100,7 @@ public class CatalogFormViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsCategoryForm));
                 OnPropertyChanged(nameof(IsModifierForm));
                 OnPropertyChanged(nameof(IsIngredientForm));
+                OnPropertyChanged(nameof(IsComboForm));
                 // Title is deliberately NOT raised here. It reads the active sub-form's Title,
                 // and the sub-form still holds the previous entity's values until its LoadAsync
                 // runs — raising it from the Kind setter flashed the previous form's title for a
@@ -105,12 +113,14 @@ public class CatalogFormViewModel : ObservableObject
     public bool IsCategoryForm => Kind == CatalogFormKind.Category;
     public bool IsModifierForm => Kind == CatalogFormKind.ModifierGroup;
     public bool IsIngredientForm => Kind == CatalogFormKind.Ingredient;
+    public bool IsComboForm => Kind == CatalogFormKind.Combo;
 
     public string Title => Kind switch
     {
         CatalogFormKind.Product => Product.Title,
         CatalogFormKind.Category => Category.Title,
         CatalogFormKind.ModifierGroup => Modifier.Title,
+        CatalogFormKind.Combo => Combo.Title,
         _ => Ingredient.Title
     };
 
@@ -135,6 +145,12 @@ public class CatalogFormViewModel : ObservableObject
             case CatalogFormKind.Ingredient:
                 if (request.EntityId is { } ingredientId) await Ingredient.LoadAsync(ingredientId);
                 else Ingredient.Reset();
+                break;
+            // Unlike the others, the bundle form takes a NULLABLE id and does its own branching:
+            // it has to read the rest of the catalogue for a new bundle (to assign the sort order
+            // that puts it at the end of the list) and only then decide there is nothing else to do.
+            case CatalogFormKind.Combo:
+                await Combo.LoadAsync(request.EntityId);
                 break;
         }
 

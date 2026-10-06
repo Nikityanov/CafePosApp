@@ -94,9 +94,69 @@ public partial class OrderEditItemViewModel : ObservableObject
 {
     public Guid ProductId { get; init; }
     public string ProductName { get; init; } = string.Empty;
-    public decimal Price { get; init; }
+
+    /// <summary>
+    /// The price this line was allowed to be sold at, read off the order's
+    /// <see cref="OrderItem.ListPriceKopecks"/> and never rewritten here.
+    /// </summary>
+    /// <remarks>
+    /// Shown struck through beside a changed price so the cashier sees the override while making it,
+    /// exactly as on the cart. The allowed price is written once, when the line is created, and
+    /// <c>UpdateOrderAsync</c> deliberately does not recompute it on an edit — recomputing it would
+    /// write the new charged price straight back into the allowed price and leave the shift report
+    /// nothing to compare.
+    /// </remarks>
+    public decimal ListPrice { get; init; }
+
+    private decimal price;
+
+    /// <summary>What the line is charged per unit. Editable by hand; see <see cref="ListPrice"/>.</summary>
+    public decimal Price
+    {
+        get => price;
+        set
+        {
+            if (!SetProperty(ref price, value)) return;
+            OnPropertyChanged(nameof(PriceText));
+            OnPropertyChanged(nameof(IsPriceOverridden));
+        }
+    }
+
+    /// <summary>The allowed price formatted, printed struck through next to <see cref="PriceText"/>.</summary>
+    public string ListPriceText => TextFormat.Money(ListPrice);
+
+    /// <summary>The charged unit price in the active currency. Tapping it re-prices the line.</summary>
+    public string PriceText => TextFormat.Money(Price);
+
+    /// <summary>Whether the charged price differs from the allowed one — the override, visible at once.</summary>
+    public bool IsPriceOverridden => Price != ListPrice;
+
     public string? SelectedModifierName { get; init; }
     public string? SelectedVariantName { get; init; }
+
+    /// <summary>
+    /// The bundle's composition, empty for an ordinary dish. Printed indented under the line, and part
+    /// of the merge key so a save cannot rewrite one build of a bundle as another.
+    /// </summary>
+    public ObservableCollection<LineComponentViewModel> Components { get; } = [];
+
+    /// <summary>True for a bundle: a line whose composition can be opened and changed.</summary>
+    public bool IsCombo => Components.Count > 0;
+
+    /// <summary>
+    /// Whether this line and another are the same sale.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="OrderLineKey"/> and not an inline comparison, which is what this row's lookup used
+    /// to do — and the inline version left the VARIANT out of the key entirely, so a large and a small
+    /// of the same dish merged into one line. The composition is in the key too, so two different
+    /// builds of one bundle stay two lines.
+    /// </remarks>
+    public string MergeKey => OrderLineKey.For(
+        ProductId,
+        SelectedModifierName,
+        SelectedVariantName,
+        Components.Select(component => (component.ProductId, component.QuantityPerUnit)));
 
     private int quantity;
     public int Quantity
@@ -106,8 +166,9 @@ public partial class OrderEditItemViewModel : ObservableObject
         {
             if (!SetProperty(ref quantity, value)) return;
             OnPropertyChanged(nameof(LineTotal));
-            // LineTotalText is what the row actually binds, so raising it here is what keeps the
-            // printed amount in step with the stepper.
+            // LineTotalText is NOT bound by the row any more: the row shows the unit price, which is what
+            // re-pricing edits, and a total beside it was the same figure twice at quantity 1. It is
+            // still raised because the decimal LineTotal is what the page's own Total sums.
             OnPropertyChanged(nameof(LineTotalText));
         }
     }
@@ -117,18 +178,48 @@ public partial class OrderEditItemViewModel : ObservableObject
     /// <summary>The line total in the active currency, e.g. "320,00 ₿". Bound by the row.</summary>
     public string LineTotalText => TextFormat.Money(LineTotal);
 
-    /// <summary>Re-raises <see cref="LineTotalText"/> after the currency setting changed.</summary>
-    public void RefreshMoneyText() => OnPropertyChanged(nameof(LineTotalText));
+    /// <summary>Re-raises the formatted amounts after the currency setting changed.</summary>
+    public void RefreshMoneyText()
+    {
+        OnPropertyChanged(nameof(LineTotalText));
+        OnPropertyChanged(nameof(PriceText));
+        OnPropertyChanged(nameof(ListPriceText));
+    }
 
+    /// <summary>Re-announces <see cref="IsCombo"/> after the composition changed.</summary>
+    public void OnCompositionChanged() => OnPropertyChanged(nameof(IsCombo));
+
+    /// <summary>
+    /// The entity this row saves as.
+    /// </summary>
+    /// <remarks>
+    /// The composition is carried through, and that is load-bearing rather than cosmetic.
+    /// <c>UpdateOrderAsync</c> matches incoming lines to the stored ones by <see cref="OrderLineKey"/>
+    /// — which is built from the composition — and then rewrites a matched line's snapshot wholesale.
+    /// A row that dropped its slots would therefore fail to match its own line, be inserted as a NEW
+    /// line with no composition, and leave the original bundle composition behind on a line that no
+    /// longer exists: a save of an untouched order would silently un-compose its bundles.
+    /// </remarks>
     public OrderItem ToOrderItem() => new()
     {
         Id = Guid.NewGuid(),
         ProductId = ProductId,
         ProductName = ProductName,
         Price = Price,
+        ListPriceKopecks = Money.ToKopecks(ListPrice),
         Quantity = Quantity,
         SelectedModifierName = SelectedModifierName,
-        SelectedVariantName = SelectedVariantName
+        SelectedVariantName = SelectedVariantName,
+        Components = Components.Select((component, index) => new OrderItemComponent
+        {
+            Id = Guid.NewGuid(),
+            ProductId = component.ProductId,
+            ProductName = component.Name,
+            QuantityPerUnit = component.QuantityPerUnit,
+            UnitPriceKopecks = component.UnitKopecks,
+            ReferencePriceKopecks = component.ReferenceKopecks,
+            SortOrder = index
+        }).ToList()
     };
 }
 
@@ -136,13 +227,19 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
 {
     private readonly IOrderService orders;
     private readonly ICatalogService catalog;
+    private readonly IComboService combos;
+    private readonly IComboEditor comboEditor;
     private readonly IModifierPicker modifierPicker;
     private readonly AppSettings settings;
     private readonly INavigationService navigation;
     private readonly IPaymentSheet paymentSheet;
+
+    /// <summary>The «Дописать» sheet. Behind a seam so the command is testable without a window.</summary>
+    private readonly IContactDetailsSheet contactDetailsSheet;
     private readonly IStockDispositionSheet stockDisposition;
     private readonly IDialogService dialogs;
     private readonly IHapticService haptics;
+    private readonly TimeProvider timeProvider;
     private readonly ILogger<OrderDetailsViewModel> logger;
 
     private Guid orderId;
@@ -151,32 +248,53 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
     public OrderDetailsViewModel(
         IOrderService orders,
         ICatalogService catalog,
+        IComboService combos,
+        IComboEditor comboEditor,
         IModifierPicker modifierPicker,
         AppSettings settings,
         INavigationService navigation,
         IPaymentSheet paymentSheet,
+        IContactDetailsSheet contactDetailsSheet,
         IStockDispositionSheet stockDisposition,
         IDialogService dialogs,
         IHapticService haptics,
+        TimeProvider timeProvider,
         ILogger<OrderDetailsViewModel> logger
     )
     {
         this.orders = orders;
         this.catalog = catalog;
+        this.combos = combos;
+        this.comboEditor = comboEditor;
         this.modifierPicker = modifierPicker;
         this.settings = settings;
         this.navigation = navigation;
         this.paymentSheet = paymentSheet;
+        this.contactDetailsSheet = contactDetailsSheet;
         this.stockDisposition = stockDisposition;
         this.dialogs = dialogs;
         this.haptics = haptics;
+        this.timeProvider = timeProvider;
         this.logger = logger;
 
         SaveCommand = new AsyncRelayCommand(SaveAsync);
+        AddContactDetailsCommand = new AsyncRelayCommand(AddContactDetailsAsync);
         AddProductCommand = new AsyncRelayCommand(AddProductAsync);
         IncreaseItemCommand = new RelayCommand<OrderEditItemViewModel>(IncreaseItem);
         DecreaseItemCommand = new RelayCommand<OrderEditItemViewModel>(DecreaseItem);
         RemoveItemCommand = new RelayCommand<OrderEditItemViewModel>(RemoveItem);
+        // CanExecute = CanEdit on the two COMMANDS the gesture recognizers use. It is what the Buttons
+        // bind IsEnabled to, and it is also what stands in for the IsEnabled that used to sit on the
+        // price's TapGestureRecognizer and crashed this template at inflation:
+        // TapGestureRecognizer derives from GestureRecognizer : Element, so it is NOT a VisualElement
+        // and has no IsEnabled at all. The assembly was read rather than recalled — its only public
+        // members are Command, CommandParameter, NumberOfTapsRequired and Buttons — and SendTapped's
+        // IL calls Command.CanExecute before Command.Execute, so a CanExecute of false is a genuinely
+        // inert tap target rather than a tap that silently does nothing. NotifyOrderState raises
+        // CanExecuteChanged whenever CanEdit moves, which is the half that is easy to forget.
+        EditItemPriceCommand = new AsyncRelayCommand<OrderEditItemViewModel>(EditItemPriceAsync, canExecute: _ => CanEdit);
+        EditItemCompositionCommand = new AsyncRelayCommand<OrderEditItemViewModel>(EditItemCompositionAsync, canExecute: _ => CanEdit);
+        ToggleFulfilmentCommand = new RelayCommand(() => IsFulfilmentExpanded = !IsFulfilmentExpanded);
         CollectPaymentCommand = new AsyncRelayCommand(CollectPaymentAsync);
         RefundPaymentCommand = new AsyncRelayCommand(RefundPaymentAsync);
         CancelOrderCommand = new AsyncRelayCommand(CancelOrderAsync);
@@ -204,6 +322,154 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
 
     public bool CanEdit => order?.Status == OrderStatus.InProgress;
     public decimal Total => Items.Sum(item => item.LineTotal);
+
+    // ── Fulfilment, contact and promise ──────────────────────────────────────────────────────────
+    // READ-ONLY HERE, AND THAT IS A KNOWN LIMITATION RATHER THAN A CHOICE. The till collects these
+    // three on the cart (MenuViewModel) and CheckoutService writes them onto the order; the order editor
+    // has no write path back, because IOrderService.UpdateOrderAsync takes only the item list. Until
+    // Core grows an overload taking an OrderDetailsIntent, offering a control here would be a control
+    // that looks editable and is not — so the page states the facts and edits nothing.
+    //
+    // What is shown is the EXACT promised time and the FULL number, both of which are staff-facing
+    // facts on this screen and are the two things the customer-facing cart deliberately does not show.
+
+    /// <summary>Whether the fulfilment/contact/promise card is worth showing at all.</summary>
+    public bool HasOrderDetails => order is not null;
+
+    // ── The same disclosure the cart uses, for the same reason ───────────────────────────────────
+    // MenuPage collapsed its fulfilment block after it measured 153dp of a 344dp cart, and leaving
+    // THIS card permanently expanded would be one screen reading two ways: dense on the till, loose
+    // on the order. The grounding — NN/g's hotel reservation, the two-level ceiling, Chimera et al.
+    // 1994 — is written out at length on MenuViewModel.IsFulfilmentExpanded and is not repeated.
+    //
+    // THE TRADE THIS SCREEN ADDS, STATED PLAINLY. The phone here is the FULL number and this is the
+    // screen a cashier dials from, so collapsing puts one tap between the operator and the number.
+    // That is the cost and it is accepted rather than discovered: what the collapse saves is two
+    // short lines, and the collapsed row still states the fulfilment and the time, which is what the
+    // operator scans. Nothing is removed, only moved one tap down.
+
+    private bool isFulfilmentExpanded;
+
+    public bool IsFulfilmentExpanded
+    {
+        get => isFulfilmentExpanded;
+        set
+        {
+            // FulfilmentSummary is raised with it — the row's caption depends on whether the block is
+            // open, and leaving it stale would print the state twice or not at all.
+            if (SetProperty(ref isFulfilmentExpanded, value))
+            {
+                OnPropertyChanged(nameof(FulfilmentToggleHint));
+                OnPropertyChanged(nameof(FulfilmentSummary));
+            }
+        }
+    }
+
+    /// <summary>The collapsed row's label, and it is <b>two different strings</b>.</summary>
+    /// <remarks>
+    /// Collapsed, it states the order as it stands («В зале · готово к 18:00»). Expanded, it says
+    /// only «Параметры заказа» and nothing more — the block directly beneath it reads «Выдача: В зале»
+    /// and «Готово …», and repeating them in the row would print each fact twice inside two rows.
+    /// <para>
+    /// Same rule and same one-property construction as <see cref="MenuViewModel.FulfilmentSummary"/>,
+    /// because the two order-entry screens are deliberately one design: both read their state from
+    /// <see cref="IsFulfilmentExpanded"/> here, never from a second string kept in step by hand.
+    /// </para>
+    /// </remarks>
+    public string FulfilmentSummary => order is null
+        ? string.Empty
+        : IsFulfilmentExpanded
+            ? FulfilmentRowTitle
+            : $"{OrderTypeText} · готово к {WhenText}";
+
+    /// <summary>
+    /// The neutral heading the row falls back to while the block is open. A constant because
+    /// <see cref="FulfilmentToggleHint"/> states it too and two copies of a caption are two things to
+    /// reword. Named for the page's own content, which is the order as it was placed — not the cart's
+    /// «Параметры выдачи».
+    /// </summary>
+    public const string FulfilmentRowTitle = "Параметры заказа";
+
+    /// <summary>The promised clock time, unqualified — see <see cref="FulfilmentSummary"/>.</summary>
+    private string WhenText => order!.RequestedAt is { } requested
+        ? requested.ToLocalTime().ToString("HH:mm")
+        : order.PromisedAt.ToLocalTime().ToString("HH:mm");
+
+    /// <summary>What the row announces and what pressing it does; the chevron itself carries no text.</summary>
+    public string FulfilmentToggleHint =>
+        IsFulfilmentExpanded
+            ? $"{FulfilmentRowTitle}. Свернуть телефон и время заказа."
+            : $"{FulfilmentSummary}. Показать телефон и время заказа.";
+
+    /// <summary>How the order is fulfilled, in the page's own words.</summary>
+    public string OrderTypeText => order is null
+        ? string.Empty
+        : order.OrderType == OrderType.Takeaway ? "С собой" : "В зале";
+
+    /// <summary>
+    /// The contact in FULL, or an empty string.
+    /// </summary>
+    /// <remarks>
+    /// The one unmasked number in the app. This page is opened deliberately, for one order at a time,
+    /// and it is the screen a cashier has to dial from — a masked number here would make the stored
+    /// value unverifiable and the customer unreachable, which is the opposite of what 152-ФЗ
+    /// ст. 6(1)(5) asks for. Everywhere else — the cart and the orders board — the number is masked,
+    /// because those two are readable by whoever is standing in the room.
+    /// <para>
+    /// Empty for a counter order, and not merely hidden: <see cref="CheckoutService"/> drops the value
+    /// at the service boundary, so there is nothing stored to show and this is an honest blank rather
+    /// than a masked nothing.
+    /// </para>
+    /// </remarks>
+    public string CustomerPhoneText => order?.CustomerPhone ?? string.Empty;
+
+    /// <summary>Whether the order carries a contact worth printing on the block.</summary>
+    public bool HasCustomerPhone => !string.IsNullOrWhiteSpace(CustomerPhoneText);
+
+    /// <summary>Whether a phone is expected at all — takeaway only.</summary>
+    public bool ExpectsPhone => order?.OrderType == OrderType.Takeaway;
+
+    /// <summary>
+    /// A counter-service order, where no phone was asked for and none is stored.
+    /// </summary>
+    /// <remarks>
+    /// Said in words rather than left as a blank. «Телефон не спрашивали» and «телефон забыли» are
+    /// different facts about the same empty row, and for an order eaten on the premises only the first
+    /// one is correct — 152-ФЗ ст. 6(1)(5) permits the field only where the number is needed to perform
+    /// the contract, so its absence here is the rule working, not a gap in the data.
+    /// </remarks>
+    public bool ExpectsNoPhone => order is not null && !ExpectsPhone;
+
+    /// <summary>
+    /// The promise, worded for what kind of promise it is.
+    /// </summary>
+    /// <remarks>
+    /// A named time reads as «к 18:00» and the lead-time one as «обещано к 18:00». The customer saw a
+    /// RANGE on the cart because that figure is an estimate the till chooses; here the exact time is
+    /// what the order was promised and is being judged against, and a staff screen showing an estimate
+    /// where a fact exists would be the wrong way round.
+    /// </remarks>
+    public string PromiseText => order is null
+        ? string.Empty
+        : order.RequestedAt is { } requested
+            ? $"к {requested.ToLocalTime():HH:mm}"
+            : $"обещано к {order.PromisedAt.ToLocalTime():HH:mm}";
+
+    /// <summary>Whether the promise has already passed while the order is still open.</summary>
+    public bool IsOverdue => order is not null && order.IsOverdueAt(timeProvider.GetUtcNow());
+
+    /// <summary>Whole minutes past the promise, or zero when there is no lateness to report.</summary>
+    public int OverdueMinutes => order is null
+        ? 0
+        : Math.Max(0, (int)Math.Round((timeProvider.GetUtcNow() - order.PromisedAt).TotalMinutes));
+
+    /// <summary>The lateness line, or empty. Names the state in words; the colour reinforces it.</summary>
+    public string OverdueText => IsOverdue
+        ? $"Просрочен на {TextFormat.Plural(OverdueMinutes, "минуту", "минуты", "минут")}"
+        : string.Empty;
+
+    /// <summary>The lateness tint for <see cref="OverdueText"/>.</summary>
+    public Color OverdueColor => ThemeColors.Resolve("Danger", "DangerDark");
 
     /// <summary>The order total in the active currency, e.g. "740,00 ₿".</summary>
     /// <remarks>
@@ -247,6 +513,23 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
     /// "control that can only fail" pattern the cancel button used to have.
     /// </remarks>
     public bool CanRefundPayment => order is not null && order.Status == OrderStatus.Completed && order.PaidKopecks > 0;
+
+    /// <summary>
+    /// Whether «Дописать» is offered: the order is paid for and was not voided.
+    /// </summary>
+    /// <remarks>
+    /// Paid is the condition, and it is the owner's whole reason for the button — the customer thinks of a
+    /// number AFTER the money has changed hands, so an order that is still unpaid is handled by the cart
+    /// sheet it already came from, and offering the same facts twice in two places would let them disagree.
+    /// <para>
+    /// A voided order is excluded because its money went back and its total is gone: a customer who
+    /// "remembers a number" for it is describing a different sale, and Core refuses it too. The two checks
+    /// exist in both places deliberately — this one so the button is not offered for nothing, that one so
+    /// a caller that skips the ViewModel still cannot write.
+    /// </para>
+    /// </remarks>
+    public bool CanAddContactDetails =>
+        order is not null && order.Status != OrderStatus.Cancelled && order.IsFullyPaid;
 
     /// <summary>
     /// Whether the void control is offered on this page.
@@ -386,10 +669,23 @@ public partial class OrderDetailsViewModel : ObservableObject, IQueryAttributabl
     public bool HasMessage => !string.IsNullOrWhiteSpace(Message);
 
     public IAsyncRelayCommand SaveCommand { get; }
+
+    /// <summary>Opens the «Дописать» sheet: phone and promised time on an order already paid for.</summary>
+    public IAsyncRelayCommand AddContactDetailsCommand { get; }
     public IAsyncRelayCommand AddProductCommand { get; }
     public IRelayCommand<OrderEditItemViewModel> IncreaseItemCommand { get; }
     public IRelayCommand<OrderEditItemViewModel> DecreaseItemCommand { get; }
     public IRelayCommand<OrderEditItemViewModel> RemoveItemCommand { get; }
+
+    /// <summary>Re-prices one line by hand; the allowed price stays and is shown struck through.</summary>
+    public IAsyncRelayCommand<OrderEditItemViewModel> EditItemPriceCommand { get; }
+
+    /// <summary>Opens the composition sheet for a bundle line — the same sheet the cart uses.</summary>
+    public IAsyncRelayCommand<OrderEditItemViewModel> EditItemCompositionCommand { get; }
+
+    /// <summary>Opens and closes the collapsed fulfilment block. See <see cref="IsFulfilmentExpanded"/>.</summary>
+    public IRelayCommand ToggleFulfilmentCommand { get; }
+
     public IAsyncRelayCommand CollectPaymentCommand { get; }
 
     /// <summary>Returns money on a finished order, in whole rubles, as a partial refund.</summary>

@@ -10,6 +10,8 @@ namespace CafePos.Core.Services;
 public sealed partial class OrderService(
     IDbContextFactory<AppDbContext> factory,
     TimeProvider timeProvider,
+    IContactDataService contacts,
+    IComboService combos,
     ILogger<OrderService> logger) : IOrderService
 {
     /// <summary>Matches the declared length of <c>Shift.CashDiscrepancyReason</c> (AppDbContext.Catalog).</summary>
@@ -18,8 +20,15 @@ public sealed partial class OrderService(
     public async Task<Order?> GetOrderAsync(Guid orderId, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
+
+        // ThenInclude, and not on purpose-later: OrderItem.Components is an un-Included collection that
+        // reads as EMPTY rather than stale — see the remarks on Order.Payments. An order read back for
+        // the details screen therefore has to ask for its composition explicitly, or a bundle prints as
+        // a single line with nothing under it. The order LISTS below do not include it, because a list
+        // of order lines has no use for the composition and would pay for a join on every row.
         return await db.Orders
             .Include(order => order.Items)
+                .ThenInclude(item => item.Components)
             .AsNoTracking()
             .FirstOrDefaultAsync(order => order.Id == orderId, cancellationToken);
     }
@@ -346,10 +355,18 @@ public sealed partial class OrderService(
         // and a half-applied close would leave a shift that is neither open nor reconciled.
         await db.SaveChangesAsync(cancellationToken);
 
+        // Retention runs here, AFTER the close has been committed, and that ordering is the decision.
+        // A sweep is housekeeping; the cash count is the audit record of what was physically in the
+        // drawer. If the sweep threw, the close must still be complete — it already is, and the next
+        // close sweeps again. Making the purge a precondition of closing a shift would let a
+        // housekeeping query cost a manager the ability to end their working day, which is a bad trade
+        // whichever way the failure went.
+        var purgedPhones = await contacts.PurgeAsync(ContactDataService.DefaultRetention, cancellationToken);
+
         // The structured log is the other audit trail, and this codebase uses it deliberately: a
         // future migration can rewrite a column, it cannot rewrite a log line.
         logger.LogInformation(
-            "Shift {PreviousShiftId} closed: counted {Counted} ₽ against {Expected} ₽ expected (float {Float} ₽, collected {Payout} ₿) ({Difference}), reason: {Reason}",
+            "Shift {PreviousShiftId} closed: counted {Counted} ₽ against {Expected} ₽ expected (float {Float} ₽, collected {Payout} ₿) ({Difference}), reason: {Reason}; contact purge cleared {PurgedPhones} phone numbers",
             active.Id,
             Money.FromKopecks(countedCashKopecks),
             Money.FromKopecks(expectedCashKopecks),
@@ -361,7 +378,8 @@ public sealed partial class OrderService(
                 < 0 => $"не хватает {TextFormat.Money(Money.FromKopecks(-discrepancyKopecks))}",
                 _ => $"излишек {TextFormat.Money(Money.FromKopecks(discrepancyKopecks))}"
             },
-            reason ?? "—");
+            reason ?? "—",
+            purgedPhones);
         return active;
     }
 }

@@ -64,6 +64,64 @@ public interface IOrderService
     Task UpdateOrderAsync(Guid orderId, IReadOnlyCollection<OrderItem> items, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Records that somebody has opened this order, retiring the board's unread dot for it.
+    /// </summary>
+    /// <remarks>
+    /// Writes <see cref="Order.SeenAt"/> and nothing else. It is deliberately not coupled to
+    /// <c>UpdateOrderAsync</c> or to the status transition: the dot exists to answer "has anyone looked
+    /// since it became ready", and the answer must come from somebody actually opening the order, not
+    /// from whatever else happened to touch the row.
+    /// <para>
+    /// MONOTONIC, and that matters because the board auto-refreshes. A plain assignment would move
+    /// <c>SeenAt</c> backwards every time the operator reopened an order that had already been seen,
+    /// and a read older than <see cref="Order.ReadyAt"/> would bring the dot back for an order nobody
+    /// has touched since. <c>max</c> keeps the newest look.
+    /// </para>
+    /// <para>
+    /// Silent when the order is missing or already fully seen: this is a courtesy write on a path the
+    /// operator did not choose to enter deliberately, and a screen that failed because a dot was
+    /// already gone would be a worse board than the dot.
+    /// </para>
+    /// </remarks>
+    Task MarkSeenAsync(Guid orderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes a phone and a promised time onto an order that has already been paid for — the customer
+    /// thought of it after the money changed hands.
+    /// </summary>
+    /// <param name="orderId">The order to annotate.</param>
+    /// <param name="phone">Whatever was typed, or <c>null</c> to leave the number alone.</param>
+    /// <param name="requestedAt">The promised time, or <c>null</c> to leave it alone.</param>
+    /// <param name="promoteToTakeaway">
+    /// The operator's explicit agreement to change the order from counter service to takeaway because a
+    /// number was named. A phone on a counter-service order is REFUSED without this — see the remarks.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <remarks>
+    /// <para>
+    /// <b>THE PHONE CONTOUR IS ENFORCED HERE, NOT IN THE SHEET.</b> 152-ФЗ ст. 6(1)(5) permits a phone
+    /// only where it is needed for the contract, and counter service needs none: the customer is on the
+    /// premises. <c>CheckoutService</c> drops it at the service boundary for that reason, and this
+    /// method does not get to be the softer door. A number therefore only lands when the order is
+    /// Takeaway, or when the operator has passed <paramref name="promoteToTakeaway"/> to make it so
+    /// deliberately. The alternative — letting the sheet write whatever it likes — would put the one
+    /// legally meaningful rule in a file that no test covers and that the next screen will copy.
+    /// </para>
+    /// <para>
+    /// <b>NO STATUS CHANGE AND NO HISTORY ROW.</b> The order does not move and no
+    /// <c>OrderStatusHistory</c> row is written: the status genuinely did not change, and a history that
+    /// claims otherwise is a worse record than no history. What DID change is personal data on a closed
+    /// sale, which is why <paramref name="promoteToTakeaway"/> has to be explicit.
+    /// </para>
+    /// </remarks>
+    Task<Order> AddContactDetailsAsync(
+        Guid orderId,
+        string? phone,
+        DateTimeOffset? requestedAt,
+        bool promoteToTakeaway = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// The shift currently open, or <c>null</c> when none is.
     /// </summary>
     /// <remarks>
@@ -171,6 +229,24 @@ public interface IOrderService
     /// whenever a screen forgets to re-sort.
     /// </summary>
     Task<List<ProductAnalyticsRowData>> GetProductAnalyticsAsync(Guid shiftId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The shift's lines whose charged price differs from the price they were allowed to be sold at:
+    /// the "Скидки" section of the shift report.
+    /// <para>
+    /// This is where the price control becomes visible, and it is detection rather than prevention:
+    /// nothing is refused at the till, and a manager reads this after the shift. Ordered by order
+    /// number and then by the line's position in the order, so the section reads in the order the
+    /// sales happened rather than in whatever order the query returned.
+    /// </para>
+    /// <para>
+    /// Includes CANCELLED orders on purpose. A voided sale is where an overridden price is most worth
+    /// seeing, and it is absent from the revenue — which is exactly why every row carries its
+    /// <see cref="DiscountedLine.Status"/> and why the section must not be summed as if it were one
+    /// number.
+    /// </para>
+    /// </summary>
+    Task<List<DiscountedLine>> GetDiscountedLinesAsync(Guid shiftId, CancellationToken cancellationToken = default);
 }
 
 public sealed record ShiftStats(
@@ -277,3 +353,56 @@ public sealed record ProductAnalyticsRowData(
     decimal Revenue,
     Guid? CategoryId,
     string? CategoryName);
+
+/// <summary>
+/// One order line whose charged price differs from the price it was allowed to be sold at, with the
+/// size of the difference.
+/// </summary>
+/// <param name="OrderNumber">Which order, in the form the operator reads on a receipt.</param>
+/// <param name="Status">
+/// Whether the order is a completed sale or was voided. Carried because the two must not be SUMMED
+/// together: a voided line's money was refunded, so adding its discount to a real sale's would report
+/// money that was never kept.
+/// </param>
+/// <param name="Quantity">Units on the line.</param>
+/// <param name="ListPriceKopecks">
+/// The allowed unit price, as the server states it: a bundle's own catalogue price, or the charged
+/// price itself for a line with nothing to compare against.
+/// </param>
+/// <param name="PriceKopecks">The unit price actually charged.</param>
+/// <param name="ReferenceTotalKopecks">
+/// What the same dishes would have cost on their own, à la carte, for the WHOLE line — or null for a
+/// line that is not a bundle. This is the second, independent signal: the first says "the price was
+/// changed", this one says "this bundle was cheaper than its parts", and a bundle can be the second
+/// without being the first. It is a NEGATIVE number for a bundle priced above its parts, which is a
+/// surcharge and not a discount.
+/// </param>
+public sealed record DiscountedLine(
+    int OrderNumber,
+    OrderStatus Status,
+    string ProductName,
+    string? ModifierName,
+    string? VariantName,
+    int Quantity,
+    long ListPriceKopecks,
+    long PriceKopecks,
+    long? ReferenceTotalKopecks)
+{
+    /// <summary>What the order lost on this line: (allowed − charged) × quantity. Negative if a price was RAISED.</summary>
+    public long DiscountKopecks => (ListPriceKopecks - PriceKopecks) * Quantity;
+
+    /// <summary>What was charged for the whole line, for comparison with <see cref="ReferenceTotalKopecks"/>.</summary>
+    public long ChargedTotalKopecks => PriceKopecks * Quantity;
+
+    /// <summary>Whether the line is a bundle, i.e. whether it has a composition at all.</summary>
+    public bool IsBundle => ReferenceTotalKopecks.HasValue;
+
+    /// <summary>
+    /// How much less the bundle cost than its parts, for the whole line. Null for a line with no
+    /// composition, and deliberately a DIFFERENT figure from <see cref="DiscountKopecks"/>: a bundle
+    /// sold at its own price has nothing to report in the override column and may still be cheaper than
+    /// its parts. NEGATIVE when the bundle was dearer than its parts — a surcharge, which is legal and
+    /// must be labelled as one rather than as a negative discount.
+    /// </summary>
+    public long? BundleSavingKopecks => ReferenceTotalKopecks - ChargedTotalKopecks;
+}

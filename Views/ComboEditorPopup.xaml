@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- The composition sheet for a bundle: what is in it, what it costs, and what can be added.
+
+     Built in code rather than declared here, exactly as ModifierPickerPopup builds its option
+     buttons: the rows are a slot list whose length is the answer to nothing in advance, and each row
+     owns its own −/+ /✕ handlers. The frame is fixed so the code only has to fill in the rows. -->
+<toolkit:Popup x:TypeArguments="views:ComboEditorResult"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="clr-namespace:CommunityToolkit.Maui.Views;assembly=CommunityToolkit.Maui"
+             xmlns:views="clr-namespace:CafePosApp.Views"
+             x:Class="CafePosApp.Views.ComboEditorPopup"
+             x:DataType="views:ComboEditorPopup"
+             x:Name="Sheet"
+             VerticalOptions="End"
+             HorizontalOptions="Fill"
+             Margin="0"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+    <ScrollView x:Name="SheetScroll" VerticalOptions="Start">
+        <VerticalStackLayout x:Name="SheetContent" Padding="16,8,16,16" Spacing="0">
+            <BoxView Style="{StaticResource BottomSheetHandle}" />
+
+            <Label x:Name="TitleLabel" FontSize="18" FontAttributes="Bold" Margin="0,12,0,4"
+                   LineBreakMode="TailTruncation" />
+
+            <!-- What the bundle costs: its OWN PRICE when the caller passed one (a catalogue bundle),
+                 or the à la carte sum of the slots when it did not (a custom build from scratch).
+                 The own price is what the till charges; the sum is the reference the discount is
+                 measured against. Recomputed on every change, which is why the labels below are
+                 rebuilt rather than bound. -->
+            <Label x:Name="TotalLabel" FontSize="15" FontAttributes="Bold" Margin="0,0,0,4" />
+
+            <!-- The reference total: what the same dishes would have cost on their own. It is the
+                 second, independent signal in OrderLinePricing/OrderItemComponent — a bundle cheaper
+                 than its parts is a different fact from a bundle whose price was touched — and
+                 showing it here is what makes the difference visible at the till instead of only in
+                 the shift report. -->
+            <Label x:Name="ReferenceLabel" FontSize="12" Margin="0,0,0,10" LineBreakMode="WordWrap"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+
+            <Label Text="В СОСТАВЕ" Style="{StaticResource FieldLabel}" Margin="0,4,0,2" />
+            <VerticalStackLayout x:Name="SlotsLayout" Spacing="6" />
+
+            <Label x:Name="EmptySlotsLabel" Text="Пусто — это сборка с нуля."
+                   Style="{StaticResource EmptyLabel}" Padding="0,4"
+                   IsVisible="False" />
+
+            <Label Text="ДОБАВИТЬ В СОСТАВ" Style="{StaticResource FieldLabel}" Margin="0,10,0,2" />
+            <VerticalStackLayout x:Name="OptionsLayout" Spacing="6" />
+
+            <!-- Starts the custom build. Present on a catalogue bundle too, because it is the same
+                 sheet with the same rows emptied — not a second mechanic reached through a different
+                 door. -->
+            <Button x:Name="ClearButton" Text="Очистить состав" Style="{StaticResource SecondaryButton}"
+                    Margin="0,10,0,0" Clicked="OnClearClicked"
+                    SemanticProperties.Description="Очистить состав и собрать с нуля" />
+
+            <Button x:Name="ConfirmButton" Text="Готово" HeightRequest="48" MinimumHeightRequest="48"
+                    FontAttributes="Bold" Padding="0" Margin="0,8,0,0" Clicked="OnConfirmClicked"
+                    SemanticProperties.Description="Сохранить состав" />
+
+            <Button Text="Отмена" Style="{StaticResource SecondaryButton}" Clicked="OnCancelClicked" />
+        </VerticalStackLayout>
+    </ScrollView>
+</toolkit:Popup>

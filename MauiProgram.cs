@@ -68,6 +68,9 @@ namespace CafePosApp
             builder.Services.AddSingleton<ICatalogActionSheet, CatalogActionSheet>();
             builder.Services.AddSingleton<IPaymentSheet, PaymentSheet>();
             builder.Services.AddSingleton<IStockDispositionSheet, StockDispositionSheet>();
+            builder.Services.AddSingleton<IComboEditor, ComboEditor>();
+            builder.Services.AddSingleton<IOrderTimePicker, OrderTimePicker>();
+            builder.Services.AddSingleton<IContactDetailsSheet, ContactDetailsSheet>();
 
             // ViewModels.
             builder.Services.AddTransient<MenuViewModel>();
@@ -83,6 +86,7 @@ namespace CafePosApp
             builder.Services.AddTransient<CategoryFormViewModel>();
             builder.Services.AddTransient<ModifierFormViewModel>();
             builder.Services.AddTransient<IngredientFormViewModel>();
+            builder.Services.AddTransient<ComboFormViewModel>();
 
             // Shell and pages.
             builder.Services.AddSingleton<AppShell>();

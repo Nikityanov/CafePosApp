@@ -27,6 +27,7 @@ namespace CafePosApp.ViewModels;
 public partial class CatalogManagementViewModel : ObservableObject
 {
     private readonly ICatalogService catalog;
+    private readonly IComboService combos;
     private readonly IDialogService dialogs;
     private readonly IHapticService haptics;
     private readonly ICatalogActionSheet actionSheet;
@@ -66,12 +67,14 @@ public partial class CatalogManagementViewModel : ObservableObject
 
     public CatalogManagementViewModel(
         ICatalogService catalog,
+        IComboService combos,
         IDialogService dialogs,
         IHapticService haptics,
         ICatalogActionSheet actionSheet,
         ILogger<CatalogManagementViewModel> logger)
     {
         this.catalog = catalog;
+        this.combos = combos;
         this.dialogs = dialogs;
         this.haptics = haptics;
         this.actionSheet = actionSheet;
@@ -99,11 +102,14 @@ public partial class CatalogManagementViewModel : ObservableObject
         EditIngredientCommand = new RelayCommand<Ingredient>(ingredient => RequestForm(CatalogFormKind.Ingredient, ingredient?.Id));
         DeleteIngredientCommand = new AsyncRelayCommand<Ingredient>(DeleteIngredientAsync);
         ToggleIngredientAvailabilityCommand = new AsyncRelayCommand<Ingredient>(ToggleIngredientAvailabilityAsync);
+        EditComboCommand = new RelayCommand<Combo>(combo => RequestForm(CatalogFormKind.Combo, combo?.Id));
+        DeleteComboCommand = new AsyncRelayCommand<Combo>(DeleteComboAsync);
         ProductActionsCommand = new AsyncRelayCommand<Product>(ShowProductActionsAsync);
         CategoryActionsCommand = new AsyncRelayCommand<Category>(ShowCategoryActionsAsync);
         ModifierGroupActionsCommand = new AsyncRelayCommand<ModifierOptionGroup>(ShowModifierGroupActionsAsync);
         ModifierOptionActionsCommand = new AsyncRelayCommand<ModifierOption>(ShowModifierOptionActionsAsync);
         IngredientActionsCommand = new AsyncRelayCommand<Ingredient>(ShowIngredientActionsAsync);
+        ComboActionsCommand = new AsyncRelayCommand<Combo>(ShowComboActionsAsync);
 
         // The strip is built from a fixed list, so the default section is marked here rather than
         // by re-entering SetSection (which would early-return on the no-op).
@@ -117,6 +123,13 @@ public partial class CatalogManagementViewModel : ObservableObject
     public ObservableCollection<Category> Categories { get; } = new();
     public ObservableCollection<ModifierOptionGroup> ModifierOptionGroups { get; } = new();
     public ObservableCollection<Ingredient> Ingredients { get; } = new();
+
+    /// <summary>
+    /// Bundles, already wrapped for the list because their price is a sum and not a field — see
+    /// <see cref="ComboRowViewModel"/>. The rows are rebuilt on every load, which is how a change to
+    /// a dish's price reaches this screen: the sum is recomputed from the freshly read components.
+    /// </summary>
+    public ObservableCollection<ComboRowViewModel> Combos { get; } = new();
 
     /// <summary>Category-filter chips: "Все" followed by one chip per category.</summary>
     public ObservableCollection<CategoryFilterChip> CategoryFilters { get; } = new();
@@ -174,16 +187,25 @@ public partial class CatalogManagementViewModel : ObservableObject
 
     // ─── Sections ───
 
-    /// <summary>Keys of the four catalogue entities, in header order.</summary>
+    /// <summary>Keys of the five catalogue entities, in header order.</summary>
     public const string ProductsSection = "products";
     public const string CategoriesSection = "categories";
     public const string ModifiersSection = "modifiers";
     public const string IngredientsSection = "ingredients";
+    public const string CombosSection = "combos";
 
-    /// <summary>The entity switcher strip. Built once — the four entries are fixed.</summary>
+    /// <summary>
+    /// The entity switcher strip. Built once — the five entries are fixed.
+    /// </summary>
+    /// <remarks>
+    /// «Комбо» sits immediately after «Товары», and the order is not cosmetic: a bundle's price is
+    /// the sum of dishes, so the section a manager needs while editing one is the one holding those
+    /// dishes. Putting it last would put «Модификаторы» and «Ингредиенты» between the two.
+    /// </remarks>
     public ObservableCollection<CatalogSection> Sections { get; } =
     [
         new(ProductsSection, "Товары"),
+        new(CombosSection, "Комбо"),
         new(CategoriesSection, "Разделы"),
         new(ModifiersSection, "Модификаторы"),
         new(IngredientsSection, "Ингредиенты")
@@ -195,13 +217,14 @@ public partial class CatalogManagementViewModel : ObservableObject
     public bool IsCategoriesSectionVisible => section == CategoriesSection;
     public bool IsModifiersSectionVisible => section == ModifiersSection;
     public bool IsIngredientsSectionVisible => section == IngredientsSection;
+    public bool IsCombosSectionVisible => section == CombosSection;
 
     /// <summary>
     /// Label on the add button, which doubles as its screen-reader name.
     /// </summary>
     /// <remarks>
-    /// The button adds whatever entity is open, so a static "Добавить" would be wrong on three
-    /// of the four sections. Material 3 asks for one or two words on an extended FAB —
+    /// The button adds whatever entity is open, so a static "Добавить" would be wrong on four
+    /// of the five sections. Material 3 asks for one or two words on an extended FAB —
     /// "Добавить группу модификаторов" was four and pushed the pill across a third of a phone
     /// screen, so the modifiers section names the thing an operator thinks of instead of the
     /// record type.
@@ -211,6 +234,7 @@ public partial class CatalogManagementViewModel : ObservableObject
         CategoriesSection => "Добавить раздел",
         ModifiersSection => "Добавить модификатор",
         IngredientsSection => "Добавить ингредиент",
+        CombosSection => "Добавить комбо",
         _ => "Добавить товар"
     };
 
@@ -223,6 +247,7 @@ public partial class CatalogManagementViewModel : ObservableObject
         OnPropertyChanged(nameof(IsCategoriesSectionVisible));
         OnPropertyChanged(nameof(IsModifiersSectionVisible));
         OnPropertyChanged(nameof(IsIngredientsSectionVisible));
+        OnPropertyChanged(nameof(IsCombosSectionVisible));
         OnPropertyChanged(nameof(AddButtonText));
         foreach (var entry in Sections)
             entry.IsSelected = entry.Key == value;
@@ -285,6 +310,8 @@ public partial class CatalogManagementViewModel : ObservableObject
     public string ModifierGroupsCountText => $"{ModifierOptionGroups.Count} {Plural(ModifierOptionGroups.Count, "группа", "группы", "групп")}";
 
     public string IngredientsCountText => $"{Ingredients.Count} {Plural(Ingredients.Count, "ингредиент", "ингредиента", "ингредиентов")}";
+
+    public string CombosCountText => $"{Combos.Count} {Plural(Combos.Count, "комбо", "комбо", "комбо")}";
 
     public string LowStockText => $"! {LowStockCount} {Plural(LowStockCount, "ингредиент заканчивается", "ингредиента заканчивается", "ингредиентов заканчивается")}";
 
@@ -351,6 +378,12 @@ public partial class CatalogManagementViewModel : ObservableObject
     public IAsyncRelayCommand<Ingredient> DeleteIngredientCommand { get; }
     public IAsyncRelayCommand<Ingredient> ToggleIngredientAvailabilityCommand { get; }
 
+    /// <summary>Opens the bundle form for one bundle (row tap or the overflow's «Редактировать»).</summary>
+    public IRelayCommand<Combo> EditComboCommand { get; }
+
+    /// <summary>Soft delete: sold bundles stay on their receipts. See <see cref="IComboService.DeleteComboAsync"/>.</summary>
+    public IAsyncRelayCommand<Combo> DeleteComboCommand { get; }
+
     // Row overflow menus. MAUI has no context menu, so each row opens an action sheet and the
     // chosen key is dispatched to the command that was already there.
     public IAsyncRelayCommand<Product> ProductActionsCommand { get; }
@@ -358,6 +391,7 @@ public partial class CatalogManagementViewModel : ObservableObject
     public IAsyncRelayCommand<ModifierOptionGroup> ModifierGroupActionsCommand { get; }
     public IAsyncRelayCommand<ModifierOption> ModifierOptionActionsCommand { get; }
     public IAsyncRelayCommand<Ingredient> IngredientActionsCommand { get; }
+    public IAsyncRelayCommand<Combo> ComboActionsCommand { get; }
 
     // ─── Load ───
 
@@ -392,6 +426,16 @@ public partial class CatalogManagementViewModel : ObservableObject
                 group => group.GroupId);
 
             Ingredients.SyncWith(await catalog.GetIngredientsAsync(), ingredient => ingredient.Id);
+
+            // Bundles, LIVE ONLY — the «Показывать удалённые» switch above belongs to the products
+            // section and is not consulted here. There is no restore for a soft-deleted bundle
+            // (IComboService has DeleteComboAsync and nothing that brings one back), so listing a
+            // deleted one would put a row on screen with no way to act on it and no way to undo the
+            // deletion. Not listing it is the honest state; the bundle stays in history either way,
+            // because a sold composition is a snapshot.
+            Combos.SyncWith(
+                (await combos.GetCombosAsync()).Select(combo => new ComboRowViewModel(combo)),
+                combo => combo.Id);
 
             RefreshFilteredProducts();
             NotifyCounts();
@@ -487,6 +531,7 @@ public partial class CatalogManagementViewModel : ObservableObject
         OnPropertyChanged(nameof(CategoriesCountText));
         OnPropertyChanged(nameof(ModifierGroupsCountText));
         OnPropertyChanged(nameof(IngredientsCountText));
+        OnPropertyChanged(nameof(CombosCountText));
         OnPropertyChanged(nameof(HasLowStock));
         OnPropertyChanged(nameof(LowStockText));
     }
@@ -496,9 +541,10 @@ public partial class CatalogManagementViewModel : ObservableObject
 
     private void ShowAddForm() => RequestForm(section switch
     {
-        "categories" => CatalogFormKind.Category,
-        "modifiers" => CatalogFormKind.ModifierGroup,
-        "ingredients" => CatalogFormKind.Ingredient,
+        CategoriesSection => CatalogFormKind.Category,
+        ModifiersSection => CatalogFormKind.ModifierGroup,
+        IngredientsSection => CatalogFormKind.Ingredient,
+        CombosSection => CatalogFormKind.Combo,
         _ => CatalogFormKind.Product
     }, null);
 }

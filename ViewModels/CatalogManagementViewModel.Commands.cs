@@ -142,6 +142,25 @@ public partial class CatalogManagementViewModel
         await LoadAsync();
     }
 
+    /// <summary>
+    /// Soft delete of a bundle. The wording is the product's, deliberately: a bundle leaves the menu
+    /// and stays on the receipts it was already sold on, because a sold composition is a snapshot of
+    /// names and prices rather than a reference to this row.
+    /// </summary>
+    private async Task DeleteComboAsync(Combo? combo)
+    {
+        if (combo is null) return;
+        var confirmed = await dialogs.ConfirmAsync(
+            "Удалить комбо?",
+            $"«{combo.Name}» исчезнет из меню, но останется в истории заказов.",
+            "Удалить");
+        if (!confirmed) return;
+
+        await combos.DeleteComboAsync(combo.Id);
+        haptics.Click();
+        await LoadAsync();
+    }
+
     // ─── Row overflow menus ───
     // Each row opens the action sheet and dispatches the chosen key to the same code the inline
     // buttons used to call, so no behaviour was moved — only where it is triggered from.
@@ -210,4 +229,36 @@ public partial class CatalogManagementViewModel
             case CatalogActionKeys.ToggleAvailability: await ToggleIngredientAvailabilityAsync(ingredient); break;
         }
     }
+
+    private async Task ShowComboActionsAsync(Combo? combo)
+    {
+        if (combo is null) return;
+
+        haptics.Click();
+        switch (await actionSheet.ChooseAsync(combo.Name, ComboRowActions()))
+        {
+            case CatalogActionKeys.Edit: RequestForm(CatalogFormKind.Combo, combo.Id); break;
+            case CatalogActionKeys.Delete: await DeleteComboAsync(combo); break;
+        }
+    }
+
+    /// <summary>
+    /// The overflow menu of a bundle row.
+    /// </summary>
+    /// <remarks>
+    /// Built HERE rather than added to the core's <c>CatalogActions</c>, and that placement is worth
+    /// naming: the other five row types get their menus from the domain precisely so the action set,
+    /// the wording and the destructive flag can be asserted from a plain test project that references
+    /// only <c>CafePos.Core</c>. A bundle's set is two entries with no condition on the row's state —
+    /// there is no availability to toggle on a bundle, because availability is a property of its
+    /// dishes and a bundle with no sellable dish is refused at the till, naming the dish, rather than
+    /// hidden from the menu. So there is nothing here that a test would want to pin down, and the
+    /// alternative is a Core edit this change is not allowed to make. Moving it next to the others is
+    /// a one-line follow-up when the Core lane next touches that file.
+    /// </remarks>
+    private static IReadOnlyList<CatalogAction> ComboRowActions() =>
+    [
+        new(CatalogActionKeys.Edit, "Редактировать"),
+        new(CatalogActionKeys.Delete, "Удалить", IsDestructive: true)
+    ];
 }

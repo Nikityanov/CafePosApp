@@ -1086,6 +1086,34 @@ public class OrderPaymentTests
     }
 
     /// <summary>
+    /// Applies every migration newer than <paramref name="afterVersion"/> to a database a test has
+    /// stopped part-way through, so that EF can read it afterwards.
+    /// <para>
+    /// WHY THIS IS HERE AND NOT <c>SchemaMigrator.MigrateAsync</c>: these tests each apply one
+    /// migration to a database that holds real rows, on purpose, to see what that one statement does.
+    /// Reading the result back through EF is the point — it proves the upgraded database is usable by
+    /// the CURRENT model — and the current model selects every column, so a database left at version 6
+    /// or 7 no longer has them all ("no such column: o.CustomerPhone"). Applying the remaining
+    /// migrations is what a real device does anyway: no terminal ever stops halfway, so the state these
+    /// tests were reading was a state nothing runs. The alternative, reading the columns back with raw
+    /// SQL, would quietly stop testing that the model and the schema still fit together.
+    /// </para>
+    /// <para>
+    /// Applied in version order and never through SchemaVersions, so the versions this test controls
+    /// stay the ones it decided on.
+    /// </para>
+    /// </summary>
+    private static async Task BringSchemaToCurrentAsync(AppDbContext db, int afterVersion)
+    {
+        foreach (var migration in SchemaMigrator.AllMigrations
+                     .Where(migration => migration.Version > afterVersion)
+                     .OrderBy(migration => migration.Version))
+        {
+            await migration.ApplyAsync(db, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
     /// The upgrade path that matters: a database that already had five migrations and real orders
     /// in it. Existing orders were paid at checkout (payment deferral did not exist before this
     /// feature), so the column is backfilled AND each backfilled order gets a matching synthetic
@@ -1110,10 +1138,10 @@ public class OrderPaymentTests
         await using (var db = await factory.CreateDbContextAsync())
         {
             await new Migration006_OrderPayments().ApplyAsync(db, CancellationToken.None);
-            // Version 7 as well: the point of reading the result back through EF is to prove the
-            // upgraded database is usable by the current model, and a v6-only schema is not what any
-            // device actually runs.
-            await new Migration007_Refunds().ApplyAsync(db, CancellationToken.None);
+            // Versions 7 to 11 as well: the point of reading the result back through EF is to prove
+            // the upgraded database is usable by the current model, and a v6-only schema is not what
+            // any device actually runs.
+            await BringSchemaToCurrentAsync(db, afterVersion: 6);
         }
 
         // Reading through EF, not through raw SQL: this is the shape the app reads afterwards, and
@@ -1165,7 +1193,10 @@ public class OrderPaymentTests
 
         var factory = host.Get<IDbContextFactory<AppDbContext>>();
         await using (var db = await factory.CreateDbContextAsync())
+        {
             await new Migration006_OrderPayments().ApplyAsync(db, CancellationToken.None);
+            await BringSchemaToCurrentAsync(db, afterVersion: 6);
+        }
 
         await using (var db = await factory.CreateDbContextAsync())
             Assert.Equal(50000, (await db.Orders.AsNoTracking().SingleAsync()).PaidKopecks);
@@ -1185,6 +1216,7 @@ public class OrderPaymentTests
             var migration = new Migration006_OrderPayments();
             await migration.ApplyAsync(db, CancellationToken.None);
             await migration.ApplyAsync(db, CancellationToken.None);
+            await BringSchemaToCurrentAsync(db, afterVersion: 6);
         }
 
         await using (var db = await factory.CreateDbContextAsync())
@@ -1213,6 +1245,11 @@ public class OrderPaymentTests
 
         await using (var db = await factory.CreateDbContextAsync())
             await new Migration007_Refunds().ApplyAsync(db, CancellationToken.None);
+
+        // A refund row written after the upgrade lands in a database that already has the rows AND is
+        // readable by the current model, which is the only shape any device runs.
+        await using (var db = await factory.CreateDbContextAsync())
+            await BringSchemaToCurrentAsync(db, afterVersion: 7);
 
         // Reading through EF, not raw SQL: the existing row must come back with the new column
         // defaulted, which is what decides whether a pre-upgrade order counts as a collection or as

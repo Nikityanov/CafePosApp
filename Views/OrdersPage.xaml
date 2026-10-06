@@ -3,18 +3,24 @@
              Shell.NavBarIsVisible="False">
     <ContentPage.Resources>
         <DataTemplate x:Key="OrderCardTemplate" x:DataType="vm:OrderRowViewModel">
-            <!-- The template root is a stack, not the card, so the section heading can sit
-                 ABOVE the card it introduces instead of inside it. -->
-            <VerticalStackLayout>
-                <Label Text="{Binding StatusGroupName}" FontAttributes="Bold" FontSize="15" TextColor="{StaticResource Tertiary}"
-                       IsVisible="{Binding ShowGroupHeader}" Padding="2,10,2,6"
-                       SemanticProperties.Description="Раздел" />
+            <!-- The template root is the card itself again. It used to be a stack wrapping a section
+                 heading above the card, because the board was ONE list grouped by a time-derived
+                 section. The three tabs are that grouping now and each tab names itself in its
+                 caption, so the heading was a second competing label for a division the tab bar
+                 already states — and it bound to properties that no longer exist. -->
             <Border Style="{StaticResource CardBorder}" Stroke="{Binding StatusColor}" StrokeThickness="2" Margin="0,0,0,8">
                 <VerticalStackLayout Spacing="7">
-                    <Grid ColumnDefinitions="*,Auto">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <VerticalStackLayout Spacing="1">
                             <Label Text="{Binding OrderTitle}" FontSize="18" FontAttributes="Bold" />
                             <Label Text="{Binding CreatedAtText}" Style="{StaticResource SecondaryLabel}" />
+                            <!-- When this order is due. The EXACT promised time, which a staff screen may
+                                 show: the cart quotes the customer a RANGE because that figure is an
+                                 estimate the till picks, and this is what the order was actually
+                                 promised and is judged against. Wording distinguishes a time the
+                                 customer named («к 18:00») from the lead-time promise
+                                 («обещано к 18:00»). -->
+                            <Label Text="{Binding PromiseText, StringFormat='Готово {0}'}" Style="{StaticResource SecondaryLabel}" FontAttributes="Bold" />
                         </VerticalStackLayout>
                         <!-- One rendering of the status, not three. The card carried both
                              StatusText and StatusHint as separate bold lines under a column
@@ -24,9 +30,54 @@
                              supplies the plural, the list view has no column. StatusHint is
                              kept as the accessible description so screen readers still get
                              the sentence form. -->
-                        <Label Grid.Column="1" Text="{Binding StatusText}" TextColor="{Binding StatusColor}" FontAttributes="Bold" VerticalOptions="Center"
-                               SemanticProperties.Description="{Binding StatusHint}" />
+                        <!-- THE UNSEEN DOT. Sits beside the status word, not on the border: the border
+                             already carries StatusColor and repainting it would make an unread order
+                             look like a different STATUS. A dot has no text of its own, so it takes
+                             the wording as a screen-reader description — feedback is never colour-only.
+                             ABOVE the status rather than inline with it, because «● Готов» reads as one
+                             word at a glance and the dot would be taken for punctuation. -->
+                        <VerticalStackLayout Grid.Column="1" Spacing="3" HorizontalOptions="End" VerticalOptions="Center">
+                            <Ellipse WidthRequest="10" HeightRequest="10" Fill="{StaticResource Primary}"
+                                     IsVisible="{Binding IsUnseenReady}"
+                                     SemanticProperties.Description="{Binding UnseenReadyHint}"
+                                     VerticalOptions="Center" HorizontalOptions="Center" />
+                            <Label Text="{Binding StatusText}" TextColor="{Binding StatusColor}" FontAttributes="Bold" HorizontalTextAlignment="End"
+                                   SemanticProperties.Description="{Binding StatusHint}" />
+                        </VerticalStackLayout>
                     </Grid>
+
+                    <!-- LATENESS IS A STATE ON THE CARD, NOT A REORDERING OF THE LIST.
+                         This badge rides along wherever the sort put the order and never moves it: the
+                         position answers "what should be worked on, in what order" and is measured by
+                         PromisedAt, while the badge answers "has this one passed its promise", which is
+                         a different measurement entirely — in a real KDS the warning colour times how
+                         long an ITEM has been cooking, not how late the promise is, and folding the two
+                         together would let a late order be shuffled into a calm stretch of the queue and
+                         lose the fact that it is late.
+
+                         Three signals, and colour is the last: the word «Просрочен», the figure in the
+                         screen-reader description, and the tint. The card's border stays StatusColor,
+                         because the order ALSO has a status and the badge must not appear to change it. -->
+                    <HorizontalStackLayout Spacing="6" IsVisible="{Binding IsOverdue}">
+                        <Border Style="{StaticResource TagWarning}">
+                            <Label Text="{Binding OverdueText}" Style="{StaticResource TagTextWarning}"
+                                   SemanticProperties.Description="{Binding OverdueHint}" />
+                        </Border>
+                        <Label Text="{Binding OverdueHint}" Style="{StaticResource TagTextWarning}" FontSize="12"
+                               VerticalTextAlignment="Center" LineBreakMode="TailTruncation" />
+                    </HorizontalStackLayout>
+
+                    <!-- Fulfilment and contact. MASKED here, not in full: a board stands in the room and
+                         is readable by whoever is standing in it, so it is not a staff-only surface in
+                         the way OrderDetailsPage is. Counter service carries no phone at all — the
+                         service boundary drops it — so the row is honestly blank rather than a masked
+                         nothing, which is why the number is a separate label and not an appended one. -->
+                    <Label Text="{Binding OrderTypeText, StringFormat='{0}'}" Style="{StaticResource TagText}" FontSize="11" />
+                    <Label Text="{Binding PhoneText, StringFormat='Телефон: {0}'}" Style="{StaticResource TagText}" FontSize="11"
+                           LineBreakMode="TailTruncation"
+                           IsVisible="{Binding PhoneText, Converter={StaticResource IsPresent}}"
+                           SemanticProperties.Description="Телефон клиента, скрытый" />
+
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding ItemLines}" Spacing="3">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="vm:OrderItemLine">
@@ -87,33 +138,6 @@
                     <Button Text="{Binding CancelText}" Style="{StaticResource DangerButton}" MinimumHeightRequest="48" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CancelOrderCommand}" CommandParameter="{Binding .}" IsVisible="{Binding CanCancel}" SemanticProperties.Description="{Binding CancelHint}" />
                 </VerticalStackLayout>
             </Border>
-            </VerticalStackLayout>
-        </DataTemplate>
-        <!-- Section filter, same FilterChip shape and same selected-fill trigger as the
-             catalogue page's category strip, so the two read as one control in two places.
-             The count rides on the chip because deciding where to look is an arithmetic
-             question, and it is text rather than a badge so it survives a screen reader. -->
-        <DataTemplate x:Key="SectionFilterChipTemplate" x:DataType="vm:OrderFilterChip">
-            <Border Style="{StaticResource FilterChip}" Margin="0,0,8,0">
-                <Border.Triggers>
-                    <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
-                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
-                        <Setter Property="Stroke" Value="Transparent" />
-                    </DataTrigger>
-                </Border.Triggers>
-                <Label Text="{Binding Label}" Style="{StaticResource FilterChipText}">
-                    <Label.Triggers>
-                        <DataTrigger TargetType="Label" Binding="{Binding IsSelected}" Value="True">
-                            <Setter Property="TextColor" Value="White" />
-                        </DataTrigger>
-                    </Label.Triggers>
-                </Label>
-                <Border.GestureRecognizers>
-                    <TapGestureRecognizer
-                        Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectSectionFilterCommand}"
-                        CommandParameter="{Binding .}" />
-                </Border.GestureRecognizers>
-            </Border>
         </DataTemplate>
     </ContentPage.Resources>
     <!-- Three rows, not four. The header row existed only to carry «Обновить»: the board
@@ -123,7 +147,7 @@
          (Shell.NavBarIsVisible on this page — it duplicated the "Заказы" tab), so the tab bar
          is what names the section. Removing the button means removing the row, and the chip
          strip takes its place with no chrome lost. -->
-    <Grid RowDefinitions="Auto,Auto,*" Padding="12" RowSpacing="8">
+    <Grid RowDefinitions="Auto,*" Padding="12" RowSpacing="8">
         <!-- Static value, so an AppThemeBinding on the attribute is the whole fix and needs no ViewModel
              change. A bare {StaticResource Danger} declared the light token in both themes: this
              label sits on the page fill (#FAFAFA / #121212), where that is 4.77:1 in light and
@@ -133,33 +157,122 @@
         <Label Grid.Row="0" Text="{Binding Message}" IsVisible="{Binding HasMessage}"
                TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
                LineBreakMode="WordWrap" />
-        <!-- "Все" is the default and stays the default: a board that hides half the orders on
-             open is worse than one that shows a heading. The chips narrow it on demand. -->
-        <ScrollView Grid.Row="1" Orientation="Horizontal" HorizontalScrollBarVisibility="Never"
-                    HeightRequest="44" Margin="-12,0,-12,0">
-            <HorizontalStackLayout BindableLayout.ItemsSource="{Binding SectionFilters}"
-                                    Spacing="0"
-                                    BindableLayout.ItemTemplate="{StaticResource SectionFilterChipTemplate}" />
-        </ScrollView>
-        <!-- One list, not two columns.
 
-             The kanban split 411dp into two ~190dp columns, and a card in that width clipped
-             "Подробнее" to "Подробн" while three buttons in a row had no room. Every card now
-             gets the full width, and the split the board had is kept by sorting preparing
-             ahead of ready and letting the first card of each group carry the section name.
+        <!-- ═══ THREE TABS AS CHIPS, AND THE «Все» CHIP IS GONE ═══
+             The owner removed «Все» and asked to switch «свайпом или по чипу». A TabbedView would have
+             given both from one control and was tried first, but the type does not resolve in this
+             project (MAUIX2000 on every target framework), so the chips carry the switch and the
+             swipe is lost rather than deferred.
 
-             The header is a flag on the row rather than CollectionView grouping: XamlC
-             cannot resolve PropertyGroupDescription, so IsGrouped was a Debug-only green
-             build and a Release failure (XC0000). ShowGroupHeader needs no new type and is
-             verified by the same Release build as everything else.
+             Each chip is a FilterChip with a DataTrigger on SelectedTab, so the selected one is tinted
+             by the same rule as the catalogue's category strip. The three lists are all built and all
+             kept in memory; only one is visible. That is deliberate — rebuilding a list on switch
+             would throw away the scroll position of the tab being left, which is exactly what the
+             deleted PropertyChanged handler existed to undo. -->
+        <Grid Grid.Row="1" RowDefinitions="Auto,*" RowSpacing="8">
+            <HorizontalStackLayout Spacing="6">
+                <Border Style="{StaticResource FilterChip}">
+                    <Border.Triggers>
+                        <DataTrigger TargetType="Border" Binding="{Binding SelectedTab}" Value="{x:Static vm:OrderTab.Preparing}">
+                            <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                            <Setter Property="Stroke" Value="Transparent" />
+                        </DataTrigger>
+                    </Border.Triggers>
+                    <Label Text="{Binding PreparingTabText}" Style="{StaticResource FilterChipText}"
+                           VerticalTextAlignment="Center">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding SelectedTab}" Value="{x:Static vm:OrderTab.Preparing}">
+                                <Setter Property="TextColor" Value="White" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding SelectTabCommand}" CommandParameter="{x:Static vm:OrderTab.Preparing}" />
+                    </Border.GestureRecognizers>
+                </Border>
 
-             Bound to VisibleOrders, not ActiveOrders: the filter narrows what is on screen while
-             ActiveOrders stays the full set behind it. -->
-        <CollectionView x:Name="OrdersList" Grid.Row="2" ItemsSource="{Binding VisibleOrders}" SelectionMode="None"
-                        ItemTemplate="{StaticResource OrderCardTemplate}">
-            <CollectionView.EmptyView>
-                <Label Text="{Binding EmptyListText}" Style="{StaticResource EmptyLabel}" />
-            </CollectionView.EmptyView>
-        </CollectionView>
+                <Border Style="{StaticResource FilterChip}">
+                    <Border.Triggers>
+                        <DataTrigger TargetType="Border" Binding="{Binding SelectedTab}" Value="{x:Static vm:OrderTab.Ready}">
+                            <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                            <Setter Property="Stroke" Value="Transparent" />
+                        </DataTrigger>
+                    </Border.Triggers>
+                    <!-- THE CHIP DOT, the owner's addition: the count says how many are waiting, this says
+                         whether the operator already knows. Same fact the row dot carries, one level up.
+                         Only on «Ждут выдачи», because a dot on «Готовятся» would assert that a
+                         half-finished order is "unseen" in a way that means nothing.
+                         The dot is INLINE, before the caption, so the chip reads as one thing; and it
+                         keeps the chip's own fill when selected — a white dot on the purple fill is the
+                         only combination that stays visible against both states. -->
+                    <HorizontalStackLayout Spacing="5" VerticalOptions="Center">
+                        <Ellipse WidthRequest="8" HeightRequest="8" VerticalOptions="Center"
+                                 IsVisible="{Binding HasUnseenReady}">
+                            <Ellipse.Triggers>
+                                <DataTrigger TargetType="Ellipse" Binding="{Binding SelectedTab}" Value="{x:Static vm:OrderTab.Ready}">
+                                    <Setter Property="Fill" Value="White" />
+                                </DataTrigger>
+                                <DataTrigger TargetType="Ellipse" Binding="{Binding SelectedTab}" Value="{x:Static vm:OrderTab.Preparing}">
+                                    <Setter Property="Fill" Value="{StaticResource Primary}" />
+                                </DataTrigger>
+                                <DataTrigger TargetType="Ellipse" Binding="{Binding SelectedTab}" Value="{x:Static vm:OrderTab.Scheduled}">
+                                    <Setter Property="Fill" Value="{StaticResource Primary}" />
+                                </DataTrigger>
+                            </Ellipse.Triggers>
+                        </Ellipse>
+                        <Label Text="{Binding ReadyTabText}" Style="{StaticResource FilterChipText}"
+                               VerticalTextAlignment="Center">
+                            <Label.Triggers>
+                                <DataTrigger TargetType="Label" Binding="{Binding SelectedTab}" Value="{x:Static vm:OrderTab.Ready}">
+                                    <Setter Property="TextColor" Value="White" />
+                                </DataTrigger>
+                            </Label.Triggers>
+                        </Label>
+                    </HorizontalStackLayout>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding SelectTabCommand}" CommandParameter="{x:Static vm:OrderTab.Ready}" />
+                    </Border.GestureRecognizers>
+                </Border>
+
+                <Border Style="{StaticResource FilterChip}">
+                    <Border.Triggers>
+                        <DataTrigger TargetType="Border" Binding="{Binding SelectedTab}" Value="{x:Static vm:OrderTab.Scheduled}">
+                            <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                            <Setter Property="Stroke" Value="Transparent" />
+                        </DataTrigger>
+                    </Border.Triggers>
+                    <Label Text="{Binding ScheduledTabText}" Style="{StaticResource FilterChipText}"
+                           VerticalTextAlignment="Center">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding SelectedTab}" Value="{x:Static vm:OrderTab.Scheduled}">
+                                <Setter Property="TextColor" Value="White" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding SelectTabCommand}" CommandParameter="{x:Static vm:OrderTab.Scheduled}" />
+                    </Border.GestureRecognizers>
+                </Border>
+            </HorizontalStackLayout>
+
+            <CollectionView Grid.Row="1" ItemsSource="{Binding PreparingOrders}" SelectionMode="None"
+                            IsVisible="{Binding IsPreparingTab}" ItemTemplate="{StaticResource OrderCardTemplate}">
+                <CollectionView.EmptyView>
+                    <Label Text="{Binding PreparingEmptyText}" Style="{StaticResource EmptyLabel}" />
+                </CollectionView.EmptyView>
+            </CollectionView>
+            <CollectionView Grid.Row="1" ItemsSource="{Binding ReadyOrders}" SelectionMode="None"
+                            IsVisible="{Binding IsReadyTab}" ItemTemplate="{StaticResource OrderCardTemplate}">
+                <CollectionView.EmptyView>
+                    <Label Text="{Binding ReadyEmptyText}" Style="{StaticResource EmptyLabel}" />
+                </CollectionView.EmptyView>
+            </CollectionView>
+            <CollectionView Grid.Row="1" ItemsSource="{Binding ScheduledOrders}" SelectionMode="None"
+                            IsVisible="{Binding IsScheduledTab}" ItemTemplate="{StaticResource OrderCardTemplate}">
+                <CollectionView.EmptyView>
+                    <Label Text="{Binding ScheduledEmptyText}" Style="{StaticResource EmptyLabel}" />
+                </CollectionView.EmptyView>
+            </CollectionView>
+        </Grid>
     </Grid>
 </ContentPage>

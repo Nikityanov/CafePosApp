@@ -10,9 +10,9 @@ using Microsoft.Maui.Devices;
 namespace CafePosApp.Views;
 
 /// <summary>
-/// The payment bottom sheet: what is owed, a keypad to enter the amount in whole rubles, a
-/// cash/card choice, and a confirm button. Returns the declared payment, or <c>null</c> when the
-/// sheet is dismissed.
+/// The payment bottom sheet: what is owed, and one tap to take it — «160,00 ₽ наличными» or
+/// «160,00 ₽ картой» — with a keypad behind «Другая сумма» for a partial payment or any other
+/// figure. Returns the declared payment, or <c>null</c> when the sheet is dismissed.
 /// </summary>
 /// <remarks>
 /// Serves BOTH directions of money: taking a payment and giving one back, told apart by
@@ -33,6 +33,36 @@ namespace CafePosApp.Views;
 /// OS keyboard covers half the screen and is slow to bring up, and an <c>Entry</c> raises it on
 /// every tap. Amounts are entered in whole rubles, so there is no decimal key.
 /// </para>
+/// <para>
+/// <b>THE COMMON SALE IS ONE TAP, AND THE KEYPAD IS NOT IN THE WAY OF IT.</b> A coffee-shop sale
+/// is the same number of taps whatever the tender, so the sheet opens on two full-width buttons
+/// that each state the amount they charge and close on the tap. The keypad still exists — partial
+/// payment is a real, supported outcome (<c>Order.BalanceKopecks</c>,
+/// <c>PaymentState.PartiallyPaid</c>) — but it is behind «Другая сумма», a secondary control
+/// clearly below the tender row.
+/// </para>
+/// <para>
+/// <b>THE AMOUNT IS ON THE BUTTON.</b> Baymard's 2024 study captured a tester asking, of a «Next»
+/// button, verbatim: «I'm not sure if I click the 'Next' button, will it charge?» — a button
+/// naming only a method repeats that ambiguity, because the figure it would charge lives somewhere
+/// else on the screen and has to be re-read. <see cref="PaymentSheetResult.Amount"/> already
+/// carries a keyed amount, so the contract needed no new field: the same record means «exactly
+/// AmountDue, cash» from a tender button and «60 ₽, whatever was typed» from the keypad.
+/// </para>
+/// <para>
+/// <b>CARD NEVER OPENS THE KEYPAD.</b> There is nothing to choose for a card — it is always the
+/// balance — so a keypad there would ask the operator to decide something that cannot be decided.
+/// </para>
+/// <para>
+/// <b>IT IS ALSO THE «WHEN DOES THE MONEY MOVE» DECISION, ON THE CART PATH ONLY.</b>
+/// «Оплата при выдаче» used to be a second button on the cart beside «Оплатить и создать»; it is now
+/// <c>DeferredButton</c> here, under the confirm. It is a decision about when money moves rather than
+/// a second kind of checkout, so it belongs where money moves — and on the other two paths that open
+/// this sheet (the board's top-up, «Принять оплату» on the details page) the order already exists and
+/// there is nothing to defer, which is why it is gated on
+/// <see cref="PaymentSheetRequest.AllowDeferredPayment"/> and never on the mode alone. One tap does
+/// not change that: it stays visible in both panel states.
+/// </para>
 /// </remarks>
 [XamlCompilation(XamlCompilationOptions.Compile)]
 public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
@@ -46,6 +76,25 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
     private PaymentMethod selectedMethod = PaymentMethod.Cash;
 
     /// <summary>
+    /// True once the operator has asked for the keypad on the collect path. The refund path opens
+    /// the keypad immediately and never sets it.
+    /// </summary>
+    private bool keypadOpen;
+
+    /// <summary>
+    /// True while the prefilled balance is behaving as if it were SELECTED text: the next digit
+    /// replaces it rather than appending to it. The keypad has no cursor and no selection, so this
+    /// flag is what «the text is selected» means here, and it is cleared by the first key — which
+    /// includes «Сброс» and «Стереть», because those are deliberate acts rather than typing.
+    /// </summary>
+    private bool replaceEnteredOnNextDigit;
+
+    /// <summary>
+    /// True when there is nothing to charge: the sheet then offers no tender button and no keypad.
+    /// </summary>
+    private bool nothingDue;
+
+    /// <summary>
     /// The most that may be keyed in on a refund, in whole rubles, floored.
     /// </summary>
     /// <remarks>
@@ -55,6 +104,35 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
     /// with the same floor, so the keypad and the ledger agree.
     /// </remarks>
     private long RefundCeilingRubles => (long)Math.Floor(request.AmountDue);
+
+    /// <summary>
+    /// The balance as whole rubles: what one-tap quick pay charges, and what the keypad is
+    /// prefilled with under «Другая сумма».
+    /// </summary>
+    /// <remarks>
+    /// Floored, clamped at zero and held under <see cref="MaxEnteredRubles"/>. The floor is the
+    /// keypad's own contract — it has no decimal key, so a 220,60 balance can only be entered as
+    /// 220 — and the service clamps the recorded payment down to the real balance afterwards, so the
+    /// quick-pay figure can never exceed what is owed. Clamping the cap in is what keeps a
+    /// pathological request from producing a prefill the keypad would refuse to replace.
+    /// </remarks>
+    private long BalanceRubles =>
+        Math.Clamp((long)Math.Floor(request.AmountDue), 0, MaxEnteredRubles);
+
+    /// <summary>
+    /// What to say when the operator tries to confirm nothing. Branched by direction because the
+    /// reason is the same but the act is not.
+    /// </summary>
+    /// <remarks>
+    /// No amount is named in the sentence, so no currency symbol is hardcoded in it — a hardcoded
+    /// «₽» here would ignore the operator's selected currency, which §5 of .opencode-rules.md
+    /// forbids for user-facing money.
+    /// </remarks>
+    private string ZeroRefusalText => request.IsRefund
+        ? "Ноль вернуть нельзя. Возврат на ноль ничего не возвращает, "
+          + "но попадает в оплату заказа и сбивает сверку кассы."
+        : "Ноль оплатить нельзя. Платёж на ноль ничего не закрывает, "
+          + "но попадает в оплату заказа и сбивает сверку кассы.";
 
     public PaymentSheetPopup(PaymentSheetRequest request)
     {
@@ -96,15 +174,21 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
     /// choice would be worse than no choice — the operator would reasonably believe the return was
     /// booked the way they picked it.
     /// </para>
+    /// <para>
+    /// A refund gets NO quick pay and NO prefill. It keeps the keypad it always had, starting at 0,
+    /// because prefilling it with the ceiling would make «Вернуть оплату» a one-tap return of
+    /// everything the till is being asked about — the single most dangerous button this sheet could
+    /// grow. The operator chooses how much to give back.
+    /// </para>
     /// </remarks>
     private void ApplyMode(PaymentSheetRequest request)
     {
         if (request.IsRefund)
         {
             AmountDueLabel.Text = $"Вернуть можно: {TextFormat.Money(request.AmountDue)}";
-            RefundNoteLabel.IsVisible = true;
             RefundNoteLabel.Text = "Деньги уходят из кассы покупателю. Способ возврата не выбирается: "
                                  + "он совпадает с тем, как заказ принимали.";
+            RefundNoteLabel.IsVisible = true;
             ConfirmButton.Text = "Вернуть оплату";
             SemanticProperties.SetDescription(ConfirmButton, "Вернуть оплату покупателю");
             MethodGrid.IsVisible = false;
@@ -112,7 +196,36 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
         else
         {
             AmountDueLabel.Text = $"К оплате: {TextFormat.Money(request.AmountDue)}";
+
+            // The tender buttons state the figure they charge, so it is written here and not bound:
+            // PaymentSheetRequest is not this popup's binding context. TextFormat.Money so the
+            // amount reads in the operator's currency, and PaymentText.Method so «наличными» /
+            // «картой» is spelled the one way the rest of the app spells it.
+            var due = TextFormat.Money(request.AmountDue);
+            QuickPayCashButton.Text = $"{due} {PaymentText.Method(PaymentMethod.Cash)}";
+            QuickPayCardButton.Text = $"{due} {PaymentText.Method(PaymentMethod.Card)}";
+            SemanticProperties.SetDescription(QuickPayCashButton, $"Оплатить {due} наличными");
+            SemanticProperties.SetDescription(QuickPayCardButton, $"Оплатить {due} картой");
         }
+
+        // Nothing owed: no tender button and no keypad, because there is nothing to charge and a
+        // keypad over a zero balance would invite a figure the domain would only clamp away. The
+        // label says why rather than leaving the operator to infer it from missing buttons.
+        nothingDue = request.AmountDue <= 0;
+        NothingDueLabel.Text = request.IsRefund
+            ? "Возвращать нечего: в оплате заказа нет денег."
+            : "Платить нечего: долга нет.";
+
+        // «Оплата при выдаче», shown only where the caller asked for it. The refund branch above cannot
+        // reach it even if it asked: ShowsDeferredPayment is false for a refund whatever the flag says,
+        // and deferring a refund would be nonsense anyway.
+        //
+        // The two are hidden TOGETHER because the rule is between them: showing the rule with no button
+        // under it, or a button with nothing above it, each reads as a layout fault.
+        //
+        // NOT gated on nothingDue. It takes no money, so it is not a tender button, and on a nil
+        // cart total it is the only way to complete the checkout at all.
+        DeferredButton.IsVisible = DeferredSeparator.IsVisible = request.ShowsDeferredPayment;
 
         // "Already settled in this direction": money collected on a top-up, money returned on a
         // partial refund. Without this line a second refund reads as a second refund of the FULL
@@ -125,8 +238,76 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
                 : $"Уже оплачено: {TextFormat.Money(request.AlreadyPaid)} · доплата";
         }
 
+        RefreshPanels();
         Refresh();
         if (!request.IsRefund) RefreshMethod();
+    }
+
+    /// <summary>
+    /// One tap on a tender button: record exactly <see cref="PaymentSheetRequest.AmountDue"/> by
+    /// that method and close.
+    /// </summary>
+    /// <remarks>
+    /// The amount is <see cref="BalanceRubles"/> and not the entered one, because there is no entered
+    /// one on this path — nothing has been typed. The figure is floored, which is the keypad's whole
+    /// rubles contract, and the service clamps a payment down to the real balance afterwards, so this
+    /// can charge less than the balance but never more.
+    /// <para>
+    /// <see cref="PaymentSheetResult"/> is returned in exactly the shape the keyed path returns it in.
+    /// That is the whole point of the design: the callers cannot tell the two apart, and none of them
+    /// needed changing to get one-tap payment.
+    /// </para>
+    /// </remarks>
+    private void OnTenderClicked(object? sender, EventArgs e)
+    {
+        var method = (sender as Button)?.CommandParameter?.ToString() == "card"
+            ? PaymentMethod.Card
+            : PaymentMethod.Cash;
+
+        _ = CloseAsync(new PaymentSheetResult(BalanceRubles, method));
+    }
+
+    /// <summary>
+    /// «Другая сумма»: swap the tender row for the keypad, prefilled with the balance.
+    /// </summary>
+    /// <remarks>
+    /// The prefill is there so the common case — «pay the balance, but let me type it» — needs no
+    /// typing at all, and <see cref="replaceEnteredOnNextDigit"/> is set with it so the first digit
+    /// REPLACES the balance instead of appending to it. Appending would be the worse bug of the two
+    /// and a quiet one: 160 prefilled, then «5» and «0» would read 1 6 0 5 0 and be refused by the
+    /// refund-style cap logic only on the collect path's behalf, so the operator would be told
+    /// nothing and would conclude the keypad is broken.
+    /// <para>
+    /// Collect only. A refund never reaches this handler — there is no «Другая сумма» — so the
+    /// refund keypad still starts at 0.
+    /// </para>
+    /// </remarks>
+    private void OnOtherAmountClicked(object? sender, EventArgs e)
+    {
+        keypadOpen = true;
+        enteredRubles = BalanceRubles;
+        replaceEnteredOnNextDigit = enteredRubles > 0;
+        ZeroRefusalLabel.IsVisible = false;
+
+        RefreshPanels();
+        Refresh();
+    }
+
+    /// <summary>
+    /// Swaps between the two payment panels. The single owner of that decision, so the states cannot
+    /// disagree with each other.
+    /// </summary>
+    /// <remarks>
+    /// Three panels, three independent flags, and every combination is reachable:
+    /// quick pay (collect, balance &gt; 0, keypad closed), the keypad (collect after «Другая сумма»,
+    /// or any refund), and the nothing-due label. Nothing is hidden behind a rule without its
+    /// button, which is the layout fault the deferred separator comment warns about.
+    /// </remarks>
+    private void RefreshPanels()
+    {
+        QuickPayPanel.IsVisible = !nothingDue && !request.IsRefund && !keypadOpen;
+        KeypadPanel.IsVisible = !nothingDue && (request.IsRefund || keypadOpen);
+        NothingDueLabel.IsVisible = nothingDue;
     }
 
     private void OnKeyClicked(object? sender, EventArgs e)
@@ -137,19 +318,31 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
             case "backspace":
                 // Integer division: drop the last digit.
                 enteredRubles = enteredRubles / 10;
+                // Not typing — a deliberate act on what is on screen, so the prefill stops being a
+                // selection here. Otherwise «Стереть» would clear the balance and the next digit
+                // would overwrite the operator's own backspace instead of extending it.
+                replaceEnteredOnNextDigit = false;
                 break;
             case "clear":
                 enteredRubles = 0;
+                replaceEnteredOnNextDigit = false;
                 break;
             default:
-                if (int.TryParse(key, out var digit) && enteredRubles <= MaxEnteredRubles / 10)
+                if (int.TryParse(key, out var digit))
                 {
-                    var next = enteredRubles * 10 + digit;
+                    // A prefilled balance behaves as if it were selected text: this digit REPLACES it.
+                    // The whole-rubles cap cannot apply to that first digit — a single digit is
+                    // always inside it — but it does to every digit after it, which is the point of
+                    // the cap: it stops a stray keypress printing a 20-digit number.
+                    var next = replaceEnteredOnNextDigit ? digit : enteredRubles * 10 + digit;
+                    var withinCap = replaceEnteredOnNextDigit || enteredRubles <= MaxEnteredRubles / 10;
+                    replaceEnteredOnNextDigit = false;
+
                     // The refund ceiling is enforced HERE rather than left to the service. The
                     // domain caps the refund too, but a sheet that accepts 500 ₽ against a 220 ₽
                     // payment and then silently books 220 is telling the operator one thing and
                     // doing another; refusing the keystroke makes the sheet's promise true.
-                    if (!request.IsRefund || next <= RefundCeilingRubles)
+                    if (withinCap && (!request.IsRefund || next <= RefundCeilingRubles))
                     {
                         enteredRubles = next;
                     }
@@ -157,6 +350,8 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
                 break;
         }
 
+        // The amount changed, so any standing refusal is stale.
+        ZeroRefusalLabel.IsVisible = false;
         Refresh();
     }
 
@@ -168,16 +363,63 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
         RefreshMethod();
     }
 
+    /// <summary>
+    /// The keyed path's confirm: take what was typed, by the method chosen above it.
+    /// </summary>
+    /// <remarks>
+    /// The entered amount is passed as typed; the service clamps it to the balance. The change
+    /// the operator hands back is entered − balance, which is what ChangeLabel showed.
+    /// <para>
+    /// Zero is REFUSED WITH A REASON rather than a disabled button. «Оплатить ноль» is not a thing:
+    /// a zero-value row would still be written to <c>OrderPayment</c>, would leave
+    /// <c>PaidKopecks</c> unchanged, and would land in the shift reconciliation as a row that
+    /// accounts for nothing. A greyed button says «not now» and leaves the operator to guess;
+    /// this says why, in a sentence, next to the control they pressed.
+    /// </para>
+    /// </remarks>
     private void OnConfirmClicked(object? sender, EventArgs e)
     {
-        // The entered amount is passed as typed; the service clamps it to the balance. The change
-        // the operator hands back is entered − balance, which is what ChangeLabel showed.
+        if (enteredRubles <= 0)
+        {
+            ZeroRefusalLabel.Text = ZeroRefusalText;
+            ZeroRefusalLabel.IsVisible = true;
+            return;
+        }
+
         _ = CloseAsync(new PaymentSheetResult(enteredRubles, selectedMethod));
     }
 
     /// <summary>
+    /// «Оплата при выдаче»: no money is taken and the order is booked to be paid on collection.
+    /// </summary>
+    /// <remarks>
+    /// The amount and method are written as fillers rather than as what the operator entered, and both
+    /// are meaningless on this path — <see cref="PaymentSheetResult.IsDeferred"/> is the whole message,
+    /// and the caller branches on it before it reads either. <c>enteredRubles</c> is passed as 0 on
+    /// purpose: whatever the operator keyed in before changing their mind is not a payment, and
+    /// handing the caller a figure it might mistakenly book is a worse failure than handing it a zero
+    /// it cannot.
+    /// <para>
+    /// Dismissal is the same outcome as tapping outside the sheet, so this is a CloseAsync like any
+    /// other — a caller that gets a non-null result has a decision either way and must read the flag.
+    /// <b>And one tap does not change this: the button is live on the quick-pay panel as well as on
+    /// the keypad panel</b>, so an operator who pays on collection has not lost the exit to the
+    /// sheet's new default. Deferring is not a fallback for being unable to charge the balance; it
+    /// is the other answer to the same question, and it is gated on the caller, never on the panel.
+    /// </para>
+    /// </remarks>
+    private void OnDeferredClicked(object? sender, EventArgs e) =>
+        _ = CloseAsync(new PaymentSheetResult(0, selectedMethod, IsDeferred: true));
+
+    /// <summary>
     /// Redraws the entered amount, the change line and the confirm button. Called after every key.
     /// </summary>
+    /// <remarks>
+    /// The confirm button is deliberately NOT disabled at 0 any more. See <see cref="OnConfirmClicked"/>:
+    /// a refusal the operator can read beats an inert control they have to interpret, and the amount
+    /// on the quick-pay buttons has already made the common case a single tap that never touches this
+    /// method — so there is no short-circuit being removed here, only an unexplained grey button.
+    /// </remarks>
     private void Refresh()
     {
         EnteredLabel.Text = TextFormat.Money(enteredRubles);
@@ -196,11 +438,6 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
         {
             ChangeLabel.Text = $"Сдача: {TextFormat.Money(over)}";
         }
-
-        // Non-zero in both directions: a confirm button reading "Вернуть оплату" must not be live
-        // at 0 ₽, or it books nothing and reports success.
-
-        ConfirmButton.IsEnabled = enteredRubles > 0;
     }
 
     /// <summary>Fills the chosen method button and tones the other, so the active choice is visible.</summary>

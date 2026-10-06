@@ -10,7 +10,10 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) : DbCo
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<Combo> Combos => Set<Combo>();
+    public DbSet<ComboComponent> ComboComponents => Set<ComboComponent>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<OrderItemComponent> OrderItemComponents => Set<OrderItemComponent>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderPayment> OrderPayments => Set<OrderPayment>();
     public DbSet<Shift> Shifts => Set<Shift>();
@@ -23,6 +26,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) : DbCo
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<DraftOrder> DraftOrders => Set<DraftOrder>();
     public DbSet<DraftOrderItem> DraftOrderItems => Set<DraftOrderItem>();
+    public DbSet<DraftOrderItemComponent> DraftOrderItemComponents => Set<DraftOrderItemComponent>();
     public DbSet<SchemaVersion> SchemaVersions => Set<SchemaVersion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

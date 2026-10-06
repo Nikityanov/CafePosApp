@@ -75,6 +75,10 @@ public partial class AppDbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(120);
+            // TEXT like Orders.OrderType — a parked cart that says "takeaway" has to say so in the
+            // database, because the phone it may keep is decided by exactly this value.
+            entity.Property(e => e.OrderType).HasConversion<string>().HasMaxLength(30);
+            entity.Property(e => e.CustomerPhone).HasMaxLength(24);
             entity.HasMany(e => e.Items)
                 .WithOne(item => item.DraftOrder)
                 .HasForeignKey(item => item.DraftOrderId)
@@ -87,6 +91,19 @@ public partial class AppDbContext
             entity.Property(e => e.ProductName).IsRequired().HasMaxLength(160);
             entity.Property(e => e.SelectedModifierName).HasMaxLength(120);
             entity.Property(e => e.SelectedVariantName).HasMaxLength(120);
+            entity.HasMany(item => item.Components)
+                .WithOne(component => component.DraftOrderItem)
+                .HasForeignKey(component => component.DraftOrderItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DraftOrderItemComponent>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ProductName).IsRequired().HasMaxLength(160);
+            // The autosave deletes and re-inserts every parked line, so the read is always "the
+            // components of one line" and the index is on the foreign key alone.
+            entity.HasIndex(e => e.DraftOrderItemId);
         });
 
         modelBuilder.Entity<SchemaVersion>(entity =>

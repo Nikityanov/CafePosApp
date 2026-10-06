@@ -32,8 +32,8 @@ public class SchemaMigrationTests
         Assert.True(result.FreshDatabase);
         Assert.Equal(migrator.LatestVersion, result.FinalVersion);
         // Pinned on purpose: when the next migration lands this line is the reminder that the
-        // expectations above it are no longer enough.
-        Assert.Equal(9, result.FinalVersion);
+        // expectations above it are no longer enough. 13 = Orders.SeenAt.
+        Assert.Equal(13, result.FinalVersion);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class SchemaMigrationTests
 
         Assert.False(result.FreshDatabase);
         Assert.Equal(migrator.LatestVersion, result.FinalVersion);
-        Assert.Equal(8, result.AppliedMigrations.Count); // 2, 3, 4, 5, 6, 7, 8, 9
+        Assert.Equal(12, result.AppliedMigrations.Count); // 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
 
         // Money became integer kopecks; totals were recalculated from the order items.
         await using var connection = new SqliteConnection($"Data Source={host.DatabasePath}");
@@ -132,6 +132,73 @@ public class SchemaMigrationTests
         Assert.Contains("ExpectedCashKopecks", await GetColumnsAsync(connection, "Shifts"));
         Assert.Contains("ReconciledAt", await GetColumnsAsync(connection, "Shifts"));
         Assert.Contains("CashDiscrepancyReason", await GetColumnsAsync(connection, "Shifts"));
+        Assert.Contains("PriceKopecks", await GetColumnsAsync(connection, "Combos"));
+    }
+
+    /// <summary>
+    /// The backfill of <c>Combos.PriceKopecks</c> is the honest one and it is worth a test of its own:
+    /// the sum of the slots, because that is what those bundles were in fact charging. A database that
+    /// predates version 12 is built here by running the migrations up to 11 by hand, a bundle with
+    /// known slots is inserted while the column does not yet exist, and only then is version 12 applied.
+    /// Anything else — 0, a round number, the dish price of the first slot — would be a number nobody
+    /// charged, and the whole point of the test is that the upgrade changes no price.
+    /// </summary>
+    [Fact]
+    public async Task An_existing_bundle_is_backfilled_with_the_price_it_was_actually_charging()
+    {
+        using var host = TestHost.Create();
+        var factory = host.Get<IDbContextFactory<AppDbContext>>();
+
+        var espresso = "33333333-3333-3333-3333-333333333333";
+        var croissant = "44444444-4444-4444-4444-444444444444";
+        var syrup = "55555555-5555-5555-5555-555555555555";
+        var combo = "66666666-6666-6666-6666-666666666666";
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            await SqliteSchemaHelper.ExecuteAsync(db, LegacyV1Schema, CancellationToken.None);
+
+            // The real migrations, up to 11 — the terminal this test is about has been in service long
+            // enough to have bundles with slots, and a hand-written Combos table would test nothing.
+            foreach (var migration in SchemaMigrator.AllMigrations.Where(migration => migration.Version <= 11))
+                await migration.ApplyAsync(db, CancellationToken.None);
+
+            await SqliteSchemaHelper.ExecuteAsync(db,
+                "CREATE TABLE IF NOT EXISTS [SchemaVersions] ([Version] INTEGER NOT NULL CONSTRAINT [PK_SchemaVersions] PRIMARY KEY, [Name] TEXT NOT NULL, [AppliedAt] TEXT NOT NULL)",
+                CancellationToken.None);
+            for (var version = 1; version <= 11; version++)
+                await SqliteSchemaHelper.ExecuteAsync(db,
+                    $"INSERT INTO [SchemaVersions] ([Version], [Name], [AppliedAt]) VALUES ({version}, 'seed', '2025-01-01T00:00:00+00:00')",
+                    CancellationToken.None);
+
+            // Three slots covering all three price states: a dish price (NULL slot price), a free slot
+            // (0) and a doubled slot (QuantityPerUnit = 2). 120 + 0 + 2 × 30 = 180 ₽ — the sum, and
+            // therefore the price this bundle has in fact been charging all along.
+            await SqliteSchemaHelper.ExecuteAsync(db, $"""
+                INSERT INTO [Products] ([Id], [Name], [PriceKopecks]) VALUES
+                    ('{espresso}', 'Эспрессо', 12000),
+                    ('{croissant}', 'Круассан', 18000),
+                    ('{syrup}', 'Сироп', 3000);
+                INSERT INTO [Combos] ([Id], [Name], [IsDeleted], [SortOrder]) VALUES ('{combo}', 'Набор', 0, 0);
+                INSERT INTO [ComboComponents] ([Id], [ComboId], [ProductId], [QuantityPerUnit], [ComponentPriceKopecks], [SubstituteProductId]) VALUES
+                    ('77777777-7777-7777-7777-777777777777', '{combo}', '{espresso}', 1, NULL, NULL),
+                    ('88888888-8888-8888-8888-888888888888', '{combo}', '{croissant}', 1, 0, NULL),
+                    ('99999999-9999-9999-9999-999999999999', '{combo}', '{syrup}', 2, NULL, NULL);
+                """, CancellationToken.None);
+        }
+
+        var migrator = host.Get<SchemaMigrator>();
+        var result = await migrator.MigrateAsync();
+
+        // Ровно ДВЕ миграции доехали — 012 и та, что добавлена после неё, — значит тест действительно
+        // проверяет 012, а не «схема целиком». Список назван явно, а не по числу, иначе следующая
+        // миграция сделала бы тест зелёным на пустой базе.
+        Assert.Equal(
+            [new Migration012_ComboOwnPrice().Name, new Migration013_OrderSeenAt().Name],
+            result.AppliedMigrations);
+        await using var connection = new SqliteConnection($"Data Source={host.DatabasePath}");
+        await connection.OpenAsync();
+        Assert.Equal(18000, await ScalarLongAsync(connection, $"SELECT [PriceKopecks] FROM [Combos] WHERE [Id] = '{combo}'"));
     }
 
     private static async Task<HashSet<string>> GetColumnsAsync(SqliteConnection connection, string table)

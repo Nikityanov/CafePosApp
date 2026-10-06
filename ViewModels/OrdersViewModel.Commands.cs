@@ -63,28 +63,80 @@ public partial class OrdersViewModel
         try
         {
             var activeOrders = await orders.GetActiveOrdersAsync();
-            // Preparing ahead of ready, then oldest first. Ascending on (Status == Ready)
-            // puts false — preparing — first and true — ready for pickup — last, which is the
-            // order the board is read in. Descending here was briefly wrong and put
-            // "Ждут выдачи" above "Готовятся", which is the opposite of what was asked for.
-            // LoadAsync runs again after every status change, so the list re-sorts itself
-            // when an order is advanced rather than waiting for a manual refresh.
-            var rows = activeOrders
-                .OrderBy(order => order.Status == OrderStatus.Ready)
-                .ThenBy(order => order.OrderNumber)
-                .Select(order => new OrderRowViewModel(order, settings))
-                .ToList();
 
-            ActiveOrders.SyncWith(rows, row => row.Model.Id);
-            SyncSectionFilters();
-            ApplyFilter();
+            // ONE instant for the whole pass. Every section decision, every lateness figure and every
+            // sort key on this board is measured against it, so two orders promised for the same
+            // minute cannot land on opposite sides of a boundary because the clock ticked between
+            // their rows. The rows are built with it in hand rather than reading a clock themselves.
+            var now = timeProvider.GetUtcNow();
+
+            // Three sections, and the section is the PRIMARY sort key: «Срочные» above «В работе»
+            // above «По времени», because that is the order a kitchen should read them in.
+            //
+            // Inside a section the order is by PromisedAt and then CreatedAt. PromisedAt is the promise
+            // — what the customer asked for, or CreatedAt + lead time — so the queue is sorted by what is
+            // owed rather than by when the order happened to be typed; CreatedAt breaks the tie so two
+            // orders promised for the same minute stay in the order they were taken.
+            //
+            // It used to sort preparing ahead of ready and then by order number, which was right when
+            // the board's question was "which status has this order reached" and is not the question
+            // now. Note what the sort deliberately does NOT do: it does not promote a late order above
+            // the others within «В работе», because lateness is a STATE and not a sort key — see
+            // OrderRowViewModel. An overdue order carries its badge wherever the promise puts it, and
+            // «Срочные» is a section, not a rule that reorders the other two.
+            // Three buckets, built in ONE pass so every card is judged against the same `now` — the
+            // reason the loader takes the clock once and hands it to each row. Three separate queries
+            // would put three different instants behind the three tabs, and a pre-order could be
+            // "scheduled" on one tab and "being made" on another.
+            var preparing = new List<OrderRowViewModel>();
+            var ready = new List<OrderRowViewModel>();
+            var scheduled = new List<OrderRowViewModel>();
+
+            foreach (var order in activeOrders)
+            {
+                var row = new OrderRowViewModel(order, settings, now);
+
+                // Status first, then the future promise. A pre-order that is ALREADY ready is still a
+                // pre-order — it is not in the kitchen, it is finished and waiting for a time — and it
+                // belongs to the operator looking at «По времени», not to the one handing orders over.
+                if (order.Status == OrderStatus.Ready) ready.Add(row);
+                else if (order.IsScheduledAt(now)) scheduled.Add(row);
+                else preparing.Add(row);
+            }
+
+            // ARRIVAL ORDER, as the owner asked: hand the orders over in the order they came. The
+            // promised time is on the card already, and a kitchen board that reorders by promise puts
+            // a «К 18:00» order above a customer standing at the counter at 15:00.
+            ready.Sort(CompareByArrival);
+            preparing.Sort(CompareByArrival);
+
+            // A pre-order is queued on its own tab AND pinned to the BOTTOM of «Готовятся», so a
+            // «К 18:00» order can be started early without jumping ahead of anything actually owed.
+            // Sorting the tail separately and re-adding keeps the two rules from fighting: the main
+            // list stays in arrival order and only the pre-orders under it are in promise order.
+            var due = preparing.Where(row => row.IsScheduled).ToList();
+            var working = preparing.Where(row => !row.IsScheduled).ToList();
+            working.Sort(CompareByArrival);
+            due.Sort((left, right) => left.Model.PromisedAt.CompareTo(right.Model.PromisedAt));
+            preparing = [.. working, .. due];
+
+            // «По времени» is the one place promise order IS the right answer: the question there is
+            // "what is coming", and the sequence of commitments is the thing being read.
+            scheduled.Sort((left, right) => left.Model.PromisedAt.CompareTo(right.Model.PromisedAt));
+
+            PreparingOrders.SyncWith(preparing, row => row.Model.Id);
+            ReadyOrders.SyncWith(ready, row => row.Model.Id);
+            ScheduledOrders.SyncWith(scheduled, row => row.Model.Id);
+            AnnounceTabCounts();
 
             // Each card's total is formatted in the operator's currency, which can be changed on the
             // Settings tab while this board is alive — Shell keeps one instance per tab, so returning
             // here re-runs this method rather than rebuilding the ViewModel. Re-raise so a board left
             // open across a switch stops printing the previous sign. See
             // MenuViewModel.RefreshMoneyText for the same argument on the cart.
-            foreach (var row in ActiveOrders) row.RefreshMoneyText();
+            foreach (var row in PreparingOrders) row.RefreshMoneyText();
+            foreach (var row in ReadyOrders) row.RefreshMoneyText();
+            foreach (var row in ScheduledOrders) row.RefreshMoneyText();
 
             if (clearMessage) Message = string.Empty;
         }
@@ -96,105 +148,50 @@ public partial class OrdersViewModel
     }
 
     /// <summary>
-    /// Brings the filter chips in line with the loaded orders: the counts, and which one is active.
+    /// Shows one of the three tabs. A no-op on the tab already shown, so a second tap on the same chip
+    /// neither re-raises the three visibility flags nor buzzes the haptic again.
     /// </summary>
-    /// <remarks>
-    /// The chips are built once and then updated, not recreated on every load. Recreating them
-    /// would drop the selection highlight on every auto-refresh tick, which is several times a
-    /// minute while the operator is trying to read a count.
-    /// </remarks>
-    private void SyncSectionFilters()
+    private void SelectTab(OrderTab tab)
     {
-        if (SectionFilters.Count == 0)
-        {
-            SectionFilters.Add(new OrderFilterChip(OrderSectionFilter.All, "Все"));
-            SectionFilters.Add(new OrderFilterChip(OrderSectionFilter.Preparing, "Готовятся"));
-            SectionFilters.Add(new OrderFilterChip(OrderSectionFilter.Ready, "Ждут выдачи"));
-            foreach (var chip in SectionFilters)
-            {
-                chip.IsSelected = chip.Filter == ActiveFilter;
-            }
-        }
+        if (tab == SelectedTab) return;
 
-        var preparing = 0;
-        foreach (var row in ActiveOrders)
-        {
-            if (row.Model.Status != OrderStatus.Ready) preparing++;
-        }
-
-        foreach (var chip in SectionFilters)
-        {
-            chip.Count = chip.Filter switch
-            {
-                OrderSectionFilter.Preparing => preparing,
-                OrderSectionFilter.Ready => ActiveOrders.Count - preparing,
-                _ => ActiveOrders.Count
-            };
-        }
-    }
-
-    /// <summary>
-    /// Narrows <see cref="ActiveOrders"/> down to <see cref="VisibleOrders"/> per
-    /// <see cref="ActiveFilter"/>, and decides which cards carry their section heading.
-    /// </summary>
-    /// <remarks>
-    /// The heading is suppressed when a single section is selected, because the chip the operator
-    /// just tapped already says which section they are looking at; repeating it on the first card
-    /// would be the same words twice. It is also recomputed on every pass rather than once, since
-    /// SyncWith reuses row instances across refreshes and a reused row still holds the previous
-    /// pass's flag — that is what would otherwise leave a stale heading above the second card of a
-    /// section, or keep the heading of a section that has just emptied.
-    /// </remarks>
-    private void ApplyFilter()
-    {
-        var showHeadings = ActiveFilter == OrderSectionFilter.All;
-        var visible = new List<OrderRowViewModel>();
-        string? previousGroup = null;
-
-        foreach (var row in ActiveOrders)
-        {
-            if (!Matches(row))
-            {
-                row.ShowGroupHeader = false;
-                continue;
-            }
-
-            row.ShowGroupHeader = showHeadings && row.StatusGroupName != previousGroup;
-            previousGroup = row.StatusGroupName;
-            visible.Add(row);
-        }
-
-        VisibleOrders.SyncWith(visible, row => row.Model.Id);
-        OnPropertyChanged(nameof(EmptyListText));
-    }
-
-    private bool Matches(OrderRowViewModel row) => ActiveFilter switch
-    {
-        OrderSectionFilter.Preparing => row.Model.Status != OrderStatus.Ready,
-        OrderSectionFilter.Ready => row.Model.Status == OrderStatus.Ready,
-        _ => true
-    };
-
-    /// <summary>
-    /// Switches the board between both sections and one of them. Re-projects what is already
-    /// loaded rather than querying again: the rows for the other section are still in
-    /// <see cref="ActiveOrders"/>, so the switch is immediate and the next auto-refresh tick
-    /// agrees with it.
-    /// </summary>
-    private void SelectSectionFilter(OrderFilterChip? chip)
-    {
-        if (chip is null || chip.Filter == ActiveFilter) return;
-
-        ActiveFilter = chip.Filter;
-        foreach (var candidate in SectionFilters)
-        {
-            candidate.IsSelected = candidate.Filter == ActiveFilter;
-        }
-
-        ApplyFilter();
+        SelectedTab = tab;
         haptics.Click();
     }
 
+    /// <summary>
+    /// Arrival order: the order that was taken first is first. Then by promised time, then by id, so
+    /// the comparison is a total order and never returns 0 for two different rows.
+    /// </summary>
+    /// <remarks>
+    /// The id tiebreak is not decoration. <see cref="List{T}.Sort(System.Comparison{T})"/> is not
+    /// stable, so two orders created in the same tick — which SQLite does not distinguish to the
+    /// second — could swap places on every auto-refresh tick. An operator would see cards flicker
+    /// between refreshes with nothing having changed, and would stop trusting the order of the queue.
+    /// </remarks>
+    private static int CompareByArrival(OrderRowViewModel left, OrderRowViewModel right) =>
+        left.Model.CreatedAt.CompareTo(right.Model.CreatedAt) is var byArrival and not 0
+            ? byArrival
+            : left.Model.PromisedAt.CompareTo(right.Model.PromisedAt) is var byPromise and not 0
+                ? byPromise
+                : left.Model.Id.CompareTo(right.Model.Id);
+
+    /// <summary>
+    /// Re-announces the three tab captions after a load. Called on every tick rather than only when a
+    /// count changes, because <c>SyncWith</c> leaves the collections equal in size across most refreshes
+    /// and the caption is a computed string that would otherwise keep a stale number on screen.
+    /// </summary>
+    private void AnnounceTabCounts()
+    {
+        OnPropertyChanged(nameof(PreparingTabText));
+        OnPropertyChanged(nameof(ReadyTabText));
+        OnPropertyChanged(nameof(ScheduledTabText));
+
+        // The chip dot rides on the rows, so it has to be announced whenever they are rebuilt. Missing
+        // this leaves the chip dot lit after the order underneath it was opened — the count would have
+        // gone down but the dot would still claim there was something new.
+        OnPropertyChanged(nameof(HasUnseenReady));
+    }
     public void StartAutoRefresh()
     {
         if (refreshTask is not null) return;
@@ -408,10 +405,37 @@ public partial class OrdersViewModel
         }
     }
 
+    /// <summary>
+    /// Opens the order, and retires its unread dot on the way in.
+    /// </summary>
+    /// <remarks>
+    /// The dot is retired by OPENING, which is the only act that can mean "seen": the operator has the
+    /// contents on screen at that point, whatever else they have or have not done with them. Tying it to
+    /// the status advance instead would clear the dot for whoever pressed «Готов» — the one person
+    /// who by definition has not looked at the finished order yet.
+    /// <para>
+    /// The write is best-effort and the navigation happens first, so a failure costs the dot, not the
+    /// navigation: an order that opens is far more important than a marker that survives. The next
+    /// auto-refresh tick reloads the row from the database, so the dot disappears on its own either
+    /// way — the re-load is what actually makes it vanish, this is what makes it permanent.
+    /// </para>
+    /// </remarks>
     private async Task OpenDetailsAsync(OrderRowViewModel? row)
     {
         if (row is null) return;
+
         await navigation.GoToOrderDetailsAsync(row.Model.Id);
+
+        if (!row.IsUnseenReady) return;
+
+        try
+        {
+            await orders.MarkSeenAsync(row.Model.Id);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Failed to mark order {OrderId} seen", row.Model.Id);
+        }
     }
 
     private async Task RefreshLoopAsync(CancellationToken cancellationToken)

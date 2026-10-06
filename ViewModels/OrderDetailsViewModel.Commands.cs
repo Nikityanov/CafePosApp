@@ -1,6 +1,7 @@
 using CafePos.Core.Common;
 using CafePos.Core.Errors;
 using CafePos.Core.Models;
+using CafePos.Core.Services;
 using CafePosApp.Services;
 using Microsoft.Extensions.Logging;
 
@@ -22,17 +23,34 @@ public partial class OrderDetailsViewModel
                 return;
             }
 
-            Items.SyncWith(
-                order.Items.Select(item => new OrderEditItemViewModel
+            // Rows built with their composition attached, and merged by OrderLineKey rather than by the
+            // inline product+modifier comparison this used to do.
+            //
+            // The inline comparison left the VARIANT out of the key entirely, so adding a large and a
+            // small of the same dish merged them into one line — and it could not tell two builds of one
+            // bundle apart, so two different bundles merged into one line at whichever price was added
+            // first. One key every caller computes the same way cannot drift that way again, and a
+            // mismatch is a line that visibly disagrees with the cart rather than a receipt that quietly
+            // loses one.
+            var rows = order.Items
+                .Select(item =>
                 {
-                    ProductId = item.ProductId,
-                    ProductName = item.ProductName,
-                    Price = item.Price,
-                    SelectedModifierName = item.SelectedModifierName,
-                    SelectedVariantName = item.SelectedVariantName,
-                    Quantity = item.Quantity
-                }),
-                item => $"{item.ProductId}|{item.SelectedModifierName}|{item.SelectedVariantName}");
+                    var row = new OrderEditItemViewModel
+                    {
+                        ProductId = item.ProductId,
+                        ProductName = item.ProductName,
+                        Price = item.Price,
+                        ListPrice = Money.FromKopecks(item.ListPriceKopecks),
+                        SelectedModifierName = item.SelectedModifierName,
+                        SelectedVariantName = item.SelectedVariantName,
+                        Quantity = item.Quantity
+                    };
+                    foreach (var component in LineComponentViewModel.FromItem(item.Components)) row.Components.Add(component);
+                    return row;
+                })
+                .ToList();
+
+            Items.SyncWith(rows, item => item.MergeKey);
 
             var history = await orders.GetStatusHistoryAsync(orderId);
             History.SyncWith(
@@ -94,7 +112,12 @@ public partial class OrderDetailsViewModel
                 return;
             }
 
-            var existing = Items.FirstOrDefault(item => item.ProductId == product.Id && item.SelectedModifierName == modifier);
+            // Merge through OrderLineKey, so this agrees with the cart, the add command and
+            // OrderService line for line. The inline comparison this replaced compared the product and
+            // the modifier only — the variant was not in the key at all, so a large and a small of the
+            // same dish joined one line and the quantity added up to two of something sold once.
+            var existing = Items.FirstOrDefault(item => item.MergeKey == OrderLineKey.For(product.Id, modifier, null));
+
             if (existing is null)
             {
                 Items.Add(new OrderEditItemViewModel
@@ -102,6 +125,8 @@ public partial class OrderDetailsViewModel
                     ProductId = product.Id,
                     ProductName = product.Name,
                     Price = product.Price,
+                    // Nothing overridden yet, so the allowed price and the charged price are one number.
+                    ListPrice = product.Price,
                     SelectedModifierName = modifier,
                     Quantity = 1
                 });
@@ -120,6 +145,195 @@ public partial class OrderDetailsViewModel
             logger.LogError(exception, "Failed to add a product to order {OrderId}", orderId);
             Message = UserMessages.Describe(exception, "Не удалось добавить блюдо");
         }
+    }
+
+    // ── Price and composition ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Re-prices one line by hand. The allowed price is left alone, so the row shows it struck through
+    /// and the shift report's discount section finds the difference afterwards.
+    /// </summary>
+    /// <remarks>
+    /// Same rule as on the cart and for the same reasons: no reason is asked for, because a reason
+    /// collected at the till becomes the first value anyone ever clicks, and nothing is refused,
+    /// because a POS that argues with a cashier about a price teaches people to work around it. The
+    /// allowed price is written once when the line is created and <c>UpdateOrderAsync</c> deliberately
+    /// does not recompute it, so an override made here cannot be laundered back into "this is what it
+    /// should have cost".
+    /// </remarks>
+    private async Task EditItemPriceAsync(OrderEditItemViewModel? item)
+    {
+        if (item is null || !CanEdit) return;
+
+        var raw = await dialogs.PromptAsync(
+            "Цена позиции",
+            $"Цена за одну штуку. Сейчас {TextFormat.Money(item.Price)}.",
+            Money.Round(item.Price).ToString("0.##"),
+            "Сохранить",
+            "Отмена");
+        if (raw is null) return;
+
+        if (!TextFormat.TryParseDecimal(raw, out var value) || value < 0)
+        {
+            Message = "Не удалось разобрать цену. Введите число, например 180 или 180,50.";
+            haptics.Warn();
+            return;
+        }
+
+        item.Price = Money.Round(value);
+        NotifyTotal();
+        Message = item.IsPriceOverridden
+            ? $"«{item.ProductName}»: было {TextFormat.Money(item.ListPrice)}, стало {TextFormat.Money(item.Price)}. Изменение попадёт в отчёт «Скидки»."
+            : $"«{item.ProductName}»: цена {TextFormat.Money(item.Price)}.";
+        haptics.Click();
+    }
+
+    /// <summary>
+    /// Re-opens the composition sheet for a bundle on this order — the SAME sheet the cart opens, with
+    /// the same rows, the same running total and the same confirm.
+    /// </summary>
+    /// <remarks>
+    /// One mechanic, two places. A second editor here would be how a shop grows the "bundles stopped
+    /// showing in reports" bug: two definitions of what a bundle is, and only one of them feeding the
+    /// sale.
+    /// <para>
+    /// The line keeps the bundle's OWN price — changing the composition does not reprice it. The sum
+    /// of the slots is the à la carte reference the discount is measured against, not the price. The
+    /// change is not written until «Сохранить» like every other edit on this page.
+    /// </para>
+    /// </remarks>
+    private async Task EditItemCompositionAsync(OrderEditItemViewModel? item)
+    {
+        if (item is null || !CanEdit || !item.IsCombo) return;
+
+        try
+        {
+            var template = await combos.GetComboAsync(item.ProductId);
+            if (template is null)
+            {
+                Message = "Комбо больше нет в каталоге. Строку придётся убрать из заказа.";
+                haptics.Warn();
+                return;
+            }
+
+            var options = new List<ComboSlotOption>();
+            var blocked = (string?)null;
+
+            // Ordered here rather than read off the loaded collection: ComboComponent carries no
+            // SortOrder and the query applies no ORDER BY, so the collection's order is whatever the
+            // join produced, and a sheet whose rows reshuffle between two opens is unusable.
+            foreach (var slot in template.Components
+                         .OrderBy(component => component.Product?.Name, StringComparer.CurrentCulture)
+                         .ThenBy(component => component.ProductId))
+            {
+                var sold = SellableDish(slot);
+                if (sold is null)
+                {
+                    blocked = slot.Product?.Name ?? slot.ProductId.ToString();
+                    break;
+                }
+
+                var (product, label) = sold.Value;
+                // The dish's price, not the slot's stored override — see the same change in
+                // ComboFormViewModel.UnitKopecks. The override has had no control in the form since
+                // it was cut, so feeding it here would show the operator a component price in the
+                // composition editor that the form cannot produce and the form's own total does not
+                // use. The 4th argument is the dish's real price and is now the same figure twice
+                // rather than two different ones, which is the honest thing to hand the editor.
+                options.Add(new ComboSlotOption(
+                    slot.ProductId,
+                    label,
+                    product.PriceKopecks,
+                    product.PriceKopecks));
+            }
+
+            if (blocked is not null)
+            {
+                Message = $"Комбо «{item.ProductName}» нельзя продать: нет в наличии: {blocked}.";
+                haptics.Warn();
+                return;
+            }
+
+            var chosen = await comboEditor.ComposeAsync(new ComboEditorRequest(
+                $"Состав комбо «{item.ProductName}»",
+                options,
+                item.Components.Select(component =>
+                    new ComboSlotChoice(component.ProductId, component.QuantityPerUnit)).ToList(),
+                template.PriceKopecks));
+            if (chosen is null) return;
+
+            // Resolved against the catalogue, not taken from the sheet: the names and both prices come
+            // from ComboService, so a composition typed here cannot invent a price. A refusal names the
+            // dish and is shown as written.
+            var probe = new CheckoutLine(
+                template.Id,
+                template.Name,
+                0m,
+                1,
+                null,
+                null,
+                chosen.Select(choice => new CheckoutComponent(
+                    choice.ProductId, template.Name, choice.QuantityPerUnit, 0, 0)).ToList());
+
+            IReadOnlyList<SaleComposition> resolved;
+            try
+            {
+                resolved = await combos.ResolveSaleCompositionsAsync([probe]);
+            }
+            catch (ValidationFailureException exception)
+            {
+                Message = exception.Message;
+                haptics.Warn();
+                return;
+            }
+
+            var composition = resolved.FirstOrDefault();
+            var components = composition?.Components ?? [];
+            if (components.Count == 0)
+            {
+                Message = "У комбо не осталось ни одного компонента. Такую позицию лучше убрать из заказа.";
+                haptics.Warn();
+                return;
+            }
+
+            item.Components.Clear();
+            foreach (var component in LineComponentViewModel.FromLine(components)) item.Components.Add(component);
+            item.OnCompositionChanged();
+            // The bundle's OWN PRICE, not the sum of its parts. Changing the composition does not
+            // reprice the bundle — the price is a number in the card, and the sum is only the
+            // à la carte reference the discount is measured against.
+            item.Price = Money.FromKopecks(template.PriceKopecks);
+
+            NotifyTotal();
+            Message = $"Состав «{item.ProductName}» изменён, итог {TextFormat.Money(item.Price)}. Сохраните заказ.";
+            haptics.Click();
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Failed to edit the composition of a line on order {OrderId}", orderId);
+            Message = UserMessages.Describe(exception, "Не удалось изменить состав комбо");
+            haptics.Warn();
+        }
+    }
+
+    /// <summary>
+    /// The dish a slot will actually be sold for, or <c>null</c> when neither it nor its substitute is
+    /// available. The same rule the sale-side resolver applies — see ComboService.ResolveSlot.
+    /// </summary>
+    private static (Product Product, string Label)? SellableDish(ComboComponent slot)
+    {
+        static bool Sellable(Product? product) => product is { IsAvailable: true, IsDeleted: false };
+
+        if (Sellable(slot.Product)) return (slot.Product!, slot.Product!.Name);
+
+        if (Sellable(slot.SubstituteProduct))
+        {
+            var substitute = slot.SubstituteProduct!;
+            var replaced = slot.Product?.Name;
+            return (substitute, replaced is null ? substitute.Name : $"{substitute.Name} (замена: {replaced})");
+        }
+
+        return null;
     }
 
     private async Task SaveAsync()
@@ -220,6 +434,77 @@ public partial class OrderDetailsViewModel
         {
             logger.LogError(exception, "Failed to refund order {OrderId}", orderId);
             Message = UserMessages.Describe(exception, "Не удалось вернуть оплату");
+            haptics.Warn();
+        }
+    }
+
+    /// <summary>
+    /// Adds a phone and a promised time to an order that is already paid for, because the customer
+    /// thought of them after the money changed hands.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The sheet is asked FIRST and the write happens SECOND, and the order matters: the fulfilment-mode
+    /// question can only be asked when the operator has said they want to record something. Opening a
+    /// sheet that then refuses to save would be a worse board than no button.
+    /// </para>
+    /// <para>
+    /// <b>THE PHONE CONTOUR IS NOT DECIDED HERE.</b> Whether a number may be stored is Core's answer, from
+    /// <c>ContactPhoneRule</c> and <c>AddContactDetailsAsync</c>. This method passes
+    /// <c>PromoteToTakeaway</c> through as a RECORD of what the operator ticked and lets Core refuse the
+    /// write when that tick is missing — which is why the catch below exists and why its message comes
+    /// from the exception rather than from a string built here. A ViewModel that second-guessed the phone
+    /// would be a second copy of 152-ФЗ ст. 6(1)(5), in a file with no test over it.
+    /// </para>
+    /// <para>
+    /// A dismissed sheet returns <c>null</c> and nothing is written: a dismissal is not an answer, and
+    /// treating it as one would let a stray back-gesture clear a stored number's edit.
+    /// </para>
+    /// </remarks>
+    private async Task AddContactDetailsAsync()
+    {
+        if (!CanAddContactDetails || order is null) return;
+
+        var sheetResult = await contactDetailsSheet.ShowAsync(new ContactDetailsSheetRequest(
+            $"{OrderTitle} — дописать",
+            order.CustomerPhone,
+            order.RequestedAt,
+            order.OrderType == OrderType.Takeaway));
+
+        if (sheetResult is null) return;
+
+        try
+        {
+            await orders.AddContactDetailsAsync(
+                orderId,
+                sheetResult.Phone,
+                sheetResult.PromisedAt,
+                sheetResult.PromoteToTakeaway);
+
+            // Reloaded rather than patched: the same call may have changed the fulfilment type, and the
+            // order card states the type in words. A message built off the pre-write order would report a
+            // state the screen no longer shows.
+            await LoadAsync();
+
+            // Says WHAT was recorded, from the reloaded order. An order written with a phone but no
+            // promised time must not be reported as having both.
+            var recordedPhone = order?.CustomerPhone is not null;
+            var recordedTime = order?.RequestedAt is not null;
+
+            Message = (recordedPhone, recordedTime) switch
+            {
+                (true, true) => "Записаны телефон и время.",
+                (true, false) => "Записан телефон.",
+                (false, true) => "Записано время выдачи.",
+                _ => "Ничего не записано."
+            };
+
+            haptics.Click();
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Failed to add contact details to order {OrderId}", orderId);
+            Message = UserMessages.Describe(exception, "Не удалось дописать в заказ");
             haptics.Warn();
         }
     }
@@ -391,11 +676,46 @@ public partial class OrderDetailsViewModel
         OnPropertyChanged(nameof(PaymentColor));
         OnPropertyChanged(nameof(CanCollectPayment));
         OnPropertyChanged(nameof(CanRefundPayment));
+
+        // «Дописать» is announced here for the same reason as the two above, and it was MISSING at first:
+        // the button bound its IsVisible to this, the page inflated before LoadAsync filled `order`, and
+        // without this line the binding stayed on the inflate-time value of false — so the button was
+        // absent from a paid order and present on nothing. A Can* property nobody announces is invisible,
+        // which is a different failure from being disabled and much harder to notice in a screenshot
+        // review, because an absent button looks like a deliberate decision.
+        OnPropertyChanged(nameof(CanAddContactDetails));
         OnPropertyChanged(nameof(CanCancel));
         OnPropertyChanged(nameof(CancelText));
         OnPropertyChanged(nameof(CancelHint));
         OnPropertyChanged(nameof(RefundedTotal));
         OnPropertyChanged(nameof(CollectedTotal));
+
+        // Fulfilment, contact and promise. IsOverdue is measured against a clock rather than against
+        // anything on the entity, so it is NOT re-evaluated by a reload — a page left open on a
+        // borderline order would keep claiming a lateness that has since stopped being true. The
+        // wording and the colour follow the flag and are re-raised with it.
+        OnPropertyChanged(nameof(HasOrderDetails));
+        OnPropertyChanged(nameof(OrderTypeText));
+        OnPropertyChanged(nameof(CustomerPhoneText));
+        OnPropertyChanged(nameof(HasCustomerPhone));
+        OnPropertyChanged(nameof(ExpectsPhone));
+        OnPropertyChanged(nameof(ExpectsNoPhone));
+        OnPropertyChanged(nameof(PromiseText));
+        // The collapsed row reads OrderTypeText and PromisedAt, neither of which the entity raises
+        // for us — it is re-read on every load here.
+        OnPropertyChanged(nameof(FulfilmentSummary));
+        OnPropertyChanged(nameof(IsOverdue));
+        OnPropertyChanged(nameof(OverdueMinutes));
+        OnPropertyChanged(nameof(OverdueText));
+        OnPropertyChanged(nameof(OverdueColor));
+
+        // The half that is easy to forget: the price and composition taps are recognizers, not
+        // Buttons, so they have no IsEnabled to bind — their liveness comes from Command.CanExecute,
+        // and nothing recomputes that unless it is told. Without this two lines the price stays
+        // tappable on a closed order and the tap opens the re-pricing sheet on a sale that is done.
+        EditItemPriceCommand.NotifyCanExecuteChanged();
+        EditItemCompositionCommand.NotifyCanExecuteChanged();
+
         NotifyTotal();
     }
 

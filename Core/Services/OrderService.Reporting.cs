@@ -208,6 +208,99 @@ public sealed partial class OrderService
             row.CategoryName)).ToList();
     }
 
+    /// <summary>
+    /// The shift's "Скидки" section: every line whose charged price is not the price it was allowed to
+    /// be sold at.
+    /// </summary>
+    /// <remarks>
+    /// <b>THE READ SIDE OF THE ONE CONTROL.</b> <see cref="OrderLinePricing"/> decides whether a price
+    /// was overridden at the moment it is written; this is where anyone finds out. No standard asks
+    /// for it — PCI DSS v4.0.1 has no occurrence of "discount" in 397 pages — and the argument is
+    /// margin: a median restaurant runs 2.8% net, so a 1% discount on sales eats roughly 36% of it,
+    /// while what the vendors ship starts at "the cashier may discount to 100%" (Lightspeed) or "Any
+    /// User" (Toast). The recomputation that makes it work — "the components do not add up to the
+    /// price" — is our own idea and not published practice; the published analogue is the before/after
+    /// review at Oracle, Bank of America and Bitta. What it buys is the FIRST occurrence caught with no
+    /// historical threshold to calibrate.
+    /// <para>
+    /// No reason code and no operator identity, both deliberately absent. A reason typed at the till
+    /// becomes the first value anybody ever picks and only the aggregate analysis of the pattern is
+    /// worth anything; and "who did it" needs staff entities, sign-in, PIN and permissions — a feature
+    /// the size of this one. The report says what was given away, and stops there.
+    /// </para>
+    /// <para>
+    /// The comparison itself is done in SQL because both figures are integer columns on the same row
+    /// and there is nothing to fetch first — the whole section is one query, not a scan of the shift's
+    /// orders with arithmetic folded in memory. The reference total is the exception: it is a SUM over
+    /// a CHILD table per line, which SQLite cannot do in a correlated subquery here, so the
+    /// compositions of the matching lines are loaded and folded here.
+    /// </para>
+    /// <para>
+    /// <b>WHAT THIS SECTION DELIBERATELY DOES NOT SHOW, SO IT IS NOT REDISCOVERED AS A BUG.</b> A
+    /// bundle that is sold at exactly its own price but deliberately cheaper than its parts does not
+    /// appear here: the filter is on the price mismatch, which is the question this section answers.
+    /// Surfacing those would be a SECOND section — "наборы выгоднее своих частей" — and a bundle
+    /// priced at a loss on purpose would otherwise drown the override report. It is a real thing a
+    /// manager may want, and it is deliberately not what this query returns.
+    /// </para>
+    /// </remarks>
+    public async Task<List<DiscountedLine>> GetDiscountedLinesAsync(Guid shiftId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+
+        // Both completed and voided — see the remarks on IOrderService.GetDiscountedLinesAsync.
+        var lines = await (
+            from item in db.OrderItems.AsNoTracking()
+            join order in db.Orders.AsNoTracking() on item.OrderId equals order.Id
+            where order.ShiftId == shiftId && item.PriceKopecks != item.ListPriceKopecks
+            select new
+            {
+                order.OrderNumber,
+                order.Status,
+                item.Id,
+                item.ProductName,
+                item.SelectedModifierName,
+                item.SelectedVariantName,
+                item.Quantity,
+                item.PriceKopecks,
+                item.ListPriceKopecks
+            })
+            .ToListAsync(cancellationToken);
+
+        if (lines.Count == 0) return [];
+
+        // Σ(ReferencePriceKopecks × QuantityPerUnit) per line, then × the line quantity: what the same
+        // dishes would have cost on their own. Nullable all the way through, because a line with no
+        // components has no "cheaper than its parts" figure and null is a different statement from 0 —
+        // 0 would say the bundle cost exactly as much as its parts, which is a fact about a bundle and
+        // not about an ordinary dish.
+        var itemIds = lines.Select(line => line.Id).ToList();
+        var references = await db.OrderItemComponents.AsNoTracking()
+            .Where(component => itemIds.Contains(component.OrderItemId))
+            .Select(component => new { component.OrderItemId, component.ReferencePriceKopecks, component.QuantityPerUnit })
+            .ToListAsync(cancellationToken);
+
+        var referenceByItem = references
+            .GroupBy(component => component.OrderItemId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(component => component.ReferencePriceKopecks * component.QuantityPerUnit));
+
+        return lines
+            .Select(line => new DiscountedLine(
+                line.OrderNumber,
+                line.Status,
+                line.ProductName,
+                line.SelectedModifierName,
+                line.SelectedVariantName,
+                line.Quantity,
+                line.ListPriceKopecks,
+                line.PriceKopecks,
+                referenceByItem.TryGetValue(line.Id, out var reference) ? reference * line.Quantity : null))
+            .OrderBy(line => line.OrderNumber)
+            .ToList();
+    }
+
     private static string DescribeModifier(string? modifierName, string? variantName)
     {
         var parts = new List<string>(2);

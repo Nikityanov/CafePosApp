@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" x:Class="CafePosApp.Views.OrderDetailsPage" x:DataType="vm:OrderDetailsViewModel" Title="Детали заказа"
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" xmlns:vm="clr-namespace:CafePosApp.ViewModels" xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls" x:Class="CafePosApp.Views.OrderDetailsPage" x:DataType="vm:OrderDetailsViewModel" Title="Детали заказа"
              Shell.NavBarIsVisible="True"><!-- Explicit, not inherited: this page is pushed from
              OrdersPage, which sets the property False to drop its duplicate tab title, and the
              back arrow on this page depends on the bar being there. Verified on the emulator. -->
-    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16" RowSpacing="10">
+    <!-- Five rows, not four: the header, the message, the fulfilment/contact/promise card, the line
+         list (the only `*` row), and the action block. The new card is its own Auto row rather than
+         packed into the header so the header stays two lines on a narrow window and the card can be
+         hidden entirely while there is no order loaded. -->
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Padding="16" RowSpacing="10">
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout>
                 <Label Text="{Binding OrderTitle}" FontSize="22" FontAttributes="Bold" />
@@ -20,34 +24,202 @@
         <Label Grid.Row="1" Text="{Binding Message}" IsVisible="{Binding HasMessage}"
                TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
                LineBreakMode="WordWrap" />
-        <CollectionView Grid.Row="2" ItemsSource="{Binding Items}" SelectionMode="None">
+
+        <!-- ═══ FULFILMENT, CONTACT AND PROMISE — ONE ROW, EXPANDING IN PLACE ═══
+             READ-ONLY, and that is a KNOWN LIMITATION rather than a design choice: the till collects
+             these three on the cart and CheckoutService writes them onto the order, but
+             IOrderService.UpdateOrderAsync takes only the item list, so there is no write path back
+             from here. Offering a control that looks editable and is not would be worse than showing
+             the facts — see OrderDetailsViewModel for the Core change that would close it.
+
+             THE SAME DISCLOSURE THE CART USES, so the two order-entry screens read as one design
+             rather than as a dense screen and a loose one. It costs more here than on the cart, and
+             the cost is stated on OrderDetailsViewModel.IsFulfilmentExpanded: the number below is the
+             FULL one and this is the screen a cashier dials from, so the collapse puts one tap
+             between the operator and it. What it saves is two short lines.
+
+             Two things inside are deliberately NOT what the customer sees. The phone is in FULL,
+             because a masked number cannot be verified or used and the cart and the board both mask
+             it already — those two stand in the room. And the promise keeps its EXACT time AND its
+             qualifier, «к 18:00» for a time the customer named against «обещано к 18:00» for one the
+             till estimated: the collapsed row above has room for the time and not for the word that
+             says which of the two it is, so the collapse costs a qualifier and not a fact.
+
+             WHILE OPEN, THE ROW SAYS ONLY «Параметры заказа», for the same reason the cart's row
+             switches to «Параметры выдачи»: directly beneath it sit «Выдача: В зале» and «Готово …」
+             restating the very facts the collapsed row carries, so printing them in the row as well
+             would say each one twice within two rows. Both captions come from ONE property computed
+             off IsFulfilmentExpanded rather than from two strings kept in step by hand — see
+             OrderDetailsViewModel.FulfilmentSummary, and MenuViewModel.FulfilmentSummary for the cart
+             half of the same rule.
+
+             No IsEnabled on any TapGestureRecognizer on this page: a recognizer derives from
+             GestureRecognizer : Element, is not a VisualElement and has no such property — writing it
+             threw XamlParseException the first time a line template was realised. Conditional
+             interactivity comes from the parent's IsVisible or from Command.CanExecute, and the
+             NotifyCanExecuteChanged() that re-runs it is at OrderDetailsViewModel's NotifyOrderState. -->
+        <VerticalStackLayout Grid.Row="2" Spacing="4" IsVisible="{Binding HasOrderDetails}">
+            <Border MinimumHeightRequest="48" Padding="8,2" StrokeShape="RoundRectangle 8"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceVariant}, Dark={StaticResource SurfaceVariantDark}}">
+                <Border.GestureRecognizers>
+                    <!-- On the ROW Border only. The expanded block below is its SIBLING and not its
+                         child, so a tap on the phone or on the lateness line never collapses the block
+                         out from under the finger that is reaching for it. -->
+                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.ToggleFulfilmentCommand}" />
+                </Border.GestureRecognizers>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Label Grid.Column="0" Text="{Binding FulfilmentSummary}" FontAttributes="Bold" FontSize="14"
+                           VerticalOptions="Center" LineBreakMode="TailTruncation"
+                           SemanticProperties.Description="{Binding FulfilmentToggleHint}" />
+                    <!-- A literal Geometry in both triggers, and only Data differs. A trigger's Setter
+                         takes a VALUE and not a binding expression, so an {AppThemeBinding} inside one
+                         resolves against the light theme at parse time and never follows a theme change
+                         — the MenuPage message-colour defect in miniature. The stroke is an attribute,
+                         where it does follow. Not a text glyph either: the implicit style sets
+                         FontFamily=OpenSansRegular, which has no «⌄». -->
+                    <shapes:Path Grid.Column="1" Aspect="Uniform" WidthRequest="16" HeightRequest="16"
+                                 VerticalOptions="Center" HorizontalOptions="End"
+                                 Stroke="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"
+                                 StrokeThickness="2" Fill="Transparent"
+                                 Data="M4,2 L14,8 L4,14">
+                        <shapes:Path.Triggers>
+                            <DataTrigger TargetType="shapes:Path" Binding="{Binding IsFulfilmentExpanded}" Value="True">
+                                <Setter Property="Data" Value="M2,5 L8,11 M14,5 L8,11" />
+                            </DataTrigger>
+                        </shapes:Path.Triggers>
+                    </shapes:Path>
+                </Grid>
+            </Border>
+
+            <VerticalStackLayout Spacing="2" IsVisible="{Binding IsFulfilmentExpanded}">
+                <HorizontalStackLayout Spacing="8">
+                    <Label Text="{Binding OrderTypeText, StringFormat='Выдача: {0}'}" Style="{StaticResource SecondaryLabel}" FontAttributes="Bold" />
+                    <Label Text="{Binding PromiseText, StringFormat='Готово {0}'}" Style="{StaticResource SecondaryLabel}" FontAttributes="Bold" />
+                </HorizontalStackLayout>
+                <!-- Present only for a takeaway order. Counter service stores no phone at all, so the
+                     row would be a masked nothing; hiding it makes that honest. The counter case says
+                     so in words rather than leaving a blank a reader has to interpret — «телефон не
+                     спрашивали» is a different fact from «телефон забыли», and only one of them is
+                     correct for an order eaten on the premises. -->
+                <Label Text="{Binding CustomerPhoneText, StringFormat='Телефон: {0}'}" Style="{StaticResource SecondaryLabel}"
+                       IsVisible="{Binding HasCustomerPhone}"
+                       SemanticProperties.Description="Телефон клиента, полностью" />
+                <Label Text="Телефон не спрашивали — заказ в зале." Style="{StaticResource TagText}" FontSize="11"
+                       IsVisible="{Binding ExpectsNoPhone}" />
+                <Label Text="{Binding OverdueText}" TextColor="{Binding OverdueColor}" FontSize="12" FontAttributes="Bold"
+                       IsVisible="{Binding IsOverdue}" />
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="3" ItemsSource="{Binding Items}" SelectionMode="None">
             <CollectionView.EmptyView>
                 <Label Text="В заказе нет блюд." Style="{StaticResource EmptyLabel}" />
             </CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="vm:OrderEditItemViewModel">
-                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="0,6">
-                        <VerticalStackLayout Spacing="2">
-                            <Label Text="{Binding ProductName}" FontAttributes="Bold" />
-                            <Label Text="{Binding SelectedModifierName, StringFormat='Модификатор: {0}'}" Style="{StaticResource SecondaryLabel}" IsVisible="{Binding SelectedModifierName, Converter={StaticResource IsPresent}}" />
-                            <Label Text="{Binding SelectedVariantName, StringFormat='Вариант: {0}'}" Style="{StaticResource SecondaryLabel}" IsVisible="{Binding SelectedVariantName, Converter={StaticResource IsPresent}}" />
-                            <!-- LineTotalText, not StringFormat='{0:F2} ₽': see
-                                 OrderEditItemViewModel.LineTotalText. -->
-                            <Label Text="{Binding LineTotalText}" Style="{StaticResource SecondaryLabel}" />
+                    <!-- THE SAME LINE AS THE CART: name and price on one row, quantity beside them,
+                         the line total dropped. LineTotalText was «220,00 ₿» under a «Цена:
+                         220,00 ₿» — the same figure twice at quantity 1, and the first multiplied by
+                         a number already on screen at any other quantity. The order total at the foot
+                         of the page is Σ over these lines and is unchanged, so nothing is lost but
+                         the duplication. The variant and modifier keep a line each, because on a
+                         411dp screen they get a line each.
+
+                         THE DECORATION MATCHES THE CART: «(модификатор)» and «[вариант]», not
+                         «Модификатор: …» / «Вариант: …». Measured on the emulator, the name column
+                         on this row is ~115dp once the 48dp stepper, the 48dp «Удалить» and the
+                         price have taken theirs, and «Модификатор: Обычное» truncated to
+                         «Модификатор: Обы…» at that width. Dropping the two label words buys the
+                         ~150px that made the row readable. Keeping «Удалить» is not negotiable —
+                         stepping down to zero is a quantity edit, removing the line is a deletion —
+                         so the name is what gives. And matching the cart's brackets and
+                         parentheses is what makes the two order-entry screens one design instead
+                         of two. -->
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8" Padding="0,2">
+                        <VerticalStackLayout Spacing="0" VerticalOptions="Center">
+                            <Label Text="{Binding ProductName}" FontAttributes="Bold" LineBreakMode="TailTruncation" />
+                            <Label Text="{Binding SelectedModifierName, StringFormat='({0})'}" Style="{StaticResource SecondaryLabel}" FontSize="11" LineBreakMode="TailTruncation" IsVisible="{Binding SelectedModifierName, Converter={StaticResource IsPresent}}" />
+                            <Label Text="{Binding SelectedVariantName, StringFormat='[{0}]'}" Style="{StaticResource SecondaryLabel}" FontSize="11" LineBreakMode="TailTruncation" IsVisible="{Binding SelectedVariantName, Converter={StaticResource IsPresent}}" />
+
+                            <!-- The composition, indented under the line. A bundle that prints as one
+                                 line is a bundle the kitchen cannot make, and this is a STAFF screen
+                                 preparing one — so the slots are on the row, and tapping them opens the
+                                 same composition sheet the cart opens. The tap exists only for a bundle
+                                 because this block is bound to IsVisible: on an ordinary dish it is out
+                                 of the tree.
+
+                                 NO IsEnabled ON THE RECOGNIZER. TapGestureRecognizer derives from
+                                 GestureRecognizer : Element — it is not a VisualElement and has no
+                                 IsEnabled — and the attribute that used to sit here threw
+                                 XamlParseException the first time a row was realised, i.e. inside the
+                                 load, behind a page-level catch that turned it into «не удалось
+                                 загрузить» under figures that had already updated. Its liveness now
+                                 comes from Command.CanExecute, which the IL of SendTapped checks
+                                 before Execute; see OrderDetailsViewModel for the CanExecute wiring. -->
+                            <VerticalStackLayout Spacing="0" Padding="12,0,0,0" IsVisible="{Binding IsCombo}">
+                                <VerticalStackLayout.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.EditItemCompositionCommand}"
+                                                          CommandParameter="{Binding .}" />
+                                </VerticalStackLayout.GestureRecognizers>
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Components}" Spacing="0">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:LineComponentViewModel">
+                                            <Label Text="{Binding Text}" Style="{StaticResource TagText}" FontSize="11" LineBreakMode="TailTruncation" />
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
                         </VerticalStackLayout>
-                        <!-- The steppers and the delete button were 36dp, below the 44dp touch
-                             minimum every other control in the app honours. -->
-                        <Grid Grid.Column="1" ColumnDefinitions="48,24,48" VerticalOptions="Center">
+
+                        <!-- The unit price, and under it — only when something was actually overridden
+                             — the price it was allowed to be. Tapping re-prices the line and nothing
+                             else on the row does; the allowed price stays, so the difference survives
+                             into the shift report's «Скидки» section. No reason is asked for — a reason
+                             typed at the till becomes the first value anyone ever picks. Read off
+                             OrderItem.ListPriceKopecks, which UpdateOrderAsync deliberately never
+                             recomputes on an edit. -->
+                        <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
+                            <Label Text="{Binding PriceText}" FontAttributes="Bold" FontSize="14"
+                                   HorizontalTextAlignment="End" LineBreakMode="NoWrap"
+                                   SemanticProperties.Description="{Binding PriceText, StringFormat='Цена {0}. Нажмите, чтобы изменить.'}">
+                                <Label.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.EditItemPriceCommand}"
+                                                          CommandParameter="{Binding .}" />
+                                </Label.GestureRecognizers>
+                            </Label>
+                            <Label Text="{Binding ListPriceText}" Style="{StaticResource SecondaryLabel}" FontSize="11"
+                                   TextDecorations="Strikethrough" HorizontalTextAlignment="End"
+                                   LineBreakMode="NoWrap"
+                                   IsVisible="{Binding IsPriceOverridden}"
+                                   SemanticProperties.Description="Разрешённая цена" />
+                        </VerticalStackLayout>
+
+                        <!-- The steppers and the delete button were 36dp, below the 44dp touch minimum
+                             every other control in the app honours. Buttons, not a text field: Baymard
+                             found 61% of sites get the quantity control wrong and, of the redesigns,
+                             97% — dropdowns and text inputs producing a quantity of «21» instead of
+                             «2». -->
+                        <Grid Grid.Column="2" ColumnDefinitions="48,24,48" VerticalOptions="Center">
                             <Button Text="−" Padding="0" FontSize="18" HeightRequest="48" WidthRequest="48" MinimumHeightRequest="48" MinimumWidthRequest="48" SemanticProperties.Description="Убрать одну штуку" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DecreaseItemCommand}" CommandParameter="{Binding .}" IsEnabled="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CanEdit}" />
                             <Label Grid.Column="1" Text="{Binding Quantity}" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
                             <Button Grid.Column="2" Text="+" Padding="0" FontSize="18" HeightRequest="48" WidthRequest="48" MinimumHeightRequest="48" MinimumWidthRequest="48" SemanticProperties.Description="Добавить ещё одну" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.IncreaseItemCommand}" CommandParameter="{Binding .}" IsEnabled="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CanEdit}" />
                         </Grid>
-                        <Button Grid.Column="2" Text="Удалить" Style="{StaticResource DangerButton}" FontSize="12" Padding="8,4" MinimumHeightRequest="44" Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveItemCommand}" CommandParameter="{Binding .}" IsEnabled="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CanEdit}" />
+
+                        <!-- The whole line, in one tap. KEPT, and kept separate from the stepper on
+                             purpose: stepping down to zero is a quantity edit, removing the line is a
+                             deletion, and conflating them is how a mistap becomes an empty order. It is
+                             the widest thing on the row and it is worth the width — the name is what
+                             truncates, which is the correct thing to lose. -->
+                        <Button Grid.Column="3" Text="Удалить" Style="{StaticResource DangerButton}" FontSize="12"
+                                Padding="8,4" MinimumHeightRequest="44"
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveItemCommand}"
+                                CommandParameter="{Binding .}"
+                                IsEnabled="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CanEdit}" />
                     </Grid>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
-        <VerticalStackLayout Grid.Row="3" Spacing="8">
+        <VerticalStackLayout Grid.Row="4" Spacing="8">
             <Picker Title="Добавить блюдо" ItemsSource="{Binding AvailableProducts}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedProduct}" IsEnabled="{Binding CanEdit}" />
             <!-- The total used to sit BELOW the action buttons, right-aligned and clipped by the
                  tab bar — the most important number on an order-editing screen was the last thing
@@ -71,6 +243,18 @@
                  is NOT the signal: the wording is («Вернуть», not «Оплата»), and the sheet it opens
                  is titled and captioned as a return as well. -->
             <Button Text="Вернуть оплату" Style="{StaticResource DangerButton}" MinimumHeightRequest="48" IsVisible="{Binding CanRefundPayment}" Command="{Binding RefundPaymentCommand}" SemanticProperties.Description="Вернуть часть оплаты по закрытому заказу" />
+
+            <!-- «Дописать» — the phone and the promised time, added to an order that is ALREADY paid
+                 for. The customer thinks of it after the money changes hands, which is the only time it
+                 can happen: before payment the cart sheet is still open and already asks.
+                 It lives in the payment block because that is where an operator looks once the money is
+                 in, and because the two controls around it («Принять оплату», «Вернуть оплату») are the
+                 other things one does to a settled order.
+                 Visible only on a paid, non-voided order (CanAddContactDetails), and it is never
+                 disabled for a counter-service order: the fulfilment question is asked INSIDE the sheet,
+                 as a tick the operator makes, because a button that silently refuses to act would be worse
+                 than one that opens and explains. -->
+            <Button Text="Дописать телефон или время" Style="{StaticResource SecondaryButton}" MinimumHeightRequest="48" IsVisible="{Binding CanAddContactDetails}" Command="{Binding AddContactDetailsCommand}" SemanticProperties.Description="Дописать в оплаченный заказ телефон клиента или время выдачи" />
 
             <!-- The individual payments, one line each.
 
@@ -102,7 +286,7 @@
 
             <Button Text="Добавить в заказ" Command="{Binding AddProductCommand}" IsEnabled="{Binding CanEdit}" />
             <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                <Button Text="Сохранить" Command="{Binding SaveCommand}" IsEnabled="{Binding CanEdit}" />
+                <Button Text="Сохранить заказ" Command="{Binding SaveCommand}" IsEnabled="{Binding CanEdit}" SemanticProperties.Description="Сохранить изменения в этом заказе" />
                 <!-- Was Command="{Binding CancelCommand}", which OrderDetailsViewModel does not
                      declare - it exposes BackCommand. The binding resolved to null, so this button
                      rendered disabled and "Назад" did nothing: the operator could not leave this

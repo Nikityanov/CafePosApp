@@ -20,11 +20,6 @@ public partial class OrdersPage : ContentPage
     {
         base.OnAppearing();
 
-        // Subscribed here and released in OnDisappearing rather than in the constructor: the
-        // view model outlives the page, so a constructor subscription would stack up one handler
-        // per visit and scroll the list once per stale subscription.
-        viewModel.PropertyChanged += OnViewModelPropertyChanged;
-
         try
         {
             // App.CreateWindow only *starts* the migration; this await is the migration guarantee
@@ -52,31 +47,5 @@ public partial class OrdersPage : ContentPage
     {
         base.OnDisappearing();
         viewModel.StopAutoRefresh();
-        viewModel.PropertyChanged -= OnViewModelPropertyChanged;
-    }
-
-    /// <summary>
-    /// Puts the list back at the top when the section filter changes.
-    /// </summary>
-    /// <remarks>
-    /// Only on a filter change, never on the auto-refresh reloads. Changing the filter swaps the
-    /// whole contents of the list, and CollectionView keeps the previous scroll offset, so
-    /// switching from "Все" to one section could otherwise land the operator halfway down a
-    /// different set of orders. The periodic reload is deliberately left alone: yanking the list
-    /// back to the top every few seconds while someone is reading a card would be worse than the
-    /// stale offset it fixes.
-    /// </remarks>
-    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName != nameof(OrdersViewModel.ActiveFilter)) return;
-
-        try
-        {
-            OrdersList.ScrollTo(0, animate: false);
-        }
-        catch (Exception exception)
-        {
-            AppLog.Exception("OrdersPage.OnViewModelPropertyChanged", exception);
-        }
     }
 }

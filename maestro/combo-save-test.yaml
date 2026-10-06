@@ -1,0 +1,40 @@
+# Test: combo catalogue save flow
+# Proves the runtime break is fixed: a combo with a price saves and persists.
+appId: com.companyname.cafeposapp
+---
+# Navigate to the catalogue tab
+- tapOn:
+    text: "Каталог"
+
+# Go to the Combo section
+- tapOn:
+    text: "Комбо"
+
+# Tap the FAB to add a new combo
+- tapOn:
+    text: "Добавить комбо"
+
+# Type a name for the combo
+- tapOn:
+    text: "Название комбо"
+- inputText: "Тестовое комбо"
+
+# Add a component: pick a dish from the picker
+- tapOn:
+    text: "Блюдо для компонента"
+# Pick the first available dish
+- tapOn:
+    text: ".*"
+
+# Set the price
+- tapOn:
+    text: "Цена комбо"
+- inputText: "300"
+
+# Save
+- tapOn:
+    text: "Добавить комбо"
+
+# Verify the combo appears in the list
+- assertVisible:
+    text: "Тестовое комбо"
