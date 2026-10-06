@@ -337,8 +337,9 @@ public partial class MenuViewModel : ObservableObject
         pending.Item.Quantity = pending.Quantity;
         // The index can be out of range if the cart changed underneath (a draft restored, a line
         // added and removed again); appending is the honest fallback rather than throwing from a
-        // tap on an "Отменить" button.
-        if (pending.Index >= 0 && pending.Index <= Cart.Count) Cart.Insert(pending.Index, pending.Item);
+        // tap on an "Отменить" button. The rule is CartStepDown.RestoreIndex's.
+        var at = CartStepDown.RestoreIndex(pending.Index, Cart.Count);
+        if (at >= 0) Cart.Insert(at, pending.Item);
         else Cart.Add(pending.Item);
 
         Recalculate();

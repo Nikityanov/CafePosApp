@@ -723,6 +723,15 @@ public partial class MenuViewModel
     /// One step down, and the line away entirely at zero.
     /// </summary>
     /// <remarks>
+    /// The decision is <see cref="CartStepDown"/>'s — including the rule that only a step which REMOVES
+    /// the line arms an undo, and the quantity the undo restores, which has to be the one from BEFORE
+    /// the decrement. This method applies it.
+    /// </remarks>
+
+    /// <summary>
+    /// One step down, and the line away entirely at zero.
+    /// </summary>
+    /// <remarks>
     /// Only the step that removes the LINE arms an undo. Stepping 3 down to 2 is not a mistake
     /// worth a control — the cashier can step back up — whereas a line leaving the cart is the one
     /// edit on this screen with no visible way back, and NN/g's finding that users "accidentally
@@ -738,14 +747,22 @@ public partial class MenuViewModel
     private void RemoveItem(CartItemViewModel? item)
     {
         if (item is null) return;
-        item.Quantity--;
-        if (item.Quantity <= 0)
+
+        // Quantity read BEFORE the decrement: the undo restores the line AS IT WAS, and a quantity
+        // taken after the step down is zero — a row reading «0» with «Итого 0,00», which the domain
+        // then refuses at checkout. See MenuViewModel.UndoRemove for what that cost on the emulator.
+        var step = CartStepDown.From(item.Quantity, item.ProductName);
+        var index = step.RemovesLine ? Cart.IndexOf(item) : -1;
+
+        item.Quantity = step.QuantityAfter;
+
+        if (step.RemovesLine)
         {
-            var index = Cart.IndexOf(item);
-            Message = $"{item.ProductName} — убрано из корзины.";
-            // The count BEFORE the decrement, so the undo can put the line back as it was rather
-            // than as a zero-quantity husk. See MenuViewModel.UndoRemove for what that cost.
-            pendingUndo = new PendingUndo(item, index, item.Quantity + 1);
+            // The message is written BEFORE the undo is armed, because Message's setter is what retires
+            // the previous one. Written the other way round, this line's own undo would be cancelled by
+            // its own message and «Отменить» would never appear.
+            if (step.Announce is not null) Message = step.Announce;
+            pendingUndo = new PendingUndo(item, index, step.UndoQuantity!.Value);
             OnPropertyChanged(nameof(HasUndo));
             Cart.Remove(item);
         }
