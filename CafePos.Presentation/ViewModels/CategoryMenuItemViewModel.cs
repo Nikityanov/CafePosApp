@@ -1,3 +1,4 @@
+using CafePos.Core.Common;
 using CafePos.Core.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Maui.Graphics;
@@ -106,15 +107,12 @@ public sealed class CategoryMenuItemViewModel : ObservableObject
         PaletteAccess.Resolve("Primary", "PrimaryDark");
 
     /// <summary>Sort key of the "Все" chip. Real category ids are generated Guids.</summary>
-    public static readonly Guid AllKey = Guid.Empty;
-
-    /// <summary>
-    /// Sort key of the "Комбо" chip. A fixed literal, not a random Guid, so it is stable across
-    /// processes — the strip is rebuilt and diffed on every return to the tab, and a key that
-    /// changed per launch would make <c>SyncWith</c> treat the chip as a different item each time
-    /// and lose the selection highlight.
-    /// </summary>
-    public static readonly Guid CombosKey = Guid.Parse("00000000-0000-0000-0000-0000000000c0");
+    /// <remarks>
+    /// The sort keys live on <see cref="MenuFilter"/>, not here. «Все» and «Комбо» are not categories
+    /// - a bundle carries no CategoryId - so the rule "is the selected category still there?" must not
+    /// depend on a row type, and must be reachable from a test. See <c>MenuFilter.AllKey</c> and
+    /// <c>MenuFilter.CombosKey</c>.
+    /// </remarks>
 
     /// <summary>
     /// The "no filter" chip; always the first item of the strip. A factory rather than a shared
@@ -179,5 +177,5 @@ public sealed class CategoryMenuItemViewModel : ObservableObject
     public Color ChipTextColor => IsSelected ? SelectedForeground : ChipForeground;
 
     /// <summary>Stable identity for <see cref="MenuViewModel.Categories"/> diffing.</summary>
-    public Guid Key => IsAll ? AllKey : IsCombos ? CombosKey : Category!.Id;
+    public Guid Key => IsAll ? MenuFilter.AllKey : IsCombos ? MenuFilter.CombosKey : Category!.Id;
 }

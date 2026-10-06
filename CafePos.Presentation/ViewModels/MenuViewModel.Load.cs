@@ -15,7 +15,7 @@ public partial class MenuViewModel
         SelectedCategory = item?.Category;
         // A null item means the strip was cleared from under us (the category was deleted while the
         // page was closed) — fall back to «Все» rather than leaving the key on a chip that is gone.
-        SelectedFilterKey = item?.Key ?? CategoryMenuItemViewModel.AllKey;
+        SelectedFilterKey = item?.Key ?? MenuFilter.AllKey;
         HighlightSelectedChip();
         ApplyFilters();
     }
@@ -35,21 +35,14 @@ public partial class MenuViewModel
     /// </summary>
     private void ApplyFilters()
     {
-        // On «Комбо» the grid is emptied outright rather than narrowed: a bundle is not a Product,
-        // so there is no category id to match on and every comparison would be true at once.
-        if (IsCombosOnly)
-        {
-            FilteredProducts.SyncWith([], product => product.Id);
-            return;
-        }
-
-        var localHour = timeProvider.GetLocalNow().Hour;
-        var query = Products.Where(product =>
-            (SelectedCategory is null || product.CategoryId == SelectedCategory.Id)
-            && ProductAvailability.IsInTimeWindow(product.AvailableFromHour, product.AvailableToHour, localHour));
+        // On «Комбо» the grid is emptied outright rather than narrowed — see MenuFilter.Apply for why a
+        // bundle cannot be matched against a category at all.
+        var visible = IsCombosOnly
+            ? []
+            : MenuFilter.Apply(Products, SelectedCategory, timeProvider.GetLocalNow().Hour);
 
         // Diff based filtering: no Clear(), so the list does not flicker or lose its scroll.
-        FilteredProducts.SyncWith(query, product => product.Id);
+        FilteredProducts.SyncWith(visible, product => product.Id);
     }
 
     public async Task LoadAsync()
@@ -81,12 +74,7 @@ public partial class MenuViewModel
             // The selected section may have been deleted while the page was closed. The two
             // pseudo-chips are keyed by sentinels that cannot collide with a real category, so a
             // key that is in neither set is a category that no longer exists and falls back to «Все».
-            if (SelectedFilterKey != CategoryMenuItemViewModel.AllKey
-                && SelectedFilterKey != CategoryMenuItemViewModel.CombosKey
-                && Categories.All(item => item.Key != SelectedFilterKey))
-            {
-                SelectedFilterKey = CategoryMenuItemViewModel.AllKey;
-            }
+            SelectedFilterKey = MenuFilter.Repair(SelectedFilterKey, [.. Categories.Select(item => item.Key)]);
             SelectedCategory = Categories.FirstOrDefault(item => item.Key == SelectedFilterKey)?.Category;
 
             HighlightSelectedChip();

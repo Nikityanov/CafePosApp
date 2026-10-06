@@ -408,7 +408,7 @@ public partial class MenuViewModel : ObservableObject
     // category is selected both sides are null, so every category-less chip — «Все» AND «Комбо» —
     // compared equal and lit up together. Comparing the chip's own identity removes the whole class
     // of bug rather than adding a case to it.
-    private Guid selectedFilterKey = CategoryMenuItemViewModel.AllKey;
+    private Guid selectedFilterKey = MenuFilter.AllKey;
     public Guid SelectedFilterKey
     {
         get => selectedFilterKey;
@@ -426,7 +426,7 @@ public partial class MenuViewModel : ObservableObject
     /// is not a <c>Product</c> and no amount of filtering <see cref="FilteredProducts"/> can produce
     /// one — «filter to combos only» means the grid is empty, not narrowed.
     /// </summary>
-    public bool IsCombosOnly => SelectedFilterKey == CategoryMenuItemViewModel.CombosKey;
+    public bool IsCombosOnly => SelectedFilterKey == MenuFilter.CombosKey;
 
     // ── Fulfilment, contact and time ────────────────────────────────────────────────────────────
     // Three facts about the ORDER rather than about any line: a customer either takes the whole
