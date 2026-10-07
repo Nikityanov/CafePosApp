@@ -34,7 +34,8 @@
              filter itself taking effect, so the active state is never colour-only: the chosen chip
              is both filled and the only one that narrows the list. -->
         <DataTemplate x:Key="CategoryChipTemplate" x:DataType="vm:CategoryFilterChip">
-            <Border Style="{StaticResource FilterChip}" Margin="3,3">
+            <Border Style="{StaticResource FilterChip}" Margin="3,3"
+                    SemanticProperties.Description="{Binding Name, StringFormat='Фильтр по разделу: {0}'}">
                 <Border.Triggers>
                     <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
                         <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
