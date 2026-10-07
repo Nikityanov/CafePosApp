@@ -72,7 +72,7 @@ public class DraftOrderTests
         Assert.NotNull(restored.Components);
         Assert.Equal(2, restored.Components.Count);
         Assert.Equal(
-            OrderLineKey.For(bundle.Id, null, null, parked.Components.Select(c => (c.ProductId, c.QuantityPerUnit))),
+            OrderLineKey.For(bundle.Id, null, null, parked.Components!.Select(c => (c.ProductId, c.QuantityPerUnit))),
             OrderLineKey.For(
                 restored.ProductId,
                 restored.ModifierName,

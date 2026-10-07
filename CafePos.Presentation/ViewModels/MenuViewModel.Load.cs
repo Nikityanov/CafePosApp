@@ -12,73 +12,22 @@ public partial class MenuViewModel
 {
     private void SelectCategory(CategoryMenuItemViewModel? item)
     {
-        SelectedCategory = item?.Category;
-        // A null item means the strip was cleared from under us (the category was deleted while the
-        // page was closed) — fall back to «Все» rather than leaving the key on a chip that is gone.
-        SelectedFilterKey = item?.Key ?? MenuFilter.AllKey;
-        HighlightSelectedChip();
-        ApplyFilters();
+        menu.SelectCategory(item);
+        menu.HighlightSelectedChip();
+        menu.ApplyFilters();
     }
-
-    /// <summary>Keeps the chip strip in sync with <see cref="SelectedFilterKey"/>.</summary>
-    private void HighlightSelectedChip()
-    {
-        foreach (var chip in Categories)
-            chip.IsSelected = chip.Key == SelectedFilterKey;
-    }
-
-    /// <summary>
-    /// Rebuilds <see cref="FilteredProducts"/> from the selected category and the time window.
-    /// Called by <see cref="SelectCategory"/> and by <see cref="LoadAsync"/>. There is no search
-    /// on this page — the owner's call, see the row-structure comment in Views/MenuPage.xaml —
-    /// so nothing else feeds it.
-    /// </summary>
-    private void ApplyFilters()
-    {
-        // On «Комбо» the grid is emptied outright rather than narrowed — see MenuFilter.Apply for why a
-        // bundle cannot be matched against a category at all.
-        var visible = IsCombosOnly
-            ? []
-            : MenuFilter.Apply(Products, SelectedCategory, timeProvider.GetLocalNow().Hour);
-
-        // Diff based filtering: no Clear(), so the list does not flicker or lose its scroll.
-        FilteredProducts.SyncWith(visible, product => product.Id);
-    }
-
     public async Task LoadAsync()
     {
         await loadGate.WaitAsync();
         IsBusy = true;
         try
         {
-            var products = await catalog.GetProductsAsync();
-            var categories = await catalog.GetCategoriesAsync();
-
             // Whatever cart is restored below is not the cart an undo was armed against, so a
             // pending undo cannot outlive a load — Shell calls this on every return to the tab.
             ClearPendingUndo();
 
-            Products.SyncWith(products, product => product.Id);
-
-            await LoadCombosAsync();
-
-            // The "Все" chip is the first element of the strip, so the whole row scrolls as one
-            // list, and "Комбо" is the last: it is a filter over the other kind of content rather
-            // than a section among these, so it belongs at the end where it reads as a switch.
-            Categories.SyncWith(
-                new[] { CategoryMenuItemViewModel.CreateAll() }
-                    .Concat(categories.Select((category, index) => new CategoryMenuItemViewModel(category, index)))
-                    .Append(CategoryMenuItemViewModel.CreateCombos()),
-                item => item.Key);
-
-            // The selected section may have been deleted while the page was closed. The two
-            // pseudo-chips are keyed by sentinels that cannot collide with a real category, so a
-            // key that is in neither set is a category that no longer exists and falls back to «Все».
-            SelectedFilterKey = MenuFilter.Repair(SelectedFilterKey, [.. Categories.Select(item => item.Key)]);
-            SelectedCategory = Categories.FirstOrDefault(item => item.Key == SelectedFilterKey)?.Category;
-
-            HighlightSelectedChip();
-            ApplyFilters();
+            // The catalogue's half of the load: the four queries, the two repairs, and the filter.
+            await menu.LoadAsync();
             await RestoreDraftAsync();
 
             // The formatted amounts depend on Currencies.Default, which the operator can change on
@@ -114,39 +63,6 @@ public partial class MenuViewModel
     }
 
     /// <summary>
-    /// Rebuilds the bundle row from the catalogue.
-    /// </summary>
-    /// <remarks>
-    /// Refreshed rather than re-created, so the row's tile does not flicker on every return to the
-    /// tab — the same reason the section chips are updated instead of rebuilt. The tiles are also the
-    /// one place on this page whose text is money, so they are re-raised by
-    /// <see cref="RefreshMoneyText"/> for the currency change.
-    /// </remarks>
-    private async Task LoadCombosAsync()
-    {
-        var templates = await combos.GetCombosAsync();
-        var rows = templates.Select(BuildComboTile).ToList();
-        Combos.SyncWith(rows, row => row.Id, (current, incoming) => current.Refresh(incoming));
-    }
-
-    /// <summary>
-    /// Reads a catalogue bundle against what is on the shelf right now, and off the same slots the tile
-    /// names in its composition line.
-    /// </summary>
-    private static MenuComboViewModel BuildComboTile(Combo template)
-    {
-        var plan = BundlePlan.Describe(template);
-        return new MenuComboViewModel(
-            template,
-            template.PriceKopecks,
-            plan.BlockedDishName,
-            TextFormat.Money(Money.FromKopecks(template.PriceKopecks)),
-            // Off the SAME components GetCombosAsync already loaded, not a query per tile: the names
-            // were in hand to compute the price two lines above, and a second read would be N+1 on the
-            // one screen the cashier looks at most. See ComboComposition.
-            ComboComposition.Summarise(template.Components));
-    }
-
     private async Task RestoreDraftAsync()
     {
         if (Cart.Count > 0) return;
@@ -720,13 +636,13 @@ public partial class MenuViewModel
     {
         OnPropertyChanged(nameof(TotalText));
         // The checkout button's caption carries the formatted total inside it, so it has to be
-        // re-announced here too — otherwise the button would quote a total in the old currency.
+        // re-announced here too - otherwise the button would quote a total in the old currency.
         OnPropertyChanged(nameof(PayAndCreateText));
-        cart.RefreshMoneyText();
 
-        // The bundle tiles carry money too, and they are the one row on this page whose text is not
-        // produced by a converter (a tile knows its price from the composition, not from a Product), so
-        // nothing else re-raises them when the operator switches currency on the Settings tab.
-        foreach (var combo in Combos) combo.RefreshMoneyText();
+        // The cart's rows and the bundle tiles, each through its own owner's refresh: the rows do not
+        // flicker because they are re-raised rather than rebuilt, and the tiles need it at all
+        // because their money is not produced by a converter.
+        cart.RefreshMoneyText();
+        menu.RefreshMoneyText();
     }
 }

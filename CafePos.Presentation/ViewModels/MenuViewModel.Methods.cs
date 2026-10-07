@@ -105,6 +105,19 @@ public partial class MenuViewModel : ObservableObject
         ParkOrderCommand = new AsyncRelayCommand(ParkOrderAsync);
         OpenParkedCommand = new AsyncRelayCommand(OpenParkedAsync);
 
+        // The catalogue reads the two catalogue services and the clock, so it cannot be a field
+        // initialiser — a field initialiser cannot see the constructor's parameters.
+        menu = new MenuCatalogue(catalog, combos, timeProvider);
+        menu.PropertyChanged += (_, e) =>
+        {
+            // The chips' own selection state is announced by MenuCatalogue; what the shell owns is the
+            // two properties XAML derives from it.
+            if (e.PropertyName != nameof(MenuCatalogue.SelectedFilterKey)) return;
+            OnPropertyChanged(nameof(SelectedCategory));
+            OnPropertyChanged(nameof(IsCombosOnly));
+            OnPropertyChanged(nameof(FilteredProducts));
+        };
+
         // The cart owns the total now, but the button that QUOTES it is the shell's, so the shell has to
         // hear about the total moving. Without this the checkout button goes on quoting the amount the
         // cart had before the change — a button promising a price the checkout does not charge, and
@@ -127,9 +140,17 @@ public partial class MenuViewModel : ObservableObject
         };
     }
 
-    public ObservableCollection<Product> Products { get; } = [];
-    public ObservableCollection<Product> FilteredProducts { get; } = [];
-    public ObservableCollection<CategoryMenuItemViewModel> Categories { get; } = [];
+    /// <summary>
+    /// The menu board: dishes, bundle tiles and the category strip, with the filter over all three.
+    /// The second Collaborator, and the one with the smallest dependency list the plan predicted.
+    /// </summary>
+    /// <remarks>
+    /// The shell keeps <see cref="Products"/>, <see cref="FilteredProducts"/>, <see cref="Categories"/>
+    /// and <see cref="Combos"/> as one-line proxies because XAML binds them here by name, and the
+    /// catalogue owns them. <see cref="SelectedCategory"/> and <see cref="IsCombosOnly"/> are computed
+    /// from the catalogue's key, which is why the shell has no filter state of its own.
+    /// </remarks>
+    private readonly MenuCatalogue menu;
 
     /// <summary>
     /// The cart, its total and its undo. One of the six Collaborators, and the only one with no
@@ -145,9 +166,19 @@ public partial class MenuViewModel : ObservableObject
     /// </remarks>
     private readonly CartBuilder cart = new();
 
+    /// <summary>The cart's lines, in the order the operator read them.</summary>
     public ObservableCollection<CartItemViewModel> Cart => cart.Cart;
 
     public decimal Total => cart.Total;
+
+    /// <summary>Every dish the till knows, before filtering.</summary>
+    public ObservableCollection<Product> Products => menu.Products;
+
+    /// <summary>The dishes on the grid: the selected category's, inside their time window.</summary>
+    public ObservableCollection<Product> FilteredProducts => menu.FilteredProducts;
+
+    /// <summary>The category strip, «Все» first and «Комбо» last.</summary>
+    public ObservableCollection<CategoryMenuItemViewModel> Categories => menu.Categories;
 
     /// <summary>
     /// The bundles on the menu board, as their own row rather than as more entries in
@@ -162,7 +193,7 @@ public partial class MenuViewModel : ObservableObject
     /// <see cref="MenuViewModel.ProductColumnSpan"/> and the GridItemsLayout comment in MenuPage.xaml)
     /// exactly as it was, instead of making a bundle tile fight a product tile for a 140dp column.
     /// </remarks>
-    public ObservableCollection<MenuComboViewModel> Combos { get; } = [];
+    public ObservableCollection<MenuComboViewModel> Combos => menu.Combos;
 
     // ── Product grid width contract ──────────────────────────────────────────────────────────────────
     // The two-column grid clipped on narrow windows, and the fix had to be found empirically
@@ -397,37 +428,25 @@ public partial class MenuViewModel : ObservableObject
     private void SetError(Exception exception, string prefix) =>
         (Message, IsErrorMessage) = (UserMessages.Describe(exception, prefix), true);
 
-    private Category? selectedCategory;
-    public Category? SelectedCategory { get => selectedCategory; private set => SetProperty(ref selectedCategory, value); }
+    /// <summary>The chosen category, or <c>null</c> for everything. The catalogue's, computed.</summary>
+    public Category? SelectedCategory => menu.SelectedCategory;
 
     // ── Which chip is selected ──────────────────────────────────────────────────────────────────
-    // A KEY, not a Category. The strip now holds three kinds of chip — «Все», the real categories
-    // and «Комбо» — and two of them have no Category at all. The old test was
-    //     chip.Category?.Id == SelectedCategory?.Id || (chip.IsAll && SelectedCategory is null)
-    // which reads correctly for a strip of one kind of chip and is WRONG for this one: when no
-    // category is selected both sides are null, so every category-less chip — «Все» AND «Комбо» —
-    // compared equal and lit up together. Comparing the chip's own identity removes the whole class
-    // of bug rather than adding a case to it.
-    private Guid selectedFilterKey = MenuFilter.AllKey;
-    public Guid SelectedFilterKey
-    {
-        get => selectedFilterKey;
-        private set
-        {
-            if (!SetProperty(ref selectedFilterKey, value)) return;
-            // IsCombosOnly and the product grid's visibility are both derived from the key, and
-            // neither would be announced by a change to the key alone.
-            OnPropertyChanged(nameof(IsCombosOnly));
-        }
-    }
+    // A KEY, not a Category, and it belongs to the catalogue now. The strip holds three kinds of chip —
+    // «Все», the real categories and «Комбо» — and two of them have no Category at all. The old test
+    // was chip.Category?.Id == SelectedCategory?.Id || (chip.IsAll && SelectedCategory is null), which
+    // reads correctly for a strip of one kind of chip and is WRONG for this one: when no category is
+    // selected both sides are null, so every category-less chip — «Все» AND «Комбо» — compared equal
+    // and lit up together. Comparing the chip's own identity removes the whole class of bug rather
+    // than adding a case to it. See MenuFilter.
+    public Guid SelectedFilterKey => menu.SelectedFilterKey;
 
     /// <summary>
     /// True while the «Комбо» chip is selected. The product grid is then hidden, because a bundle
     /// is not a <c>Product</c> and no amount of filtering <see cref="FilteredProducts"/> can produce
     /// one — «filter to combos only» means the grid is empty, not narrowed.
     /// </summary>
-    public bool IsCombosOnly => SelectedFilterKey == MenuFilter.CombosKey;
-
+    public bool IsCombosOnly => menu.IsBundlesOnly;
     // ── Fulfilment, contact and time ────────────────────────────────────────────────────────────
     // Three facts about the ORDER rather than about any line: a customer either takes the whole
     // thing away or eats all of it on the premises, so they cannot be carried per cart line — which
