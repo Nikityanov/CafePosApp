@@ -3,7 +3,7 @@
 - **Started:** 2026-10-07 13:05
 - **Branch:** chore/delete-branch-after-merge
 - **Kind:** chore
-- **Status:** in progress
+- **Status:** merged — `59a3905` (merge commit), `eb80981` (branch)
 
 ## Why
 
