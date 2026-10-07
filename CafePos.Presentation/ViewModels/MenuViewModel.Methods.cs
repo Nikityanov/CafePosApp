@@ -91,6 +91,34 @@ public partial class MenuViewModel : ObservableObject
         cart = new CartBuilder();
         autosave = new DraftAutosave(drafts, cart, logger);
 
+        // The last two, built here for the same reason as the others: the command lambdas below close
+        // over them. The sale takes IsBusy as a delegate rather than reading it, because IsBusy is the
+        // shell's - it disables the checkout button, which the shell owns.
+        checkoutCoordinator = new CheckoutCoordinator(
+            checkout,
+            paymentSheet,
+            inventory,
+            shiftSession,
+            dialogs,
+            cart,
+            haptics,
+            logger,
+            message => Message = message,
+            message => (Message, IsErrorMessage) = (message, true),
+            busy => IsBusy = busy);
+
+        // Parking has no navigation and no busy flag, so nine dependencies against the sale's eleven.
+        parkedCarts = new ParkedCarts(
+            drafts,
+            draftPicker,
+            dialogs,
+            timeProvider,
+            cart,
+            haptics,
+            logger,
+            message => Message = message,
+            message => (Message, IsErrorMessage) = (message, true));
+
         // The resolver speaks through the shell's two channels rather than owning them: `announce` is
         // `Message`, whose setter retires a pending undo, and `sayError` is SetError. Both are written
         // as the assignment they stand for, so the resolver cannot accidentally retire an undo on a
@@ -216,6 +244,20 @@ public partial class MenuViewModel : ObservableObject
     /// The fifth Collaborator.
     /// </summary>
     private readonly DraftAutosave autosave;
+
+    /// <summary>
+    /// The sale: pre-flight the stock, take the money, book the order. Returns what happened; the
+    /// screen is cleared here, by the shell, because "an order was booked" and "the till is empty" are
+    /// not the same fact. The sixth Collaborator.
+    /// </summary>
+    private readonly CheckoutCoordinator checkoutCoordinator;
+
+    /// <summary>
+    /// Parking a receipt under a name, and picking one back up. Not a sale - no money, no stock check,
+    /// no order - which is why it is a separate class from the sale despite sharing a file with it
+    /// until now.
+    /// </summary>
+    private readonly ParkedCarts parkedCarts;
 
     /// <summary>The cart's lines, in the order the operator read them.</summary>
     public ObservableCollection<CartItemViewModel> Cart => cart.Cart;
