@@ -3,7 +3,7 @@
 - **Started:** 2026-10-07 13:40
 - **Branch:** docs/changelog-index
 - **Kind:** docs
-- **Status:** in progress
+- **Status:** merged — `95a49e3` (merge commit), `2906873` (branch)
 
 ## Why
 

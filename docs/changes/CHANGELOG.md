@@ -28,7 +28,7 @@ the question you ask when a revert is being considered.
 
 | Date | Kind | Change | Detail | Branch | Merged |
 |---|---|---|---|---|---|
-| 2026-10-07 13:40 | docs | One changelog index over the change records | [record](2026-10-07-1340-docs-changelog-index.md) | `docs/changelog-index` | — |
+| 2026-10-07 13:40 | docs | One changelog index over the change records | [record](2026-10-07-1340-docs-changelog-index.md) | `docs/changelog-index` | [`95a49e3`](https://github.com/Nikityanov/CafePosApp/commit/95a49e3) |
 | 2026-10-07 13:05 | chore | Merge, then delete the branch | [record](2026-10-07-1305-chore-delete-branch-after-merge.md) | `chore/delete-branch-after-merge` | [`59a3905`](https://github.com/Nikityanov/CafePosApp/commit/59a3905) |
 | 2026-10-07 12:22 | docs | One branch per feature, and a written record per change | [record](2026-10-07-1222-docs-agent-rules-and-change-records.md) | `docs/agent-rules-and-change-records` | [`13463bf`](https://github.com/Nikityanov/CafePosApp/commit/13463bf) |
 
