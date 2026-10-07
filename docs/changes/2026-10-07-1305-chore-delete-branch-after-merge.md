@@ -62,19 +62,49 @@ Not "git said so" — checked what that actually cost:
 
 - **`git branch -D` for speed.** Rejected: `-D` is how an unmerged branch gets destroyed
   silently. `-d` refusing is the check, and forcing past it throws the check away.
-- **Deleting `fix/analytics-scrolling` too, to leave a tidy list.** Rejected. It is the one
-  branch that still matters: branched 2026-10-01, never merged, and carrying real work —
-  *"the product breakdown on Аналитика showed three rows of a four-row list"*, 68 insertions
-  across `ShiftAnalyticsViewModel.cs` and `ShiftAnalyticsPage.xaml`. A tidy branch list is
-  not worth losing a defect fix over, so it goes to the owner as a decision (§3.5).
-- **Committing `.opencode-rules.md`.** Not possible: it is gitignored by its own declared
-  choice, so this record is the only trace in the repo that the rules changed. Flagged to
-  the owner as an open question, not solved unilaterally.
+- **Deleting `fix/analytics-scrolling` too, to leave a tidy list.** Rejected on the first
+  pass. It is the one branch that still matters: branched 2026-10-01, never merged, and
+  carrying real work — *"the product breakdown on Аналитика showed three rows of a
+  four-row list"*. So it was checked on the device instead, and the answer is below.
+- **Committing `.opencode-rules.md`.** The owner overrode the "intentionally local"
+  decision: the rules are now tracked, so a rule change is an ordinary reviewable commit.
 
-## Rules this changed
+## `fix/analytics-scrolling` is already fixed in `develop`, by another route
+
+The owner asked to check it on the device before deciding. That check is the finding.
+
+**The bug it fixed:** on Аналитика the product breakdown was the only scrolling field. Of a
+1945 px content area the toolbar, eight KPI cards and the peak-hour card took 1073 px,
+leaving the breakdown — the reason the tab exists — 478 px. A product row is 154 px, so
+three rows fit and the fourth was unreachable without scrolling that one field alone.
+
+**`develop` already has this fix, from a different commit.** Evidence, not impression:
+
+- The breakdown is built with `BindableLayout` on a `VerticalStackLayout` —
+  `SectionRows`, `Dishes`, `Lines`, `DishRows`, `LineRows` — which is exactly what the
+  branch introduced. The page is one `ScrollView` (`ShiftAnalyticsPage.xaml:59`).
+- **The reasoning is already in `develop`,** in the XAML comment at lines 26–41: *"a
+  CollectionView inside a ScrollView needs an explicit HeightRequest guessed from an item
+  count — wrong … BindableLayout on a VerticalStackLayout: the idiom already used on the
+  shift report."* That is this fix's argument, already committed to the codebase.
+- On the device: one continuous scroll, **14 позиций из 14**, all four dishes present —
+  Американо ×9 + Капучино ×2 + Чизкейк ×2 + coffe and more ×1 = 14 across 3 sections, and
+  the header total agrees with the rows.
+
+So the branch is superseded: merging it would resurrect a layout decision `develop` has
+already moved past. **It should be abandoned, not ported.**
+
+One real difference, and it is a choice rather than a defect. The branch kept the shift
+picker and «Обновить» **outside** the scroller, so they stay reachable while the breakdown
+is in view. `develop` puts both **inside** it (`:59`, `:67`), so they scroll away. That is
+consistent with how the page is built and documented, but it is worth deciding
+consciously rather than inheriting from whichever branch landed first.
 
 - §3.3 — deletion is step 6 of the merge, same sitting, both copies.
 - §3.4 — new: delete without asking, and never `-D`.
 - §3.5 — new: an unmerged branch rots, with this repo's `fix/analytics-scrolling` as the
   worked example.
 - §3.6 — new: housekeeping command for finding clutter and undecided work.
+- **The rules file itself is now tracked.** `.gitignore` no longer excludes it, the line in
+  its own header that said "keep it gitignored" is replaced with the reason it changed, and
+  `.github/copilot-instructions.md` became a pointer to it instead of a stale duplicate.
