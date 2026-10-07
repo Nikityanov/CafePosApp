@@ -104,12 +104,50 @@ public partial class MenuViewModel : ObservableObject
         PayAndCreateCommand = new AsyncRelayCommand(PayAndCreateAsync);
         ParkOrderCommand = new AsyncRelayCommand(ParkOrderAsync);
         OpenParkedCommand = new AsyncRelayCommand(OpenParkedAsync);
+
+        // The cart owns the total now, but the button that QUOTES it is the shell's, so the shell has to
+        // hear about the total moving. Without this the checkout button goes on quoting the amount the
+        // cart had before the change — a button promising a price the checkout does not charge, and
+        // exactly the defect the old Total setter existed to prevent.
+        cart.PropertyChanged += (_, e) =>
+        {
+            switch (e.PropertyName)
+            {
+                case nameof(CartBuilder.Total):
+                case nameof(CartBuilder.HasUndo):
+                    OnPropertyChanged(e.PropertyName);
+                    OnPropertyChanged(nameof(PayAndCreateText));
+                    OnPropertyChanged(nameof(CanCreateOrder));
+                    break;
+                case nameof(CartBuilder.TotalText):
+                    OnPropertyChanged(nameof(TotalText));
+                    OnPropertyChanged(nameof(PayAndCreateText));
+                    break;
+            }
+        };
     }
 
     public ObservableCollection<Product> Products { get; } = [];
     public ObservableCollection<Product> FilteredProducts { get; } = [];
     public ObservableCollection<CategoryMenuItemViewModel> Categories { get; } = [];
-    public ObservableCollection<CartItemViewModel> Cart { get; } = [];
+
+    /// <summary>
+    /// The cart, its total and its undo. One of the six Collaborators, and the only one with no
+    /// dependencies of its own.
+    /// </summary>
+    /// <remarks>
+    /// The shell keeps <see cref="Cart"/>, <see cref="Total"/> and <see cref="TotalText"/> as one-line
+    /// proxies because XAML binds them here by name, and keeps <see cref="PayAndCreateText"/> and
+    /// <see cref="CanCreateOrder"/> outright because they quote the total inside a control that also
+    /// depends on <see cref="IsBusy"/>, which is the shell's. The subscription in the constructor is
+    /// what keeps those two honest: without it the checkout button would go on quoting the amount the
+    /// cart had before the change.
+    /// </remarks>
+    private readonly CartBuilder cart = new();
+
+    public ObservableCollection<CartItemViewModel> Cart => cart.Cart;
+
+    public decimal Total => cart.Total;
 
     /// <summary>
     /// The bundles on the menu board, as their own row rather than as more entries in
@@ -199,30 +237,8 @@ public partial class MenuViewModel : ObservableObject
         }
     }
 
-    private decimal total;
-
-    /// <summary>
-    /// The cart total. Setting it raises <see cref="TotalText"/> as well, because the checkout button
-    /// binds the formatted amount inside its own caption.
-    /// </summary>
-    public decimal Total
-    {
-        get => total;
-        private set
-        {
-            // …and the button caption, which is the ONE place the total is now printed. A total that
-            // moved while the button still quoted the old one would be a button promising a price the
-            // checkout does not charge.
-            if (SetProperty(ref total, value))
-            {
-                OnPropertyChanged(nameof(TotalText));
-                OnPropertyChanged(nameof(PayAndCreateText));
-            }
-        }
-    }
-
-    /// <summary>The cart total in the active currency, e.g. "740,00 ₿".</summary>
-    public string TotalText => TextFormat.Money(Total);
+    /// <summary>The cart total in the active currency, e.g. «740,00 ₿».</summary>
+    public string TotalText => cart.TotalText;
 
     /// <summary>
     /// The checkout button's caption, which is the ACTION and the AMOUNT it will charge:
@@ -306,49 +322,32 @@ public partial class MenuViewModel : ObservableObject
     // top-to-bottom is a sequence, and a cashier who removes the third line and undoes it expects
     // the third line back.
 
-    private PendingUndo? pendingUndo;
-
     /// <summary>Whether the message strip is currently offering to put a line back.</summary>
-    public bool HasUndo => pendingUndo is not null;
+    /// <remarks>
+    /// A proxy, like <see cref="Cart"/> and <see cref="Total"/>. The state itself is
+    /// <see cref="CartBuilder"/>'s; the shell re-announces it because the strip that shows it is
+    /// bound here.
+    /// </remarks>
+    public bool HasUndo => cart.HasUndo;
 
-    private void ClearPendingUndo()
-    {
-        if (pendingUndo is null) return;
-        pendingUndo = null;
-        OnPropertyChanged(nameof(HasUndo));
-    }
+    /// <summary>Retires a pending undo, as <c>Message</c>'s setter does for every message.</summary>
+    private void ClearPendingUndo() => cart.ClearPendingUndo();
 
-    /// <summary>Puts the line the last message removed back where it was.</summary>
+    /// <summary>Puts the line the last message removed back where it was, and says so.</summary>
+    /// <remarks>
+    /// The restore itself is <see cref="CartBuilder.Restore"/>'s, down to the quantity and the index —
+    /// the two things that cost an emulator session when they were wrong. What stays here is the two
+    /// things the cart must not know about: the sentence, and the haptic.
+    /// </remarks>
     private void UndoRemove()
     {
-        if (pendingUndo is not { } pending) return;
+        var restored = cart.Restore();
+        if (restored is null) return;
 
-        // Disarmed FIRST, because the confirmation below goes through Message and its setter
-        // clears the pending undo anyway — arming nothing and leaving that to the message would
-        // work, but only by accident of ordering.
-        ClearPendingUndo();
-
-        // THE QUANTITY HAS TO BE PUT BACK TOO, and this is not a detail. RemoveItem decrements the
-        // line's own Quantity before removing it, so the instance held here arrives with 0 on it.
-        // Re-inserting it as it stands puts a row on the cart reading "0" and "Итого 0,00", and the
-        // checkout then fails in the domain with «У каждой позиции заказа должно быть положительное
-        // количество» — which is exactly what the emulator showed the first time this ran. Restoring
-        // means "put the line back AS IT WAS", not merely "put the object back".
-        pending.Item.Quantity = pending.Quantity;
-        // The index can be out of range if the cart changed underneath (a draft restored, a line
-        // added and removed again); appending is the honest fallback rather than throwing from a
-        // tap on an "Отменить" button. The rule is CartStepDown.RestoreIndex's.
-        var at = CartStepDown.RestoreIndex(pending.Index, Cart.Count);
-        if (at >= 0) Cart.Insert(at, pending.Item);
-        else Cart.Add(pending.Item);
-
-        Recalculate();
-        Message = $"{pending.Item.ProductName} — возвращено в корзину.";
+        Message = $"{restored}— возвращено в корзину.";
         haptics.Click();
     }
 
-    /// <summary>A removed line, and where it was.</summary>
-    private readonly record struct PendingUndo(CartItemViewModel Item, int Index, int Quantity);
 
     private bool isErrorMessage;
     /// <summary>

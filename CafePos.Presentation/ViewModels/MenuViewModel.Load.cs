@@ -157,7 +157,7 @@ public partial class MenuViewModel
         // Through WithComponents so a restored bundle keeps its slots. A combo that arrives without
         // them prints as one line with nothing under it AND loses its merge signature, so it would
         // merge with an identical bundle and split from itself.
-        foreach (var line in snapshot.Lines) Cart.Add(CartItemViewModel.FromLine(line).WithComponents(line.Components));
+        cart.RestoreLines([.. snapshot.Lines.Select(line => CartItemViewModel.FromLine(line).WithComponents(line.Components))]);
         Recalculate();
         // The header continuation, not the message strip — see DraftNotice. The word
         // «Восстановлен» was dropped on the owner's instruction: the header already says
@@ -207,36 +207,25 @@ public partial class MenuViewModel
             // A selected variant carries its own price and replaces the product price entirely.
             var effectivePrice = flow.ResolvePrice(variant);
 
-            // Merge through OrderLineKey rather than the inline product/modifier/variant comparison
-            // this used to make. The key is the same function the cart rows, the order editor and
-            // OrderService all compute, so the four cannot drift apart again — and it now carries the
-            // composition, which the inline comparison could not: two different builds of one bundle
-            // are two lines at two prices, and one bundle tapped twice is one line at quantity 2.
-            var key = OrderLineKey.For(product.Id, modifier, variant);
-            var existing = Cart.FirstOrDefault(item => item.MergeKey == key);
-
-            if (existing is null)
+            // The merge is the CART's: it folds this line into an identical one already there, on the same
+            // OrderLineKey the cart rows, the order editor and OrderService all compute. An inline
+            // comparison is what this used to do, and it left the composition out of the identity —
+            // which merged two DIFFERENT builds of one bundle into one line and put one bundle in as
+            // two. Both cost money.
+            cart.Add(new CartItemViewModel
             {
-                Cart.Add(new CartItemViewModel
-                {
-                    ProductId = product.Id,
-                    ProductName = product.Name,
-                    Price = effectivePrice,
-                    // A plain dish has no composition, so the allowed price IS the dish price and the
-                    // row has nothing struck through. That is the whole of the price control's first
-                    // signal for an ordinary line: only a hand edit can make the two differ.
-                    ListPrice = effectivePrice,
-                    SelectedModifierName = modifier,
-                    SelectedVariantName = variant,
-                    Quantity = 1
-                });
-            }
-            else
-            {
-                existing.Quantity++;
-            }
+                ProductId = product.Id,
+                ProductName = product.Name,
+                Price = effectivePrice,
+                // A plain dish has no composition, so the allowed price IS the dish price and the
+                // row has nothing struck through. That is the whole of the price control's first
+                // signal for an ordinary line: only a hand edit can make the two differ.
+                ListPrice = effectivePrice,
+                SelectedModifierName = modifier,
+                SelectedVariantName = variant,
+                Quantity = 1
+            });
 
-            Recalculate();
             Message = string.Empty;
             haptics.Click();
         }
@@ -456,19 +445,6 @@ public partial class MenuViewModel
     {
         var price = Money.FromKopecks(priceKopecks);
 
-        var key = OrderLineKey.For(
-            comboId,
-            null,
-            null,
-            components.Select(component => (component.ProductId, component.QuantityPerUnit)));
-
-        var existing = Cart.FirstOrDefault(item => item.MergeKey == key);
-        if (existing is not null)
-        {
-            existing.Quantity++;
-            return;
-        }
-
         var line = new CartItemViewModel
         {
             ProductId = comboId,
@@ -482,7 +458,11 @@ public partial class MenuViewModel
         };
 
         foreach (var component in LineComponentViewModel.FromLine(components)) line.Components.Add(component);
-        Cart.Add(line);
+
+        // The cart does the merge, and it does it on the line's own MergeKey — the same
+        // OrderLineKey the cart rows, the order editor and OrderService compute. Two builds of one
+        // bundle are two lines at two prices; one build tapped twice is one line at quantity 2.
+        cart.Add(line);
     }
 
     // ── Price override ────────────────────────────────────────────────────────────────────────────
@@ -709,68 +689,22 @@ public partial class MenuViewModel
         haptics.Click();
     }
 
-    private void AddItem(CartItemViewModel? item)
-    {
-        if (item is null) return;
-        // Adding after removing is the operator moving on, so the pending undo is retired. It would
-        // also die on the next message; this makes it immediate rather than merely eventual.
-        ClearPendingUndo();
-        item.Quantity++;
-        Recalculate();
-    }
+    /// <summary>One step up on an existing line. The cart owns the quantity itself.</summary>
+    private void AddItem(CartItemViewModel? item) => cart.StepUp(item);
 
     /// <summary>
     /// One step down, and the line away entirely at zero.
     /// </summary>
     /// <remarks>
-    /// The decision is <see cref="CartStepDown"/>'s — including the rule that only a step which REMOVES
-    /// the line arms an undo, and the quantity the undo restores, which has to be the one from BEFORE
-    /// the decrement. This method applies it.
+    /// The step is <see cref="CartBuilder.StepDown"/>'s, and so is the order it does two things in: it
+    /// announces FIRST and arms the undo second, because <c>Message</c>'s setter retires the previous
+    /// undo. That ordering is passed in here as <see cref="Message"/> rather than left to the caller
+    /// to respect, because a caller that gets it backwards loses the undo silently.
     /// </remarks>
+    private void RemoveItem(CartItemViewModel? item) => cart.StepDown(item, message => Message = message);
 
-    /// <summary>
-    /// One step down, and the line away entirely at zero.
-    /// </summary>
-    /// <remarks>
-    /// Only the step that removes the LINE arms an undo. Stepping 3 down to 2 is not a mistake
-    /// worth a control — the cashier can step back up — whereas a line leaving the cart is the one
-    /// edit on this screen with no visible way back, and NN/g's finding that users "accidentally
-    /// added the same item to their cart multiple times" is the same failure seen from the other
-    /// side: an unintended edit here is corrected by an affordance, not by another tap on the line
-    /// that is no longer there.
-    /// <para>
-    /// The message is written BEFORE the undo is armed, because Message's setter is what retires the
-    /// previous one. Written the other way round, this line's own undo would be cancelled by its own
-    /// message and «Отменить» would never appear.
-    /// </para>
-    /// </remarks>
-    private void RemoveItem(CartItemViewModel? item)
-    {
-        if (item is null) return;
-
-        // Quantity read BEFORE the decrement: the undo restores the line AS IT WAS, and a quantity
-        // taken after the step down is zero — a row reading «0» with «Итого 0,00», which the domain
-        // then refuses at checkout. See MenuViewModel.UndoRemove for what that cost on the emulator.
-        var step = CartStepDown.From(item.Quantity, item.ProductName);
-        var index = step.RemovesLine ? Cart.IndexOf(item) : -1;
-
-        item.Quantity = step.QuantityAfter;
-
-        if (step.RemovesLine)
-        {
-            // The message is written BEFORE the undo is armed, because Message's setter is what retires
-            // the previous one. Written the other way round, this line's own undo would be cancelled by
-            // its own message and «Отменить» would never appear.
-            if (step.Announce is not null) Message = step.Announce;
-            pendingUndo = new PendingUndo(item, index, step.UndoQuantity!.Value);
-            OnPropertyChanged(nameof(HasUndo));
-            Cart.Remove(item);
-        }
-
-        Recalculate();
-    }
-
-    private void Recalculate() => Total = Cart.Sum(item => item.LineTotal);
+    /// <summary>Recomputes the total from the lines. The cart owns the total.</summary>
+    private void Recalculate() => cart.Recalculate();
 
     /// <summary>
     /// Re-raises every formatted amount on this screen — the cart total and each row's line total —
@@ -788,7 +722,7 @@ public partial class MenuViewModel
         // The checkout button's caption carries the formatted total inside it, so it has to be
         // re-announced here too — otherwise the button would quote a total in the old currency.
         OnPropertyChanged(nameof(PayAndCreateText));
-        foreach (var item in Cart) item.RefreshMoneyText();
+        cart.RefreshMoneyText();
 
         // The bundle tiles carry money too, and they are the one row on this page whose text is not
         // produced by a converter (a tile knows its price from the composition, not from a Product), so

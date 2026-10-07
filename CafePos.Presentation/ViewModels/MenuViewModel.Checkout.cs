@@ -39,7 +39,7 @@ public partial class MenuViewModel
     /// </remarks>
     private async Task<IReadOnlyList<CheckoutLine>> PrepareCheckoutAsync()
     {
-        var lines = Cart.Select(item => item.ToCheckoutLine()).ToList();
+        var lines = cart.ToCheckoutLines();
 
         var shortages = await inventory.PreviewShortagesAsync(
             ComboExpander.Expand(lines)
@@ -207,7 +207,7 @@ public partial class MenuViewModel
             var name = await dialogs.PromptAsync("Отложить чек", "Название отложенного чека", suggestedName);
             if (name is null) return;
 
-            var parked = await drafts.ParkAsync(name, Cart.Select(item => item.ToCheckoutLine()).ToList());
+            var parked = await drafts.ParkAsync(name, cart.ToCheckoutLines());
             Cart.Clear();
             Recalculate();
             // The lines now belong to a parked receipt with its own name, so the header has no
@@ -256,7 +256,7 @@ public partial class MenuViewModel
             var snapshot = await drafts.TakeAsync(draftId.Value);
             Cart.Clear();
             // WithComponents, so a parked bundle comes back with its slots — see RestoreDraftAsync.
-            foreach (var line in snapshot.Lines) Cart.Add(CartItemViewModel.FromLine(line).WithComponents(line.Components));
+            cart.RestoreLines([.. snapshot.Lines.Select(line => CartItemViewModel.FromLine(line).WithComponents(line.Components))]);
             Recalculate();
             // A parked receipt is not an unsaved one: the header note is specifically about lines
             // recovered from a draft after the app went away, and would be a false statement here.
@@ -285,7 +285,7 @@ public partial class MenuViewModel
         var cancellation = new CancellationTokenSource();
         autoSaveCancellation = cancellation;
 
-        var lines = Cart.Select(item => item.ToCheckoutLine()).ToList();
+        var lines = cart.ToCheckoutLines();
         _ = AutoSaveAsync(lines, cancellation);
     }
 
