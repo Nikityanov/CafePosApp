@@ -94,6 +94,23 @@ public partial class MenuViewModel : ObservableObject
         fulfilment = new FulfilmentEditor(timeProvider);
         cart = new CartBuilder();
 
+        // The resolver speaks through the shell's two channels rather than owning them: `announce` is
+        // `Message`, whose setter retires a pending undo, and `sayError` is SetError. Both are written
+        // as the assignment they stand for, so the resolver cannot accidentally retire an undo on a
+        // path that did not mean to - `Message = string.Empty` clears it, and that has to stay true.
+        composition = new CompositionResolver(
+            combos,
+            comboEditor,
+            cart,
+            haptics,
+            logger,
+            message => Message = message,
+            message =>
+            {
+                Message = message;
+                IsErrorMessage = true;
+            });
+
         Cart.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(CanCreateOrder));
@@ -116,12 +133,12 @@ public partial class MenuViewModel : ObservableObject
 
         LoadCommand = new AsyncRelayCommand(LoadAsync);
         AddProductCommand = new AsyncRelayCommand<Product>(AddProductAsync);
-        AddComboCommand = new AsyncRelayCommand<MenuComboViewModel>(AddComboAsync);
+        AddComboCommand = new AsyncRelayCommand<MenuComboViewModel>(composition.AddComboAsync);
         SelectCategoryCommand = new RelayCommand<CategoryMenuItemViewModel?>(SelectCategory);
         AddItemCommand = new RelayCommand<CartItemViewModel>(AddItem);
         RemoveItemCommand = new RelayCommand<CartItemViewModel>(RemoveItem);
         EditLinePriceCommand = new AsyncRelayCommand<CartItemViewModel>(EditLinePriceAsync);
-        EditLineCompositionCommand = new AsyncRelayCommand<CartItemViewModel>(EditLineCompositionAsync);
+        EditLineCompositionCommand = new AsyncRelayCommand<CartItemViewModel>(composition.EditLineCompositionAsync);
         ToggleOrderTypeCommand = new RelayCommand(SwitchOrderType);
         EditPhoneCommand = new AsyncRelayCommand(EditPhoneAsync);
         ToggleFulfilmentCommand = new RelayCommand(() => fulfilment.SetExpanded(!IsFulfilmentExpanded));
@@ -179,6 +196,16 @@ public partial class MenuViewModel : ObservableObject
     /// cart had before the change.
     /// </remarks>
     private readonly CartBuilder cart;
+
+    /// <summary>
+    /// Everything about putting a bundle on the cart. The fourth Collaborator.
+    /// </summary>
+    /// <remarks>
+    /// Two commands hand their handlers straight to it, so the shell has no bundle method of its own
+    /// and nothing to keep in step. It is constructed before those commands because the lambdas close
+    /// over it — the same ordering rule as the other three, and see the note above for why.
+    /// </remarks>
+    private readonly CompositionResolver composition;
 
     /// <summary>The cart's lines, in the order the operator read them.</summary>
     public ObservableCollection<CartItemViewModel> Cart => cart.Cart;
