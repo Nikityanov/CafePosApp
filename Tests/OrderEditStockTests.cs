@@ -289,9 +289,43 @@ public class OrderEditStockTests
         Assert.Equal(1, Assert.Single((await orders.GetOrderAsync(order.Id))!.Items).Quantity);
     }
 
+    /// <summary>
+    /// Обновление на живой базе. Миграция 14 добавляет <c>Kind</c> со значением по умолчанию 0, и
+    /// на телефоне, который работает не первый месяц, ВСЕ старые строки журнала становятся
+    /// <c>Unknown</c>. Если бы предохранитель отмены считал «неизвестное» подозрительным, то после
+    /// обновления приложения отмена с возвратом остатков перестала бы работать у всех, кто держит
+    /// историю, — и это выглядело бы как «приложение сломалося», а не как «добавлен столбец».
+    ///
+    /// Знак здесь важнее вида: отрицательный ряд — это расход, чем бы он ни назывался.
+    /// </summary>
     [Fact]
-    public async Task An_order_whose_dish_has_no_recipe_can_still_be_edited()
+    public async Task A_cancellation_still_returns_stock_for_journal_rows_from_before_kinds_existed()
     {
+        using var host = TestHost.Create();
+        await host.Get<DatabaseBootstrapper>().InitializeAsync();
+        await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());
+        var catalog = host.Get<ICatalogService>();
+        var orders = host.Get<IOrderService>();
+        var (latte, milk) = await DishAsync(catalog, "Латте", "Молоко", LattePrice, MilkPerLatte, MilkStock);
+
+        var order = await CheckoutAsync(host.Get<ICheckoutService>(), latte);
+
+        // Ровно то, что делает DEFAULT 0 на существующей базе.
+        var factory = host.Get<IDbContextFactory<AppDbContext>>();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            await db.StockMovements
+                .Where(row => row.OrderId == order.Id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.Kind, StockMovementKind.Unknown));
+        }
+
+        await orders.CancelOrderAsync(order.Id, stock: StockDisposition.ReturnToStock);
+
+        Assert.Equal(MilkStock, await StockOfAsync(host, milk.Id));
+    }
+
+    [Fact]
+    public async Task An_order_whose_dish_has_no_recipe_can_still_be_edited()    {
         using var host = TestHost.Create();
         await host.Get<DatabaseBootstrapper>().InitializeAsync();
         await TestHost.OpenEmptyShiftAsync(host.Get<IOrderService>());

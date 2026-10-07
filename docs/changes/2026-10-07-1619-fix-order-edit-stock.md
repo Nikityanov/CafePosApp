@@ -69,7 +69,7 @@ operator. See `docs/PLAN-stock-and-undo.md` §4 for the order and why this one g
   the edit moves nothing, so reversing the original write-off happens to be consistent. It is
   not evidence of the defect; it is the guard against a fix that writes a second full write-off
   instead of a delta, which would leave the shelf 200 ml too high and would have gone green.
-- **Full suite: `Passed: 514, Failed: 0`** (490 before this change; +11 integration, +13 pure).
+- **Full suite: `Passed: 515, Failed: 0`** (490 before this change; +12 integration, +13 pure).
   `dotnet test Tests/CafePos.Tests.csproj -c Debug`.
 - **Four expectation edits, all mechanical and none a weakening**, each forced by a new schema
   version: `SchemaMigrationTests` 13 → 14 in the latest-version and applied-count assertions, its
@@ -85,11 +85,43 @@ operator. See `docs/PLAN-stock-and-undo.md` §4 for the order and why this one g
   journal nets to exactly **0**. Before the fix the same sequence left the shelf at 99 600 after
   the edit and, had the operator edited again, diverged on every further cancellation.
 
+## Device pass, and what it could not check
+
+Migration 14 was run against the emulator's real database, which is at version 13 and has four
+`InProgress` orders in it:
+
+```
+SchemaMigrator: Applying schema migration 14: A stock movement records what kind of row it is
+ALTER TABLE [StockMovements] ADD COLUMN [Kind] INTEGER NOT NULL DEFAULT 0
+SchemaMigrator: Schema upgraded to version 14 (1 migrations)
+DatabaseBootstrapper: Database ready. Schema version 14
+```
+
+**The first attempt proved nothing and is worth recording.** The emulator was handed the APK
+already sitting in `bin\Debug`, built at 12:04 — four hours before the migration was written. It
+reported "Schema version 13" and would have looked like a failed migration. The Windows-target
+builds do not produce the Android package; the app had to be rebuilt with
+`-f net10.0-android`. A device pass against a stale binary is a pass for the wrong reason.
+
+**The emulator's stock journal is empty, so it could not test the case that matters most.** Read
+out of the device database: 0 stock movements in total, 0 with an `OrderId`, 4 `InProgress`
+orders. Migration 14 defaults every pre-existing row to `Unknown`, and on the owner's own phone
+every one of those rows IS a write-off. Had the guard treated "unknown" as suspect rather than
+looking at the sign, the upgrade would have quietly broken stock returns for every order already in
+the database — and the emulator would have shown nothing wrong.
+
+So that case is now a test, and the test is mutation-checked:
+`A_cancellation_still_returns_stock_for_journal_rows_from_before_kinds_existed` forces the row to
+`Unknown` exactly as the migration's default does, then cancels with a return. Dropping the
+`QuantityDelta > 0` clause from the guard fails it and
+`An_empty_or_write_off_only_journal_describes_the_order`; both were watched fail, and the file is
+byte-identical to the committed state afterwards.
+
 ## Not verified
 
-- **No device pass.** The edit screen's own behaviour is unchanged — no new control, no new
-  message path in the UI — but the two new refusals carry operator-facing text that has not been
-  read on a screen. That is §3.3 item 4, and it is the owner's.
+- **No operator pass.** The edit screen itself is unchanged — no new control, no new message path
+  in the UI — but the two new refusals carry operator-facing text that nobody has read on a
+  screen. That is §3.3 item 4, and it is the owner's.
 
 ## What was rejected, and why
 
