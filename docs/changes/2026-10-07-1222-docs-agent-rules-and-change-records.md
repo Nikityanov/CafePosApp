@@ -3,7 +3,7 @@
 - **Started:** 2026-10-07 12:22
 - **Branch:** docs/agent-rules-and-change-records
 - **Kind:** docs
-- **Status:** in progress
+- **Status:** merged — `13463bf` (merge commit), `1c09928` (branch)
 
 ## Why
 
