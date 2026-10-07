@@ -12,6 +12,21 @@ Local time, 24-hour, zero-padded. The stamp sorts chronologically and no two ent
 collide, which matters because several changes are started in one session. The slug is
 `feat-…`, `fix-…`, `refactor-…`, matching the branch name without the slash.
 
+## The index
+
+**Every record gets a line in [`CHANGELOG.md`](CHANGELOG.md), in the same commit that
+creates the record.** The index is what turns this folder from a pile of files into
+something searchable: one table answers "what did we do" and "where is it written down"
+without listing a directory and guessing at file names.
+
+- **Newest first.** That is the order a reader arrives in.
+- **Add the row, do not rewrite the table.** Append one line; a diff that adds a row is
+  reviewable, a reformatted table is not.
+- **The index and the files beside it must agree.** A record on `develop` with no row
+  here means the index is wrong. An index that looks authoritative and is not is worse
+  than no index, so this is not optional bookkeeping.
+- **On merge**, fill in the `Merged` column with the merge commit. Before that, `—`.
+
 ## Template
 
 ```markdown
