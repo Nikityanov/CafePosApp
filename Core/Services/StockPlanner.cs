@@ -55,6 +55,77 @@ internal sealed record StockPlan(
                 QuantityDelta = after - before,
                 StockAfter = after,
                 Reason = $"Заказ #{order.OrderNumber}",
+                Kind = StockMovementKind.WriteOff,
+                OrderId = order.Id,
+                CreatedAt = now
+            });
+        }
+
+        return movements;
+    }
+
+    /// <summary>
+    /// Refuses a journal that no longer answers "how much did THIS order take off the shelf".
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A positive row is a receipt, and in the app it carries no OrderId — <c>RestockAsync</c>
+    /// leaves that null. An order carrying one means something was booked against it, and blind
+    /// negation would hand back stock that never came off the shelf for this order.
+    /// </para>
+    /// <para>
+    /// <b>Unknown counts, deliberately.</b> It is the kind of row written before
+    /// <see cref="StockMovementKind"/> existed, and guessing which one it was is exactly what this
+    /// refuses to do. The refusal still leaves the operator a way out: cancel without returning
+    /// the stock.
+    /// </para>
+    /// </remarks>
+
+    public static void EnsureJournalDescribesTheOrder(IReadOnlyList<StockMovement> journal, long orderNumber)
+    {
+        var receipt = journal.FirstOrDefault(movement =>
+            movement.QuantityDelta > 0 &&
+            movement.Kind is StockMovementKind.Delivery or StockMovementKind.Unknown);
+
+        if (receipt is not null)
+            throw new ConflictException(
+                $"По заказу #{orderNumber} есть поступление на склад ({receipt.Reason}): остатки вернуть нельзя. Отмените заказ без возврата на склад.");
+    }
+
+    /// <summary>Applies a delta decided by <see cref="Common.StockDeltaPlan"/> and journals it.</summary>
+    /// <remarks>Почему так — `docs/decisions/stock.md`</remarks>
+
+    public static IReadOnlyList<StockMovement> WriteOffDeltas(
+        StockDeltaPlan plan,
+        IReadOnlyList<Ingredient> ingredients,
+        Order order,
+        DateTimeOffset now,
+        ILogger logger)
+    {
+        var movements = new List<StockMovement>();
+        foreach (var delta in plan.Deltas)
+        {
+            var ingredient = ingredients.FirstOrDefault(candidate => candidate.Id == delta.IngredientId);
+            if (ingredient is null)
+                // Unreachable through Decide, which only ever positions an ingredient that exists.
+                // Cheaper to stay honest than to trust a caller.
+                throw new ConflictException("Ингредиент не найден — остатки не изменены.");
+
+            var before = ingredient.StockQuantity;
+            var after = Math.Max(0, before + delta.QuantityDelta);
+            ingredient.StockQuantity = after;
+
+            logger.LogInformation(
+                "Order #{OrderNumber} edited: {Ingredient} {Delta}, stock {Before} → {After}",
+                order.OrderNumber, ingredient.Name, delta.QuantityDelta, before, after);
+
+            movements.Add(new StockMovement
+            {
+                IngredientId = ingredient.Id,
+                QuantityDelta = after - before,
+                StockAfter = after,
+                Reason = $"Правка заказа #{order.OrderNumber}",
+                Kind = StockMovementKind.Edit,
                 OrderId = order.Id,
                 CreatedAt = now
             });
@@ -76,14 +147,12 @@ internal sealed record StockPlan(
         /// <summary>Belt and braces before negating anything.</summary>
         /// <remarks>Почему так — `docs/decisions/stock.md`</remarks>
 
-        if (await db.StockMovements.AnyAsync(
-                movement => movement.OrderId == order.Id && movement.QuantityDelta > 0, cancellationToken))
-            throw new ConflictException(
-                $"По заказу #{order.OrderNumber} есть поступление на склад: вернуть остатки на склад нельзя. Отмените заказ без возврата на склад.");
-
         var journal = await db.StockMovements.AsNoTracking()
             .Where(movement => movement.OrderId == order.Id)
             .ToListAsync(cancellationToken);
+
+        EnsureJournalDescribesTheOrder(journal, order.OrderNumber);
+
         if (journal.Count == 0)
         {
             logger.LogInformation("Order #{OrderNumber} has no stock journal; nothing to return", order.OrderNumber);
@@ -131,6 +200,7 @@ internal sealed record StockPlan(
                 QuantityDelta = after - before,
                 StockAfter = after,
                 Reason = $"Возврат по заказу #{order.OrderNumber}",
+                Kind = StockMovementKind.Reversal,
                 OrderId = order.Id,
                 CreatedAt = now
             });

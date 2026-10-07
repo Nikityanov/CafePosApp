@@ -30,7 +30,8 @@ public sealed class SchemaMigrator(
         new Migration010_CombosAndOrderFields(),
         new Migration011_DraftComboComponents(),
         new Migration012_ComboOwnPrice(),
-        new Migration013_OrderSeenAt()
+        new Migration013_OrderSeenAt(),
+        new Migration014_StockMovementKind()
     ];
 
     public int LatestVersion => AllMigrations.Max(migration => migration.Version);

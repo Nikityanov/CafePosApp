@@ -17,6 +17,10 @@ public class StockMovement
     /// <summary>Human readable reason, e.g. "Заказ #12" or "Поставка".</summary>
     public string Reason { get; set; } = string.Empty;
 
+    /// <summary>What this row is, so nothing has to decide it by reading <see cref="Reason"/>.</summary>
+
+    public StockMovementKind Kind { get; set; } = StockMovementKind.Unknown;
+
     public Guid? OrderId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }

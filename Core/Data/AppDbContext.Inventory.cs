@@ -32,6 +32,9 @@ public partial class AppDbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Reason).IsRequired().HasMaxLength(200);
+            // INTEGER, not TEXT: the journal reader decides whether a row is a receipt by this
+            // column, and a string comparison is what breaks silently.
+            entity.Property(e => e.Kind).HasConversion<int>();
             entity.HasIndex(e => new { e.IngredientId, e.CreatedAt });
             entity.HasOne(e => e.Ingredient)
                 .WithMany()

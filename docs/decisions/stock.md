@@ -60,12 +60,11 @@ public static async Task<StockReversal> ReverseAsync(
 Undoes `WriteOff` by reading the StockMovement journal of the order and applying
 the inverse delta. The mirror of the write-off, and deliberately NOT a recompute.
 WHY a recompute would be a bug, not a simplification: a write-off is a recorded event, and only
-an event can be reversed. (1) UpdateOrderAsync lets the operator change the lines of an
-InProgress order and never touches stock, so order.Items no longer matches what was
-deducted — a recompute returns MORE than was ever written off (invented stock) or LESS if a
-line was removed, and in the second case the operator is told the shelf got its money back
-when it did not. (2) SaveRecipeItemAsync edits recipe quantities with no versioning, so the
-recipe at cancel time is not the recipe at checkout.
+an event can be reversed. (1) An order's journal is the sum of its checkout and of every edit made
+since, so it — and not `order.Items` — is what the shelf was actually asked for; a recompute of
+the stored lines would return what the recipe says today rather than what left the shelf.
+(2) SaveRecipeItemAsync edits recipe quantities with no versioning, so the recipe at cancel time
+is not the recipe at checkout.
 Static and on the type rather than an instance method on a plan: it must NOT be given the
 plan's Required/Ingredients, because reading those is exactly the recompute that is wrong
 here. Nothing is saved — the caller's SaveChanges/Commit is the only commit point.
@@ -76,12 +75,31 @@ here. Nothing is saved — the caller's SaveChanges/Commit is the only commit po
 if (await db.StockMovements.AnyAsync(
 ```
 
-Belt and braces before negating anything. Nothing in the app writes a positive movement
-with an OrderId today (a delivery has no order, RestockAsync leaves OrderId null), and a
-write-off can only be clamped to zero, never flipped positive — but a future per-order
-manual adjustment would also carry OrderId, and blind negation would silently undo that
-too. Refusing the whole reversal keeps the shelf consistent: the caller's transaction
-rolls back, and the operator can still cancel with LeaveWrittenOff.
+SUPERSEDED BY `EnsureJournalDescribesTheOrder`, and the old guard became wrong the moment an edit
+started moving stock. It refused to reverse when the order had ANY positive movement carrying an
+OrderId, and its own justification was that nothing in the app wrote one. An edit does write one —
+a removed dish puts its ingredients back — so the rule as it stood would have made "cancel with
+stock returned" impossible on every edited order. What the guard now refuses is a positive row that
+is not an edit: a receipt, or a row from before kinds existed.
+
+The narrower rule is not a weakening. Negation is of the NET, and an edit row belongs to that net
+by construction, so allowing it is what makes the returned amount right rather than larger.
+
+## StockMovementKind
+
+```csharp
+public enum StockMovementKind { Unknown, WriteOff, Delivery, Edit, Reversal }
+```
+
+Migration 14 adds `StockMovements.Kind INTEGER NOT NULL DEFAULT 0`. Why a column and not a prefix
+on `Reason`: the reason strings are the operator's text, the guard has to be exact, and §5 already
+records what happens when a decision rests on a stored string — SQLite keeps it as TEXT,
+comparisons behave alphabetically, and nothing says so. `Unknown = 0` is what a pre-migration row
+gets, and it is honest: such a row is refused rather than guessed at.
+
+`Delivery` carries no `OrderId` (`RestockAsync` leaves it null), which lets the rule be stated
+without a special case: a POSITIVE row in an order's journal is a receipt. Sign beats kind — a
+negative row is consumption whatever it was called.
 
 ## Add
 

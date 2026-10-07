@@ -59,16 +59,37 @@ operator. See `docs/PLAN-stock-and-undo.md` §4 for the order and why this one g
 
 ## How it was verified
 
-Filled in as the work lands. Required before merge:
+- **Red first, and eight of eleven were genuinely red.** On the unmodified code
+  `dotnet test Tests/CafePos.Tests.csproj --filter "FullyQualifiedName~OrderEditStockTests"`
+  reported `Failed: 8, Passed: 3, Total: 11`, with the failures on quantity down, quantity up,
+  removing a line, adding a line, a bundle line, the shortage refusal, the delivery-in-journal
+  refusal and the recipe-drift refusal.
+- **The ninth assertion was already green, and that is worth saying plainly.**
+  `Cancelling_an_edited_order_returns_only_what_the_edited_order_took` passes today — because
+  the edit moves nothing, so reversing the original write-off happens to be consistent. It is
+  not evidence of the defect; it is the guard against a fix that writes a second full write-off
+  instead of a delta, which would leave the shelf 200 ml too high and would have gone green.
+- **Full suite: `Passed: 514, Failed: 0`** (490 before this change; +11 integration, +13 pure).
+  `dotnet test Tests/CafePos.Tests.csproj -c Debug`.
+- **Four expectation edits, all mechanical and none a weakening**, each forced by a new schema
+  version: `SchemaMigrationTests` 13 → 14 in the latest-version and applied-count assertions, its
+  backfill list extended with `Migration014_StockMovementKind().Name`, and `BackupTests` 13 → 14.
+  No assertion was relaxed and none was deleted.
+- **Release build: 0 errors**, `dotnet build CafePosApp.csproj -f net10.0-windows10.0.19041.0
+  -c Release`. 8 XC0022 warnings, all `Picker.ItemDisplayBinding` — the pre-existing set, listed in
+  §8. This branch touches no XAML.
+- **Migration on a legacy database:** `Legacy_v1_database_is_upgraded_to_the_latest_version`
+  covers v1 → 14, and `AddColumnIfMissingAsync` is a no-op when the table is absent.
+- **Figures, not adjectives.** Latte at 200 ml/cup, shelf at 100 000 ml:
+  checkout ×2 → 99 600; edit to ×1 → **99 800**; cancel with return → **100 000**, and the order's
+  journal nets to exactly **0**. Before the fix the same sequence left the shelf at 99 600 after
+  the edit and, had the operator edited again, diverged on every further cancellation.
 
-- a red test first: `UpdateOrderAsync` currently writes no journal row, so the assertion that it
-  does has to fail before the fix and pass after it;
-- `dotnet test Tests/CafePos.Tests.csproj` green with **no expectation edits** — the existing
-  guard test
-  (`Cancelling_refuses_to_return_stock_when_the_order_has_a_receipt_in_the_journal`) keeps
-  passing, which is what proves the narrowing did not turn into a removal;
-- a migration test from an older database to the new version;
-- the cancellation-after-edit numbers stated as figures, not as "stock looks right".
+## Not verified
+
+- **No device pass.** The edit screen's own behaviour is unchanged — no new control, no new
+  message path in the UI — but the two new refusals carry operator-facing text that has not been
+  read on a screen. That is §3.3 item 4, and it is the owner's.
 
 ## What was rejected, and why
 
@@ -88,6 +109,14 @@ Filled in as the work lands. Required before merge:
 
 ## Rules this changed
 
-To be filled in at merge (`.opencode-rules.md` §17.2). One candidate is already visible: §5's
-domain invariants say a stock write-off happens at checkout and is inverted at cancellation, and
-this change makes "edited order" a third state that the other two rules have to account for.
+- **`.opencode-rules.md` §5** — new bullets on editing an order: the correction's old side is the
+  journal, a changed recipe refuses the edit, and a shortage refuses the whole edit. §5 said a
+  write-off happens at checkout and is inverted at cancellation; this adds the third state the
+  other two rules had to account for.
+- **`docs/decisions/stock.md`** — `ReverseAsync`'s reason (1) rewritten, because it said an edit
+  "never touches stock", which is what this change stopped being true of. Added the
+  `StockMovementKind` section and marked the old `if` guard superseded, with why the narrower rule
+  is a correction and not a weakening.
+- **`.opencode-rules.md` §8** — the Release warning count said 6 and is 8. Measured on this branch,
+  which touches no XAML, so the figure was stale rather than changed. The reasoning around
+  XC0045 and XC0022 is untouched; §8's own warning about a stale rule is what §17.2 asks for.

@@ -32,8 +32,8 @@ public class SchemaMigrationTests
         Assert.True(result.FreshDatabase);
         Assert.Equal(migrator.LatestVersion, result.FinalVersion);
         // Pinned on purpose: when the next migration lands this line is the reminder that the
-        // expectations above it are no longer enough. 13 = Orders.SeenAt.
-        Assert.Equal(13, result.FinalVersion);
+        // expectations above it are no longer enough. 14 = StockMovements.Kind.
+        Assert.Equal(14, result.FinalVersion);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class SchemaMigrationTests
 
         Assert.False(result.FreshDatabase);
         Assert.Equal(migrator.LatestVersion, result.FinalVersion);
-        Assert.Equal(12, result.AppliedMigrations.Count); // 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
+        Assert.Equal(13, result.AppliedMigrations.Count); // 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
 
         // Money became integer kopecks; totals were recalculated from the order items.
         await using var connection = new SqliteConnection($"Data Source={host.DatabasePath}");
@@ -194,7 +194,7 @@ public class SchemaMigrationTests
         // проверяет 012, а не «схема целиком». Список назван явно, а не по числу, иначе следующая
         // миграция сделала бы тест зелёным на пустой базе.
         Assert.Equal(
-            [new Migration012_ComboOwnPrice().Name, new Migration013_OrderSeenAt().Name],
+            [new Migration012_ComboOwnPrice().Name, new Migration013_OrderSeenAt().Name, new Migration014_StockMovementKind().Name],
             result.AppliedMigrations);
         await using var connection = new SqliteConnection($"Data Source={host.DatabasePath}");
         await connection.OpenAsync();

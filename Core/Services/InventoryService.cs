@@ -57,6 +57,7 @@ public sealed class InventoryService(
             QuantityDelta = quantity,
             StockAfter = ingredient.StockQuantity,
             Reason = string.IsNullOrWhiteSpace(comment) ? "Поставка" : comment.Trim(),
+            Kind = StockMovementKind.Delivery,
             CreatedAt = now
         });
 

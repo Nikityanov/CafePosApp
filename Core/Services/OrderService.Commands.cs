@@ -223,6 +223,10 @@ public sealed partial class OrderService
         if (items.Count == 0) throw new ValidationFailureException("Нельзя сохранить пустой заказ.");
 
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        // Same shape as checkout and cancellation: the lines and the stock correction are one fact
+        // about the till, so a shortage or a refusal has to leave the order exactly as it was.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
         var order = await db.Orders
             .Include(current => current.Items)
                 .ThenInclude(item => item.Components)
@@ -230,6 +234,8 @@ public sealed partial class OrderService
             ?? throw new EntityNotFoundException("Заказ не найден.");
         if (order.Status != OrderStatus.InProgress)
             throw new ConflictException("Изменять можно только заказ, который еще готовится.");
+
+        await ApplyStockForEditAsync(db, order, items, cancellationToken);
 
         /// <summary>The reconciled line set, kept separately from order.Items: a new line is tracked through the DbSet (an entity pushed into the Items collection of a tr…</summary>
         /// <remarks>Почему так — `docs/decisions/orders.md`</remarks>
@@ -300,8 +306,104 @@ public sealed partial class OrderService
 
         order.RecalculateTotal(resulting);
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
         logger.LogInformation("Order {OrderNumber} updated: {Items} lines, total {Total}", order.OrderNumber, resulting.Count, order.TotalPrice);
     }
+
+    /// <summary>
+    /// The stock half of an edit: what the order took before, what it should hold now, and the
+    /// difference between the two, which is the only movement an edit may write.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The decision itself is <see cref="StockDeltaPlan"/> — a pure type, unit-testable without a
+    /// database. This is the part that reads: the journal, both recipe passes and the shelf.
+    /// </para>
+    /// <para>
+    /// <b>WHY THE JOURNAL, AND NOT THE STORED LINES.</b> The lines say what the order now is; the
+    /// journal says what actually left the shelf. Once an edit moves stock, the two are different
+    /// facts and only the second one can be subtracted — and the cancellation reads the same
+    /// journal, so an edit that ignored it would make a later cancellation return the wrong amount.
+    /// </para>
+    /// </remarks>
+
+    private async Task ApplyStockForEditAsync(
+        AppDbContext db,
+        Order order,
+        IReadOnlyCollection<OrderItem> incoming,
+        CancellationToken cancellationToken)
+    {
+        var journal = await db.StockMovements.AsNoTracking()
+            .Where(movement => movement.OrderId == order.Id)
+            .ToListAsync(cancellationToken);
+
+        // Before anything is computed: a receipt booked against the order makes "what this order
+        // took" unanswerable, and a number nobody can justify is worse than a refusal.
+        StockPlan.EnsureJournalDescribesTheOrder(journal, order.OrderNumber);
+
+        var before = await StockPlanner.BuildAsync(db, ComboExpander.Expand(order.Items.Select(ToCheckoutLine)), cancellationToken);
+        var after = await StockPlanner.BuildAsync(db, ComboExpander.Expand(incoming.Select(ToCheckoutLine)), cancellationToken);
+
+        var consumed = journal
+            .GroupBy(movement => movement.IngredientId)
+            .ToDictionary(group => group.Key, group => -group.Sum(movement => movement.QuantityDelta));
+
+        var touched = before.Required.Keys
+            .Concat(after.Required.Keys)
+            .Concat(consumed.Keys)
+            .Distinct()
+            .ToList();
+
+        var ingredients = await db.Ingredients
+            .Where(ingredient => touched.Contains(ingredient.Id))
+            .ToListAsync(cancellationToken);
+
+        // An ingredient in the journal whose row is gone cannot receive anything back, and skipping
+        // it quietly would leave the shelf wrong with nothing on screen to say so.
+        var gone = touched.Where(id => ingredients.All(ingredient => ingredient.Id != id)).ToList();
+        if (gone.Count > 0)
+            throw new ConflictException(
+                $"Ингредиент по заказу #{order.OrderNumber} удалён из каталога, остатки не изменены: {string.Join(", ", gone)}");
+
+        var positions = ingredients
+            .Select(ingredient => new StockPosition(
+                ingredient.Id,
+                ingredient.Name,
+                ingredient.Unit,
+                ingredient.StockQuantity,
+                consumed.GetValueOrDefault(ingredient.Id),
+                before.Required.GetValueOrDefault(ingredient.Id),
+                after.Required.GetValueOrDefault(ingredient.Id)))
+            .ToList();
+
+        var plan = StockDeltaPlan.Decide(positions);
+
+        if (plan.RecipeDrift.Count > 0)
+            throw new ConflictException(
+                "Рецепт изменился после оформления заказа, списание не пересчитать: "
+                + string.Join("; ", plan.RecipeDrift.Select(drift => drift.Describe())));
+
+        if (plan.Shortages.Count > 0)
+            throw new InsufficientStockException(plan.DescribeShortages());
+
+        if (plan.IsEmpty) return;
+
+        var now = timeProvider.GetUtcNow();
+        db.StockMovements.AddRange(StockPlan.WriteOffDeltas(plan, ingredients, order, now, logger));
+    }
+
+    /// <summary>A stored order line in the shape the stock planner reads.</summary>
+
+    private static CheckoutLine ToCheckoutLine(OrderItem item) =>
+        new(
+            item.ProductId,
+            item.ProductName,
+            item.Price,
+            item.Quantity,
+            item.SelectedModifierName,
+            item.SelectedVariantName,
+            ToCheckoutComponents(item));
 
     /// <summary>The bundle's own price from the catalogue, or `null` when the line is not a live bundle.</summary>
     /// <remarks>Почему так — `docs/decisions/orders.md`</remarks>
