@@ -5,29 +5,13 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace CafePos.Presentation.ViewModels;
 
-/// <summary>
-/// The product breakdown's filter, sorting and grouping — the half of the analytics screen that
-/// lives behind the «Фильтры и сортировка» panel.
-/// </summary>
-/// <remarks>
-/// Split out of <see cref="ShiftAnalyticsViewModel"/> because it is one concern with one rule
-/// running through it: <b>nothing here filters an already-filtered list</b>. Every change to the
-/// section selection, the search term, the sort or the grouping re-runs
-/// <see cref="ProductAnalyticsProjection.Build"/> over <see cref="unfilteredRows"/> — the raw
-/// breakdown as the query returned it. Filtering in place would mean a chip could not be unchecked,
-/// and the second search term would be applied to the first one's results.
-/// <para>
-/// The projection itself is in Core and has no MAUI in it; this file is the adapter that turns its
-/// records into notifying rows the markup can bind.
-/// </para>
-/// </remarks>
+/// <summary>The product breakdown's filter, sorting and grouping — the half of the analytics screen that lives behind the «Фильтры и сортировка» panel.</summary>
+/// <remarks>Почему так — `docs/decisions/analytics.md`</remarks>
+
 public partial class ShiftAnalyticsViewModel
 {
-    /// <summary>
-    /// The breakdown exactly as the query returned it. Held rather than re-queried on every filter
-    /// change: it is one shift's distinct products, it is bounded, and re-asking SQLite for a chip
-    /// tap would put a disk round trip between the finger and the list moving.
-    /// </summary>
+    /// <summary>The breakdown exactly as the query returned it. Held rather than re-queried on every filter change: it is one shift's distinct products, it is bounded, and re-asking SQLite for a chip tap would put a disk round trip between the finger and the list moving.</summary>
+
     private IReadOnlyList<ProductAnalyticsRowData> unfilteredRows = [];
 
     /// <summary>Which sections are selected. EMPTY means "no section filter" — see the type.</summary>
@@ -40,31 +24,17 @@ public partial class ShiftAnalyticsViewModel
     /// <summary>The shift's whole revenue, the denominator every share on this screen is taken against.</summary>
     private decimal shiftRevenue;
 
-    /// <summary>
-    /// The dish names the reader has FOLDED, carried across a rebuild.
-    /// </summary>
-    /// <remarks>
-    /// FOLDED, not opened. The default is OPEN, so the set must record the exceptions — collecting
-    /// the opened dishes would start from an empty set and fold everything on the first render, which
-    /// is precisely what this did before the name was corrected.
-    /// <para>
-    /// A FIELD rather than a read of the collections at rebuild time, because
-    /// <see cref="ObservableCollectionSync.SyncWith{T, TKey}"/> replaces an item whose key it already
-    /// holds and the replacement carries no fold state of its own.
-    /// </para>
-    /// </remarks>
+    /// <summary>The dish names the reader has FOLDED, carried across a rebuild.</summary>
+    /// <remarks>Почему так — `docs/decisions/analytics.md`</remarks>
+
     private readonly HashSet<string> foldedDishes = new(StringComparer.CurrentCultureIgnoreCase);
 
-    /// <summary>
-    /// Stands in for «Без раздела» as a dictionary key. A null key is not merely a lookup miss —
-    /// <see cref="Dictionary{TKey, TValue}"/> throws — so the unfiled section needs a real id.
-    /// </summary>
+    /// <summary>Stands in for «Без раздела» as a dictionary key. A null key is not merely a lookup miss — throws — so the unfiled section needs a real id.</summary>
+
     private static readonly Guid UnfiledSectionKey = Guid.Empty;
 
-    /// <summary>
-    /// Populates the three control strips. Called from the constructor because a control strip that
-    /// only appears after the first load is a strip that flashes empty on every open.
-    /// </summary>
+    /// <summary>Populates the three control strips. Called from the constructor because a control strip that only appears after the first load is a strip that flashes empty on every open.</summary>
+
     private void SeedControls()
     {
         SortOptions.Add(new ProductAnalyticsSortOption(ProductAnalyticsSortCriterion.Quantity, "по количеству"));
@@ -81,15 +51,9 @@ public partial class ShiftAnalyticsViewModel
 
     // ── The panel trigger ─────────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// What the collapsed panel says it is doing, in words: which sections, whether a search is
-    /// active, and how the list is ordered.
-    /// </summary>
-    /// <remarks>
-    /// Stated rather than implied because the panel is CLOSED by default. A trigger that only reads
-    /// «Фильтры и сортировка» leaves the reader unable to tell an unfiltered list from a filtered
-    /// one, and on this screen those two can look identical — the cards above never change.
-    /// </remarks>
+    /// <summary>What the collapsed panel says it is doing, in words: which sections, whether a search is active, and how the list is ordered.</summary>
+    /// <remarks>Почему так — `docs/decisions/analytics.md`</remarks>
+
     public string FilterPanelSummary
     {
         get
@@ -139,21 +103,15 @@ public partial class ShiftAnalyticsViewModel
         ? "по возрастанию"
         : "по убыванию";
 
-    // ── Grouping visibility ────────────────────────────────────────────────────────────────────
-    // Exactly one of the three list shapes is bound at a time. Three flags rather than one enum
-    // binding, because XAML has no way to compare a bound enum to a literal without a converter
-    // and a converter would be a second place to keep the names in step.
+    /// <summary>── Grouping visibility ──────────────────────────────────────────────────────────────────── Exactly one of the three list shapes is bound at a time. Three flags rather than one enum binding, because XAML has no way to compare a bound enum to a literal without a converter and a converter would be a second place to keep the names in step.</summary>
+
 
     public bool IsSectionGrouping => grouping == ProductAnalyticsGrouping.SectionsAndDishes;
     public bool IsDishGrouping => grouping == ProductAnalyticsGrouping.Dishes;
     public bool IsFlatGrouping => grouping == ProductAnalyticsGrouping.None;
 
-    /// <summary>
-    /// The section's own heading, which is no longer the constant «Продажи по блюдам и модификаторам»
-    /// that was always wrong the moment a header went above a modifier row. Under
-    /// <see cref="ProductAnalyticsGrouping.None"/> there are no headers at all, and the wording
-    /// says so rather than promising rows that are not there.
-    /// </summary>
+    /// <summary>The section's own heading, which is no longer the constant «Продажи по блюдам и модификаторам» that was always wrong the moment a header went above a modifier row. Under there are no headers at all, and the wording says so rather than promising rows that are not there.</summary>
+
     public string ProductSectionTitle => grouping switch
     {
         ProductAnalyticsGrouping.SectionsAndDishes => "Продажи по разделам и блюдам",
@@ -214,19 +172,9 @@ public partial class ShiftAnalyticsViewModel
 
     // ── Loading ───────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Takes a fresh breakdown from the query and rebuilds the list, the chips and the summary.
-    /// Named for what it is not: it does not re-run the statistics, so «Обновить аналитику» and a
-    /// filter change take visibly different amounts of work.
-    /// </summary>
-    /// <summary>
-    /// Takes a fresh breakdown from the query and rebuilds the list, the chips and the summary.
-    /// </summary>
-    /// <remarks>
-    /// Synchronous on purpose: it does no I/O, it only re-projects rows already in hand, and there is
-    /// nothing to await. A filter tap calls it directly rather than going through a command, so the
-    /// list re-projects within the same frame as the touch.
-    /// </remarks>
+    /// <summary>Takes a fresh breakdown from the query and rebuilds the list, the chips and the summary. Named for what it is not: it does not re-run the statistics, so «Обновить аналитику» and a filter change take visibly different amounts of work. Takes a fresh breakdown from the query and rebuilds the list, the chips and the summary.</summary>
+    /// <remarks>Почему так — `docs/decisions/analytics.md`</remarks>
+
     private void ApplyAnalytics(IReadOnlyList<ProductAnalyticsRowData> rows)
     {
         unfilteredRows = rows;
@@ -237,33 +185,13 @@ public partial class ShiftAnalyticsViewModel
         RebuildProductRows();
     }
 
-    /// <summary>
-    /// Rebuilds the section chips from the UNFILTERED rows.
-    /// </summary>
-    /// <remarks>
-    /// Off the unfiltered rows on purpose. A chip strip built from what survives the filter would
-    /// make every other section vanish the moment one is picked — so the user could narrow once and
-    /// have no way back. The counts on the chips are the shift's totals for that section, not what
-    /// is currently shown, because they answer "how much is in there" rather than "how much am I
-    /// looking at".
-    /// <para>
-    /// «Без раздела» is a chip like any other, not an absence: a dish in no section is real revenue
-    /// and the manager has to be able to isolate it as easily as any named section.
-    /// </para>
-    /// </remarks>
+    /// <summary>Rebuilds the section chips from the UNFILTERED rows.</summary>
+    /// <remarks>Почему так — `docs/decisions/analytics.md`</remarks>
+
     private void RebuildSectionChips()
     {
-        // The section each line belongs to, straight off the query. Keyed by the category id so a
-        // RENAME keeps the chip selected instead of silently dropping the selection, and so two
-        // sections that differ only in case stay apart.
-        //
-        // THE KEY IS A SENTINEL, NOT NULL, and that was the bug that emptied the list.
-        // «Без раздела» arrives as a null CategoryId, and Dictionary<TKey,…> refuses a null key
-        // outright — TryGetValue(null) throws ArgumentNullException rather than reporting "not
-        // found", so the very first unfiled line took the whole breakdown down with it and the
-        // screen said «За выбранную смену нет закрытых заказов» about a shift that had sold 30
-        // items. Guid.Empty stands in for the unfiled section and is mapped back to null on the way
-        // out; it cannot collide, because no row is ever created with an empty id.
+        /// <summary>The section each line belongs to, straight off the query. Keyed by the category id so a RENAME keeps the chip selected instead of silently dropping the selection, and so two sections that differ only in case stay apart. THE KEY IS A SENTINEL, NOT NULL, and that was the bug that emptied the list. «Без раздела» arrives as a null CategoryId, and Dictionary refuses a null key outright — TryGetValue(null) throws ArgumentNullException rather than reporting "not found", so the very first unfiled line took the whole breakdown down with it and the screen said «За выбранную смену нет закрытых заказов» about a shift that had sold 30 items. Guid.Empty stands in for the unfiled section and is mapped back to null on the way out; it cannot collide, because no row is ever created with an empty id.</summary>
+
         var bySection = new Dictionary<Guid, (string Name, int Quantity, decimal Revenue)>();
         foreach (var row in unfilteredRows)
         {
@@ -277,10 +205,8 @@ public partial class ShiftAnalyticsViewModel
             bySection[key] = (current.Name, current.Quantity + row.Quantity, current.Revenue + row.Revenue);
         }
 
-        // DROPPED FIRST, and the order matters. A section this shift does not sell must not stay
-        // selected: the filter is ANDed with the selection, so a stale id would hide every row while
-        // the chip for it claimed a section that is not on screen. Pruning before the selection is
-        // read below means a chip can never come back pre-selected for a section that is absent.
+        /// <summary>DROPPED FIRST, and the order matters. A section this shift does not sell must not stay selected: the filter is ANDed with the selection, so a stale id would hide every row while the chip for it claimed a section that is not on screen. Pruning before the selection is read below means a chip can never come back pre-selected for a section that is absent.</summary>
+
         var available = bySection.Keys.ToHashSet();
         selectedSections.RemoveWhere(id => !available.Contains(id ?? UnfiledSectionKey));
 
@@ -298,12 +224,8 @@ public partial class ShiftAnalyticsViewModel
             })
             .ToList();
 
-        // Keyed on the (id, name) PAIR, not on the id. SectionId is a Guid? because null is a real chip
-        // («Без раздела») rather than "unknown", and SyncWith's TKey is constrained to notnull
-        // (CS8714). The usual shortcut — `SectionId ?? Guid.Empty` — would work and would be wrong in
-        // a way nobody could see: it silently merges «Без раздела» into a section that happens to
-        // have the empty GUID, and the two chips would then swap contents instead of coexisting.
-        // A ValueTuple is a struct, so it satisfies notnull, and null ids compare by the name.
+        /// <summary>Keyed on the (id, name) PAIR, not on the id. SectionId is a Guid? because null is a real chip («Без раздела») rather than "unknown", and SyncWith's TKey is constrained to notnull (CS8714). The usual shortcut — `SectionId ?? Guid.Empty` — would work and would be wrong in a way nobody could see: it silently merges «Без раздела» into a section that happens to have the empty GUID, and the two chips would then swap contents instead of coexisting. A ValueTuple is a struct, so it satisfies notnull, and null ids compare by the name.</summary>
+
         SectionChips.SyncWith(chips, chip => (chip.SectionId, chip.Name));
         foreach (var chip in SectionChips) chip.SetShare(ShiftRevenueShare(chip.Revenue));
 
@@ -311,16 +233,9 @@ public partial class ShiftAnalyticsViewModel
         OnPropertyChanged(nameof(FilterPanelHint));
     }
 
-    /// <summary>
-    /// Runs the projection and syncs the three list shapes.
-    /// </summary>
-    /// <remarks>
-    /// Expanded state is carried ACROSS rebuilds by dish name, which is why
-    /// <see cref="ProductAnalyticsDishRow"/> keeps its <see cref="ProductAnalyticsDishRow.IsExpanded"/>
-    /// when the projection hands back a new instance of the same dish: a filter change or a sort
-    /// flip must not fold a dish the reader had opened. It is dropped on a shift change instead,
-    /// where the whole set of dishes is different — see <see cref="CollapseAllDishes"/>.
-    /// </remarks>
+    /// <summary>Runs the projection and syncs the three list shapes.</summary>
+    /// <remarks>Почему так — `docs/decisions/analytics.md`</remarks>
+
     private void RebuildProductRows()
     {
         var filter = new ProductAnalyticsFilter(selectedSections.ToHashSet(), SearchText);
@@ -379,12 +294,8 @@ public partial class ShiftAnalyticsViewModel
         return row;
     }
 
-    /// <summary>
-    /// Forgets every fold and opens every dish, called when the selected shift changes: the next
-    /// shift sells different dishes, and a manager who folded «Капучино» away to read the rest of
-    /// the day does not expect the fold to follow them to yesterday and hide a dish they have never
-    /// seen folded.
-    /// </summary>
+    /// <summary>Forgets every fold and opens every dish, called when the selected shift changes: the next shift sells different dishes, and a manager who folded «Капучино» away to read the rest of the day does not expect the fold to follow them to yesterday and hide a dish they have never seen folded.</summary>
+
     private void OpenAllDishes()
     {
         foldedDishes.Clear();
@@ -404,21 +315,9 @@ public partial class ShiftAnalyticsViewModel
 
     // ── Commands ───────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Folds or unfolds one dish, and remembers which way it went.
-    /// </summary>
-    /// <remarks>
-    /// The set is updated HERE, at the tap, and not read back off the rows during a rebuild. A fold
-    /// has to survive the next filter change or sort flip, and a rebuild cannot tell a dish the
-    /// reader never touched from one they had opened.
-    /// </remarks>
-    // Every handler below takes its row as NULLABLE and returns on null. IRelayCommand<T> declares
-    // Execute(object? parameter), so null is part of the contract whether or not the page supplies a
-    // CommandParameter: one of these rows losing its binding, or a tap landing before the template is
-    // realised, hands the command a null and the handler used to dereference it straight away. The
-    // compiler said so four times (CS8622) and the argument for leaving it was that the current XAML
-    // always passes a parameter — which is a property of a file, not of a type. `is not { } row`
-    // reads "and does nothing without a row", which is what a filter chip should do.
+    /// <summary>Folds or unfolds one dish, and remembers which way it went. Every handler below takes its row as NULLABLE and returns on null. IRelayCommand declares Execute(object? parameter), so null is part of the contract whether or not the page supplies a CommandParameter: one of these rows losing its binding, or a tap landing before the template is realised, hands the command a null and the handler used to dereference it straight away. The compiler said so four times (CS8622) and the argument for leaving it was that the current XAML always passes a parameter — which is a property of a file, not of a type. `is not { } row` reads "and does nothing without a row", which is what a filter chip should do.</summary>
+    /// <remarks>Почему так — `docs/decisions/analytics.md`</remarks>
+
     private void ToggleDish(ProductAnalyticsDishRow? dish)
     {
         if (dish is not { } row) return;
@@ -505,24 +404,14 @@ public partial class ShiftAnalyticsViewModel
         SectionChips.FirstOrDefault(chip => chip.SectionId == sectionId)?.Name
         ?? ProductAnalyticsProjection.SectionWithoutName;
 
-    /// <summary>
-    /// A flat line's identity: the dish AND its modifier.
-    /// </summary>
-    /// <remarks>
-    /// Both halves, because a dish sold plain and with a modifier is two rows with the same dish name
-    /// — keying on the dish alone would collapse them into one, silently dropping a sale from the
-    /// list. This is the same pair the query groups by.
-    /// </remarks>
+    /// <summary>A flat line's identity: the dish AND its modifier.</summary>
+    /// <remarks>Почему так — `docs/decisions/analytics.md`</remarks>
+
     private static string RowKey(ProductAnalyticsLineRow row) => $"{row.ProductName}|{row.ModifierName}";
 
-    /// <summary>
-    /// A value's share of the shift's revenue as a 0..1 fraction.
-    /// </summary>
-    /// <remarks>
-    /// The denominator is the WHOLE shift, never the visible subset. A share that moves when the
-    /// filter moves is not a share of anything the manager can hold in their head, and a chip that
-    /// said «34% выручки» on one tap and «91%» on the next would be worse than saying nothing.
-    /// </remarks>
+    /// <summary>A value's share of the shift's revenue as a 0..1 fraction.</summary>
+    /// <remarks>Почему так — `docs/decisions/analytics.md`</remarks>
+
     private double ShiftRevenueShare(decimal value) =>
         shiftRevenue <= 0 ? 0 : (double)(value / shiftRevenue);
 
@@ -532,11 +421,8 @@ public partial class ShiftAnalyticsViewModel
         return share <= 0 ? string.Empty : $"{Math.Round(share * 100)}% выручки смены";
     }
 
-    /// <summary>Russian plural selection: one / few / many. Kept out of markup.</summary>
-    /// <summary>
-    /// Russian plural selection: one / few / many — the app's single implementation, in Core.
-    /// Never written inline in markup (§5).
-    /// </summary>
+    /// <summary>Russian plural selection: one / few / many — the app's single implementation, in Core. Never written inline in markup (§5).</summary>
+
     private static string Plural(int count, string one, string few, string many) =>
         TextFormat.Plural(count, one, few, many);
 }

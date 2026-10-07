@@ -17,10 +17,8 @@ public partial class ShiftReportViewModel
         IsBusy = true;
         try
         {
-            // NO SHIFT IS A NORMAL STATE NOW, not something to paper over by creating one. This screen is what
-            // the operator comes to when there is nothing open, and it offers to open a shift rather
-            // than quietly opening one with no float — which is the state the whole cash ledger
-            // feature exists to stop.
+            /// <summary>NO SHIFT IS A NORMAL STATE NOW, not something to paper over by creating one. This screen is what the operator comes to when there is nothing open, and it offers to open a shift rather than quietly opening one with no float — which is the state the whole cash ledger feature exists to stop.</summary>
+
             var shift = await orders.GetActiveShiftAsync();
             await shiftSession.RefreshAsync();
             HasOpenShift = shift is not null;
@@ -63,17 +61,12 @@ public partial class ShiftReportViewModel
             PaymentsCard = stats.PaymentsCard;
             RefundsCash = stats.RefundsCash;
             RefundsCard = stats.RefundsCard;
-            // The change put in and the cash carried out, so the drawer line below is a SUM the
-            // operator can check on the screen instead of a number they have to trust. Both are net
-            // of correcting entries, which is why an uncorrected mistake and a corrected one show the
-            // same figure here and differ only in the list underneath.
+            /// <summary>The change put in and the cash carried out, so the drawer line below is a SUM the operator can check on the screen instead of a number they have to trust. Both are net of correcting entries, which is why an uncorrected mistake and a corrected one show the same figure here and differ only in the list underneath.</summary>
+
             FloatCash = stats.FloatCash;
             PayoutCash = stats.PayoutCash;
-            // The net, copied from the one place it is computed. It used to be
-            // PaymentsCash - RefundsCash written here, plus a hand-written
-            // OnPropertyChanged(nameof(CashInDrawer)) to re-notify a derived property; both are gone,
-            // because a drawer figure that the presentation layer recomputes is a second definition
-            // of it, and the shift close now compares a stored count against this number.
+            /// <summary>The net, copied from the one place it is computed. It used to be PaymentsCash - RefundsCash written here, plus a hand-written OnPropertyChanged(nameof(CashInDrawer)) to re-notify a derived property; both are gone, because a drawer figure that the presentation layer recomputes is a second definition of it, and the shift close now compares a stored count against this number.</summary>
+
             CashInDrawer = stats.ExpectedCashNow;
 
             // Every figure above is assigned in this one pass, so the seven formatted amounts the
@@ -83,30 +76,17 @@ public partial class ShiftReportViewModel
 
             SyncMovements(await cashLedger.GetMovementsAsync(shift.Id));
 
-            // GetShiftOrderHistoryAsync (Completed AND Cancelled), not GetCompletedOrdersAsync.
-            // Cancelling a paid order flips it to Cancelled, so under the old query the one sale a
-            // manager most needs to see after a bad void vanished from the only list they read.
-            //
-            // ONE `now`, taken here and handed to every row. OrderRowViewModel judges each order
-            // against the instant it was given rather than reading a clock of its own, so that two
-            // orders promised for the same minute cannot land in different sections because their
-            // rows were built microseconds apart. The loader is the only place that knows what
-            // "now" means for a whole list, which is why it is passed in rather than derived.
+            /// <summary>GetShiftOrderHistoryAsync (Completed AND Cancelled), not GetCompletedOrdersAsync. Cancelling a paid order flips it to Cancelled, so under the old query the one sale a manager most needs to see after a bad void vanished from the only list they read. ONE `now`, taken here and handed to every row. OrderRowViewModel judges each order against the instant it was given rather than reading a clock of its own, so that two orders promised for the same minute cannot land in different sections because their rows were built microseconds apart. The loader is the only place that knows what "now" means for a whole list, which is why it is passed in rather than derived.</summary>
+
             var now = DateTimeOffset.Now;
             var history = await orders.GetShiftOrderHistoryAsync(shift.Id);
             ShiftHistory.SyncWith(history.Select(order => new OrderRowViewModel(order, settings, now)), row => row.Model.Id);
-            // BindableLayout has no EmptyView, so «Закрытых заказов пока нет.» is a label bound to
-            // this flag. The flag is derived from the count and therefore notifies itself when it
-            // has to — but only if something asks it to, and SyncWith raises collection changes
-            // without consulting the ViewModel. This is the one line that keeps a shift with no
-            // closed orders from rendering a bare section heading.
+            /// <summary>BindableLayout has no EmptyView, so «Закрытых заказов пока нет.» is a label bound to this flag. The flag is derived from the count and therefore notifies itself when it has to — but only if something asks it to, and SyncWith raises collection changes without consulting the ViewModel. This is the one line that keeps a shift with no closed orders from rendering a bare section heading.</summary>
+
             OnPropertyChanged(nameof(HasNoShiftHistory));
 
-            // The price control. Read from the domain rather than derived here, and deliberately
-            // NOT folded into any of the figures above: a voided order's line is in this list and
-            // its money is not in the revenue, so a total computed over the two would be a figure
-            // that describes nothing. Read after the history so a failure in the extra query still
-            // leaves the report above it populated.
+            /// <summary>The price control. Read from the domain rather than derived here, and deliberately NOT folded into any of the figures above: a voided order's line is in this list and its money is not in the revenue, so a total computed over the two would be a figure that describes nothing. Read after the history so a failure in the extra query still leaves the report above it populated.</summary>
+
             SyncDiscountedLines(await orders.GetDiscountedLinesAsync(shift.Id));
 
             Message = string.Empty;
@@ -122,38 +102,9 @@ public partial class ShiftReportViewModel
         }
     }
 
-    /// <summary>
-    /// Brings the movements list in line with the domain, using only Add and Remove.
-    /// </summary>
-    /// <remarks>
-    /// NOT <c>ObservableCollectionSync.SyncWith</c>, and at the time of writing the reason was a crash
-    /// rather than a preference. <c>SyncWith</c> replaced a row whose key was unchanged but whose
-    /// instance differed, which is every reload here because these rows are classes; MAUI's
-    /// <c>BindableLayoutController.ReplaceChild</c> indexes into its own list of realised children and
-    /// throws <c>ArgumentOutOfRangeException</c> when a reload happens before that list exists. The
-    /// exception was raised inside this reload, caught by the page's own handler and shown to the
-    /// operator as «Не удалось загрузить смену» — with the drawer figures above it already updated,
-    /// which is the worst shape a partial failure can take.
-    /// <para>
-    /// <c>SyncWith</c> no longer raises Replace at all — it re-creates a changed row AT ITS INDEX or
-    /// refreshes it through a delegate — so it would be safe here too. This method stays anyway,
-    /// because for THIS list it is the clearer statement of what the list can do: a movement is
-    /// written once and never edited, a correction is a new row rather than a change to an old one,
-    /// and so the only two operations the list ever needs are Add and Remove. Add/Remove/Reset are
-    /// the actions BindableLayout applies through layout.Insert / layout.RemoveAt / CreateChildren(),
-    /// so nothing here depends on the collection and its realised children agreeing by index.
-    /// </para>
-    /// <para>
-    /// The reason it is not <c>SyncWith</c> was never that a movement cannot change in place. It is
-    /// that <c>OrderRowViewModel</c> — the row <see cref="ShiftHistory"/> is built from — has
-    /// <c>Model { get; }</c> with computed properties, so there is nothing on it to write: a changed
-    /// row can only be replaced by a NEW instance. <c>SyncWith</c> now does exactly that at the same
-    /// index, which is why the history list needed no second sync method to become safe.
-    /// </para>
-    /// <para>
-    /// O(n²) over a handful of rows, which is not a cost worth optimising away.
-    /// </para>
-    /// </remarks>
+    /// <summary>Brings the movements list in line with the domain, using only Add and Remove.</summary>
+    /// <remarks>Почему так — `docs/decisions/shift-report.md`</remarks>
+
     private void SyncMovements(IReadOnlyList<CashMovement> movements)
     {
         var incoming = movements.Select(movement => movement.Id).ToHashSet();
@@ -171,17 +122,9 @@ public partial class ShiftReportViewModel
         OnPropertyChanged(nameof(HasNoCashMovements));
     }
 
-    /// <summary>
-    /// Brings the «Скидки» list in line with the domain.
-    /// </summary>
-    /// <remarks>
-    /// Clear + Add, and NOT <c>ObservableCollectionSync.SyncWith</c>, for one reason:
-    /// <see cref="DiscountedLine"/> carries no identifier of its own, so any key would have to be
-    /// assembled out of the values themselves — and two overridden lines that agree on every value
-    /// would then collapse into a single row. In an audit list a silently missing row is a worse
-    /// defect than a list that is re-created on load, and this list is re-read only when the page
-    /// appears or a reload is asked for.
-    /// </remarks>
+    /// <summary>Brings the «Скидки» list in line with the domain.</summary>
+    /// <remarks>Почему так — `docs/decisions/shift-report.md`</remarks>
+
     private void SyncDiscountedLines(List<DiscountedLine> lines)
     {
         DiscountedLines.Clear();
@@ -191,22 +134,9 @@ public partial class ShiftReportViewModel
         OnPropertyChanged(nameof(HasNoDiscountedLines));
     }
 
-    /// <summary>
-    /// Voids a closed order from the history list — the entry point for a handed-over sale, since
-    /// the orders board never lists a Completed one.
-    /// </summary>
-    /// <remarks>
-    /// Deliberately the same three dialogs in the same order as the board's cancel flow
-    /// (confirm, disposition, reason) and with the same wording, because they are the same
-    /// operation. The difference is entirely in what it costs: here the order is finished and paid,
-    /// so the confirmation states the amount that goes back and the outcome message reports it.
-    /// <para>
-    /// The page reloads rather than patching the row. A cancellation writes refund rows to the
-    /// ledger, changes PaidKopecks and can move stock; the row on screen shows status and payment
-    /// state, and a half-updated card is worse than a re-read one. It is also the only way the
-    /// money block above the list can pick up the refund it just caused.
-    /// </para>
-    /// </remarks>
+    /// <summary>Voids a closed order from the history list — the entry point for a handed-over sale, since the orders board never lists a Completed one.</summary>
+    /// <remarks>Почему так — `docs/decisions/shift-report.md`</remarks>
+
     private async Task CancelOrderAsync(OrderRowViewModel? row)
     {
         if (row is null) return;
@@ -247,53 +177,15 @@ public partial class ShiftReportViewModel
         }
     }
 
-    /// <summary>
-    /// Closes the shift, and only after the operator has said what was physically in the drawer.
-    /// </summary>
-    /// <remarks>
-    /// The count is not a step in this flow, it IS the flow: <c>CloseShiftAsync</c> takes the
-    /// counted amount and refuses a shift closed without one, so a shift that closes has a
-    /// reconciliation attached to it. There is no "skip" branch and none is wanted — a count that
-    /// can be declined is a count that does not exist.
-    /// <para>
-    /// ORDER OF OPERATIONS, and the order is the design. Confirm, then count, then reason, then
-    /// backup, then close:
-    /// <list type="bullet">
-    ///   <item>The count is asked for BEFORE the backup, because the backup is wasted work if the
-    ///   operator then abandons the dialog — and the dialogs are the only part of this the operator
-    ///   can genuinely back out of.</item>
-    ///   <item>The count is asked for before the close, not after, so a mismatch is discovered while
-    ///   the drawer is still on the table and the operator can count it again. Discovering a
-    ///   shortage after the fact, with the money in a bank bag, is the worst order available.</item>
-    ///   <item>The backup stays immediately before the write, which is the only moment it can protect
-    ///   anything: everything after it is either a dialog or the reload.</item>
-    /// </list>
-    /// </para>
-    /// <para>
-    /// The PROMPT IS PRE-FILLED with the live drawer figure. In the overwhelmingly common case the
-    /// count matches, and then the whole reconciliation costs one tap on a value the app already
-    /// knows. Hand-transcribing a figure the screen is already showing is a transcription task, and
-    /// transcription fatigue has a known failure mode: after a dozen shifts of typing zeroes into
-    /// fields that are all the same shape, the zeros keep coming. Removing the typing is the
-    /// cheapest accuracy win available anywhere in this feature.
-    /// </para>
-    /// <para>
-    /// The pre-fill deliberately shows the figure ON SCREEN, not a freshly re-read one. A pre-fill
-    /// that disagreed with the «Итого наличными в кассе» line a few centimetres above the button
-    /// would be a number the operator cannot reason about; if the screen is stale they press
-    /// «Обновить». The failure mode of a stale screen is benign anyway — the domain compares
-    /// against the truth and answers with both figures, and the operator corrects the count.
-    /// </para>
-    /// </remarks>
+    /// <summary>Closes the shift, and only after the operator has said what was physically in the drawer.</summary>
+    /// <remarks>Почему так — `docs/decisions/shift-report.md`</remarks>
+
     private async Task CloseShiftAsync()
     {
         try
         {
-            // Says what happens and nothing more. It used to promise "и открыта новая", because the
-            // close did open one; it does not any more, and a dialog that describes a behaviour the
-            // app no longer has is worse than no dialog at all — the operator waits for a shift that
-            // never arrives. The terminal sits empty until someone opens the next one, which is the
-            // whole point of counting the drawer onto paper first.
+            /// <summary>Says what happens and nothing more. It used to promise "и открыта новая", because the close did open one; it does not any more, and a dialog that describes a behaviour the app no longer has is worse than no dialog at all — the operator waits for a shift that never arrives. The terminal sits empty until someone opens the next one, which is the whole point of counting the drawer onto paper first.</summary>
+
             if (!await dialogs.ConfirmAsync("Закрыть смену?", "Текущая смена будет закрыта. Следующую нужно будет открыть заново.", "Закрыть смену", "Отмена"))
             {
                 return;
@@ -305,19 +197,8 @@ public partial class ShiftReportViewModel
                 return;
             }
 
-            // Captured BEFORE the close, and this is the whole reason the post-close export works at
-            // all. The close ends the shift and the reload below rebinds this ViewModel to whatever
-            // is open - which, right after a close, is nothing - so `shiftId`, the id every export in
-            // this ViewModel reads, would be empty. Exporting against that produced a CSV of a
-            // shift with no orders in it, which is how a reconciliation became unexportable: the
-            // one file that carries the counted cash was the file about the wrong shift.
-            //
-            // The start time is captured for the same reason: the file is named after the SHIFT it
-            // describes, not after the moment it was exported, or every shift closed within the same
-            // hour would be ambiguous on the device it landed on. The default is reachable — a load
-            // that failed leaves startTime unset while the button is still live — and a report named
-            // shift-00010101-0000.csv helps nobody, so it falls back to now rather than to a lie
-            // about when the shift began.
+            /// <summary>Captured BEFORE the close, and this is the whole reason the post-close export works at all. The close ends the shift and the reload below rebinds this ViewModel to whatever is open - which, right after a close, is nothing - so `shiftId`, the id every export in this ViewModel reads, would be empty. Exporting against that produced a CSV of a shift with no orders in it, which is how a reconciliation became unexportable: the one file that carries the counted cash was the file about the wrong shift. The start time is captured for the same reason: the file is named after the SHIFT it describes, not after the moment it was exported, or every shift closed within the same hour would be ambiguous on the device it landed on. The default is reachable — a load that failed leaves startTime unset while the button is still live — and a report named shift-00010101-0000.csv helps nobody, so it falls back to now rather than to a lie about when the shift began.</summary>
+
             var closingShiftId = shiftId;
             var closingShiftStartedAt = startTime == default ? DateTimeOffset.Now : startTime;
 
@@ -329,26 +210,18 @@ public partial class ShiftReportViewModel
             // rewrites it, which is why the retry pre-fill has to be dropped at this exact point.
             pendingCount = null;
 
-            // No shift is open now, and the terminal cannot be used until one is. The cache is
-            // updated BEFORE the reload so the page renders the closed state rather than the last
-            // open one, and the opening screen pre-fills the counted drawer - the number the
-            // operator has just written on paper.
+            /// <summary>No shift is open now, and the terminal cannot be used until one is. The cache is updated BEFORE the reload so the page renders the closed state rather than the last open one, and the opening screen pre-fills the counted drawer - the number the operator has just written on paper.</summary>
+
             shiftSession.SetKnownState(false, null);
 
             await LoadAsync();
-            // The count result is the one thing the operator cannot read off the screen they are on:
-            // a balance is stated here and then, for a shift with no orders, there is nothing left
-            // on this page to compare it against. The time is the moment the shift ENDED, which is
-            // what it always was — it was being labelled as the start of the next shift, which never
-            // came.
+            /// <summary>The count result is the one thing the operator cannot read off the screen they are on: a balance is stated here and then, for a shift with no orders, there is nothing left on this page to compare it against. The time is the moment the shift ENDED, which is what it always was — it was being labelled as the start of the next shift, which never came.</summary>
+
             Message = $"Смена закрыта в {closed.EndTime?.ToLocalTime():HH:mm}. "
                       + CashWording.Describe(entry.CountedKopecks - entry.ExpectedKopecks);
 
-            // The report of the shift that was just closed, NOT the archive. The archive is still
-            // available from Настройки, so nothing is lost by asking here instead — but the
-            // archive's own shift-report.csv is written from whatever shift it is handed, and after
-            // a close there is no open shift to hand it, so the reconciliation was never in it.
-            // This CSV is the only artefact that carries the count, and it is about the right shift.
+            /// <summary>The report of the shift that was just closed, NOT the archive. The archive is still available from Настройки, so nothing is lost by asking here instead — but the archive's own shift-report.csv is written from whatever shift it is handed, and after a close there is no open shift to hand it, so the reconciliation was never in it. This CSV is the only artefact that carries the count, and it is about the right shift.</summary>
+
             if (await dialogs.ConfirmAsync("Экспорт отчёта?",
                     "Отправить отчёт по закрытой смене с пересчётом кассы?", "Отправить", "Позже"))
             {
@@ -358,12 +231,8 @@ public partial class ShiftReportViewModel
                 await files.ShareFileAsync(path, "Отчёт смены");
             }
 
-            // LAST, after the export question, because that dialog is the only thing left that belongs
-            // to the shift being closed. Then the opening screen, for the same reason the startup path
-            // shows it: the terminal cannot be used until a shift exists, and its field arrives
-            // pre-filled with the figure the operator just wrote on paper. Staying on this page would
-            // leave them looking at "Смена не открыта" with a button, which is the same fact said more
-            // weakly.
+            /// <summary>LAST, after the export question, because that dialog is the only thing left that belongs to the shift being closed. Then the opening screen, for the same reason the startup path shows it: the terminal cannot be used until a shift exists, and its field arrives pre-filled with the figure the operator just wrote on paper. Staying on this page would leave them looking at "Смена не открыта" with a button, which is the same fact said more weakly.</summary>
+
             await navigation.GoToOpenShiftAsync();
         }
         catch (Exception exception)
@@ -378,23 +247,9 @@ public partial class ShiftReportViewModel
         }
     }
 
-    /// <summary>
-    /// Asks for the counted cash and, when it does not match, for the reason. Returns null when the
-    /// operator backed out or the entry was unusable, in which case nothing at all has been written.
-    /// </summary>
-    /// <remarks>
-    /// Two failure modes are handled differently on purpose. An ABORT (whitespace, an unparseable
-    /// number, a missing reason) returns quietly and writes nothing: the shift is untouched and the
-    /// operator decides when to try again. A DOMAIN REFUSAL is left to propagate to the caller's
-    /// catch, because by then the count is on its way into the shift and the operator has to be told
-    /// why it is not there.
-    /// <para>
-    /// The expectation is carried back in the entry next to the count. The caller needs it to word
-    /// the outcome message, and reading it off the ViewModel after the close would mean reading
-    /// <c>CashInDrawer</c> — a value <c>LoadAsync</c> is about to overwrite with the NEW shift's
-    /// figures. Carrying the pair means the message cannot be assembled from a number that moved.
-    /// </para>
-    /// </remarks>
+    /// <summary>Asks for the counted cash and, when it does not match, for the reason. Returns null when the operator backed out or the entry was unusable, in which case nothing at all has been written.</summary>
+    /// <remarks>Почему так — `docs/decisions/shift-report.md`</remarks>
+
     private async Task<CashCountEntry?> CollectCashCountAsync()
     {
         // Exact round trip: ExpectedCashNow is Money.FromKopecks of the ledger's kopeck figure, and
@@ -403,16 +258,8 @@ public partial class ShiftReportViewModel
         var expectedKopecks = Money.ToKopecks(CashInDrawer);
         var expected = Money.FromKopecks(expectedKopecks);
 
-        // A previous entry wins over the live figure ONLY while the drawer it was counted against is
-        // the same drawer. After a refused close the operator is being asked the same question about
-        // the same money, and their answer is still true — unless the drawer moved while they were
-        // away closing orders, which is exactly what happens after that refusal. So the previous entry
-        // carries the figure it was counted against and is used only when that still matches; otherwise
-        // the live figure, which the sentence above already states.
-        //
-        // WHICH entry to offer is decided in the core (CashCountPrefill.Resolve) and only formatted
-        // here: the rule is tested rather than trusted, and no arithmetic about money lives in a
-        // dialog. This ViewModel no longer knows how to tell a fresh count from a stale one.
+        /// <summary>A previous entry wins over the live figure ONLY while the drawer it was counted against is the same drawer. After a refused close the operator is being asked the same question about the same money, and their answer is still true — unless the drawer moved while they were away closing orders, which is exactly what happens after that refusal. So the previous entry carries the figure it was counted against and is used only when that still matches; otherwise the live figure, which the sentence above already states. WHICH entry to offer is decided in the core (CashCountPrefill.Resolve) and only formatted here: the rule is tested rather than trusted, and no arithmetic about money lives in a dialog. This ViewModel no longer knows how to tell a fresh count from a stale one.</summary>
+
         var prefillKopecks = CashCountPrefill.Resolve(pendingCount, expectedKopecks);
 
         // "0.00" rather than "F2" on purpose: F2 in ru-RU groups the thousands ("4 320,00"), and a
@@ -428,20 +275,15 @@ public partial class ShiftReportViewModel
             "Закрыть смену",
             "Отмена");
 
-        // DisplayPromptAsync returns null for BOTH "Отмена" and an empty field, so the two cannot be
-        // told apart and neither is guessed at here — the same refusal OrderDetailsViewModel makes
-        // on the refund reason. Whitespace is therefore an abort, and the count is not written: a
-        // close the operator cancelled must not leave a reconciliation behind.
+        /// <summary>DisplayPromptAsync returns null for BOTH "Отмена" and an empty field, so the two cannot be told apart and neither is guessed at here — the same refusal OrderDetailsViewModel makes on the refund reason. Whitespace is therefore an abort, and the count is not written: a close the operator cancelled must not leave a reconciliation behind.</summary>
+
         if (string.IsNullOrWhiteSpace(entry))
         {
             return null;
         }
 
-        // Group separators are removed before parsing, not after. ru-RU's is U+00A0, a hand-typed
-        // "4 320,00" is a realistic input, and NumberStyles accepts a thousands separator only in
-        // the culture's own form — rejecting a number of the shape the app itself displays would be
-        // a self-inflicted wound. Everything else is left to TextFormat.TryParseDecimal, which
-        // handles the comma/dot ambiguity.
+        /// <summary>Group separators are removed before parsing, not after. ru-RU's is U+00A0, a hand-typed "4 320,00" is a realistic input, and NumberStyles accepts a thousands separator only in the culture's own form — rejecting a number of the shape the app itself displays would be a self-inflicted wound. Everything else is left to TextFormat.TryParseDecimal, which handles the comma/dot ambiguity.</summary>
+
         var normalized = entry.Replace(" ", string.Empty).Replace("\u00a0", string.Empty);
         if (!TextFormat.TryParseDecimal(normalized, out var amount))
         {
@@ -461,11 +303,8 @@ public partial class ShiftReportViewModel
         var countedKopecks = Money.ToKopecks(amount);
         string? reason = null;
 
-        // Pre-checked against the figure already on screen, so a matching count never shows the
-        // reason dialog — demanding a reason for an exact drawer would train the operator to type
-        // filler into an audit field. The domain re-checks against the truth and throws if the two
-        // disagree, which is the point: this is a UX pre-check, not the rule, and the rule is the
-        // domain's.
+        /// <summary>Pre-checked against the figure already on screen, so a matching count never shows the reason dialog — demanding a reason for an exact drawer would train the operator to type filler into an audit field. The domain re-checks against the truth and throws if the two disagree, which is the point: this is a UX pre-check, not the rule, and the rule is the domain's.</summary>
+
         if (countedKopecks != expectedKopecks)
         {
             reason = await PromptDiscrepancyReasonAsync(expected, countedKopecks);
@@ -482,16 +321,9 @@ public partial class ShiftReportViewModel
         return new CashCountEntry(countedKopecks, expectedKopecks, reason);
     }
 
-    /// <summary>
-    /// The reason for a mismatch, or null when the operator did not give a usable one. Required by
-    /// the domain and asked for as such, because an unexplained shortage is the one entry nobody
-    /// can reconstruct a week later.
-    /// </summary>
-    /// <remarks>
-    /// Both figures are repeated in the prompt. The operator is being asked to explain a specific
-    /// number, and a prompt that says only "причина расхождения" invites a reason for the wrong
-    /// discrepancy — the one they remember from this morning, not the one on the screen.
-    /// </remarks>
+    /// <summary>The reason for a mismatch, or null when the operator did not give a usable one. Required by the domain and asked for as such, because an unexplained shortage is the one entry nobody can reconstruct a week later.</summary>
+    /// <remarks>Почему так — `docs/decisions/shift-report.md`</remarks>
+
     private async Task<string?> PromptDiscrepancyReasonAsync(decimal expected, long countedKopecks)
     {
         var difference = countedKopecks - Money.ToKopecks(expected);
@@ -513,13 +345,8 @@ public partial class ShiftReportViewModel
         var trimmed = reason.Trim();
         if (trimmed.Length > MaxDiscrepancyReasonLength)
         {
-            // Pre-checked here even though the domain refuses an over-long reason too. The domain's
-            // refusal is correct and must not be weakened — this string is the only record of why a
-            // drawer did not balance, and DisplayPromptAsync has no MaxLength to stop a paste — but
-            // it costs the operator the entire dialog to learn it, and pasting 300+ characters into
-            // a phone prompt is not a rare accident. Mirrors the private
-            // OrderService.MaxDiscrepancyReasonLength; the domain stays the authority, this only
-            // keeps what was typed on screen instead of throwing it away.
+            /// <summary>Pre-checked here even though the domain refuses an over-long reason too. The domain's refusal is correct and must not be weakened — this string is the only record of why a drawer did not balance, and DisplayPromptAsync has no MaxLength to stop a paste — but it costs the operator the entire dialog to learn it, and pasting 300+ characters into a phone prompt is not a rare accident. Mirrors the private OrderService.MaxDiscrepancyReasonLength; the domain stays the authority, this only keeps what was typed on screen instead of throwing it away.</summary>
+
             Message = $"Причина расхождения длиннее {MaxDiscrepancyReasonLength} символов. Смена не закрыта.";
             return null;
         }
@@ -527,29 +354,13 @@ public partial class ShiftReportViewModel
         return trimmed;
     }
 
-    /// <summary>
-    /// What the operator entered at the close prompt, in the units the domain takes.
-    /// </summary>
-    /// <param name="CountedKopecks">The physical count. 0 is a real count, not an absent one.</param>
-    /// <param name="ExpectedKopecks">
-    /// The live drawer figure the count was compared against, carried back so the outcome message
-    /// can be worded from the pair that was actually submitted.
-    /// </param>
-    /// <param name="Reason">Set iff <paramref name="CountedKopecks"/> differs from the expectation.</param>
+    /// <summary>What the operator entered at the close prompt, in the units the domain takes. The physical count. 0 is a real count, not an absent one. The live drawer figure the count was compared against, carried back so the outcome message can be worded from the pair that was actually submitted. Set iff differs from the expectation.</summary>
+
     private readonly record struct CashCountEntry(long CountedKopecks, long ExpectedKopecks, string? Reason);
 
-    /// <summary>
-    /// Operator-facing text for a refused close.
-    /// </summary>
-    /// <remarks>
-    /// An <see cref="AppException"/> from this flow is already a Russian sentence written for the
-    /// operator — «Нельзя закрыть смену: осталось незакрытых заказов — 3, из них не оплачено 2 на
-    /// 120,00 ₽» — so it is shown on its own. Prefixing it with the generic «Не удалось закрыть
-    /// смену: » produced "Не удалось закрыть смену: Нельзя закрыть смену: …", which reads as a
-    /// stutter and buries the part that matters. Every other failure still goes through
-    /// <see cref="UserMessages.Describe"/>, whose last arm is what keeps an unknown error from
-    /// reaching the operator as a bare type name.
-    /// </remarks>
+    /// <summary>Operator-facing text for a refused close.</summary>
+    /// <remarks>Почему так — `docs/decisions/shift-report.md`</remarks>
+
     private static string DescribeCloseFailure(Exception exception) => exception switch
     {
         AppException app when !string.IsNullOrWhiteSpace(app.Message) => app.Message,

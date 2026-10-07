@@ -23,15 +23,8 @@ public partial class OrderDetailsViewModel
                 return;
             }
 
-            // Rows built with their composition attached, and merged by OrderLineKey rather than by the
-            // inline product+modifier comparison this used to do.
-            //
-            // The inline comparison left the VARIANT out of the key entirely, so adding a large and a
-            // small of the same dish merged them into one line — and it could not tell two builds of one
-            // bundle apart, so two different bundles merged into one line at whichever price was added
-            // first. One key every caller computes the same way cannot drift that way again, and a
-            // mismatch is a line that visibly disagrees with the cart rather than a receipt that quietly
-            // loses one.
+            /// <summary>Rows built with their composition attached, and merged by OrderLineKey rather than by the inline product+modifier comparison this used to do. The inline comparison left the VARIANT out of the key entirely, so adding a large and a small of the same dish merged them into one line — and it could not tell two builds of one bundle apart, so two different bundles merged into one line at whichever price was added first. One key every caller computes the same way cannot drift that way again, and a mismatch is a line that visibly disagrees with the cart rather than a receipt that quietly loses one.</summary>
+
             var rows = order.Items
                 .Select(item =>
                 {
@@ -64,10 +57,8 @@ public partial class OrderDetailsViewModel
                 payments.Select(payment => BuildPaymentLine(payment)),
                 line => line.Text);
 
-            // Gross in and gross out, summed from the ledger rather than read off PaidKopecks, which
-            // is NET. An order refunded all the way down to zero is arithmetically identical to one
-            // that was never paid, and the summary line has to tell those two apart: only one of them
-            // ever held money, and only one of them needs a refund button.
+            /// <summary>Gross in and gross out, summed from the ledger rather than read off PaidKopecks, which is NET. An order refunded all the way down to zero is arithmetically identical to one that was never paid, and the summary line has to tell those two apart: only one of them ever held money, and only one of them needs a refund button.</summary>
+
             collectedTotal = payments.Where(payment => !payment.IsRefund).Sum(payment => payment.Amount);
             refundedTotal = payments.Where(payment => payment.IsRefund).Sum(payment => payment.Amount);
 
@@ -78,11 +69,8 @@ public partial class OrderDetailsViewModel
 
             NotifyOrderState();
 
-            // The formatted amounts follow the operator's currency setting, which can be changed
-            // while this page is still alive. Re-raised here rather than left to the setters above:
-            // an unchanged total raises nothing, so a page opened on «0,00 ₽» and left open across a
-            // switch to ₿ would keep printing the old sign. See MenuViewModel.RefreshMoneyText for
-            // the same argument on the cart.
+            /// <summary>The formatted amounts follow the operator's currency setting, which can be changed while this page is still alive. Re-raised here rather than left to the setters above: an unchanged total raises nothing, so a page opened on «0,00 ₽» and left open across a switch to ₿ would keep printing the old sign. See MenuViewModel.RefreshMoneyText for the same argument on the cart.</summary>
+
             NotifyTotal();
             foreach (var item in Items) item.RefreshMoneyText();
             foreach (var line in Payments) line.RefreshMoneyText();
@@ -112,10 +100,8 @@ public partial class OrderDetailsViewModel
                 return;
             }
 
-            // Merge through OrderLineKey, so this agrees with the cart, the add command and
-            // OrderService line for line. The inline comparison this replaced compared the product and
-            // the modifier only — the variant was not in the key at all, so a large and a small of the
-            // same dish joined one line and the quantity added up to two of something sold once.
+            /// <summary>Merge through OrderLineKey, so this agrees with the cart, the add command and OrderService line for line. The inline comparison this replaced compared the product and the modifier only — the variant was not in the key at all, so a large and a small of the same dish joined one line and the quantity added up to two of something sold once.</summary>
+
             var existing = Items.FirstOrDefault(item => item.MergeKey == OrderLineKey.For(product.Id, modifier, null));
 
             if (existing is null)
@@ -149,18 +135,9 @@ public partial class OrderDetailsViewModel
 
     // ── Price and composition ─────────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Re-prices one line by hand. The allowed price is left alone, so the row shows it struck through
-    /// and the shift report's discount section finds the difference afterwards.
-    /// </summary>
-    /// <remarks>
-    /// Same rule as on the cart and for the same reasons: no reason is asked for, because a reason
-    /// collected at the till becomes the first value anyone ever clicks, and nothing is refused,
-    /// because a POS that argues with a cashier about a price teaches people to work around it. The
-    /// allowed price is written once when the line is created and <c>UpdateOrderAsync</c> deliberately
-    /// does not recompute it, so an override made here cannot be laundered back into "this is what it
-    /// should have cost".
-    /// </remarks>
+    /// <summary>Re-prices one line by hand. The allowed price is left alone, so the row shows it struck through and the shift report's discount section finds the difference afterwards.</summary>
+    /// <remarks>Почему так — `docs/decisions/order-details.md`</remarks>
+
     private async Task EditItemPriceAsync(OrderEditItemViewModel? item)
     {
         if (item is null || !CanEdit) return;
@@ -188,20 +165,9 @@ public partial class OrderDetailsViewModel
         haptics.Click();
     }
 
-    /// <summary>
-    /// Re-opens the composition sheet for a bundle on this order — the SAME sheet the cart opens, with
-    /// the same rows, the same running total and the same confirm.
-    /// </summary>
-    /// <remarks>
-    /// One mechanic, two places. A second editor here would be how a shop grows the "bundles stopped
-    /// showing in reports" bug: two definitions of what a bundle is, and only one of them feeding the
-    /// sale.
-    /// <para>
-    /// The line keeps the bundle's OWN price — changing the composition does not reprice it. The sum
-    /// of the slots is the à la carte reference the discount is measured against, not the price. The
-    /// change is not written until «Сохранить» like every other edit on this page.
-    /// </para>
-    /// </remarks>
+    /// <summary>Re-opens the composition sheet for a bundle on this order — the SAME sheet the cart opens, with the same rows, the same running total and the same confirm.</summary>
+    /// <remarks>Почему так — `docs/decisions/order-details.md`</remarks>
+
     private async Task EditItemCompositionAsync(OrderEditItemViewModel? item)
     {
         if (item is null || !CanEdit || !item.IsCombo) return;
@@ -234,12 +200,8 @@ public partial class OrderDetailsViewModel
                 }
 
                 var (product, label) = sold.Value;
-                // The dish's price, not the slot's stored override — see the same change in
-                // ComboFormViewModel.UnitKopecks. The override has had no control in the form since
-                // it was cut, so feeding it here would show the operator a component price in the
-                // composition editor that the form cannot produce and the form's own total does not
-                // use. The 4th argument is the dish's real price and is now the same figure twice
-                // rather than two different ones, which is the honest thing to hand the editor.
+                /// <summary>The dish's price, not the slot's stored override — see the same change in ComboFormViewModel.UnitKopecks. The override has had no control in the form since it was cut, so feeding it here would show the operator a component price in the composition editor that the form cannot produce and the form's own total does not use. The 4th argument is the dish's real price and is now the same figure twice rather than two different ones, which is the honest thing to hand the editor.</summary>
+
                 options.Add(new ComboSlotOption(
                     slot.ProductId,
                     label,
@@ -347,36 +309,9 @@ public partial class OrderDetailsViewModel
         }
     }
 
-    /// <summary>
-    /// Opens the payment sheet for this order and books what the operator declares. A dismissed
-    /// sheet leaves the order untouched.
-    /// </summary>
-    /// <remarks>
-    /// A <see cref="ConflictException"/> with "уже оплачен" is not an error: the order may have been
-    /// settled on the board since this page loaded. It is treated as a reload at warning level.
-    /// </remarks>
-    /// <summary>
-    /// Returns money on a finished order: the amount off the keypad, the reason from a prompt.
-    /// </summary>
-    /// <remarks>
-    /// Amount first, then reason, and that order is not arbitrary. The amount comes from the keypad
-    /// so the operator sees the ceiling ("Вернуть можно: …") while deciding, and the reason is typed
-    /// afterwards — the domain stores it on the refund rows and truncates it at 300 characters, so a
-    /// free-text prompt before the amount would be typing into a form for a transaction whose size
-    /// was not yet chosen.
-    /// <para>
-    /// No method is passed, and that is not an omission. The domain mirrors the payments it
-    /// reverses, oldest first, because the drawer and the terminal are two real tills: booking the
-    /// return under a method the money never arrived in would leave one of them wrong at the count
-    /// with nothing in the app to say so.
-    /// </para>
-    /// <para>
-    /// The reason is REQUIRED here, unlike the cancellation reason next door. It is the only record
-    /// of why money left the till on a sale that genuinely happened, so it lands on the refund rows
-    /// and is what an auditor reads first. An empty prompt result aborts: an unexplained refund is
-    /// the one entry nobody can reconstruct afterwards.
-    /// </para>
-    /// </remarks>
+    /// <summary>Opens the payment sheet for this order and books what the operator declares. A dismissed sheet leaves the order untouched. Returns money on a finished order: the amount off the keypad, the reason from a prompt.</summary>
+    /// <remarks>Почему так — `docs/decisions/order-details.md`</remarks>
+
     private async Task RefundPaymentAsync()
     {
         if (order is null || !CanRefundPayment) return;
@@ -418,29 +353,9 @@ public partial class OrderDetailsViewModel
         }
     }
 
-    /// <summary>
-    /// Adds a phone and a promised time to an order that is already paid for, because the customer
-    /// thought of them after the money changed hands.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The sheet is asked FIRST and the write happens SECOND, and the order matters: the fulfilment-mode
-    /// question can only be asked when the operator has said they want to record something. Opening a
-    /// sheet that then refuses to save would be a worse board than no button.
-    /// </para>
-    /// <para>
-    /// <b>THE PHONE CONTOUR IS NOT DECIDED HERE.</b> Whether a number may be stored is Core's answer, from
-    /// <c>ContactPhoneRule</c> and <c>AddContactDetailsAsync</c>. This method passes
-    /// <c>PromoteToTakeaway</c> through as a RECORD of what the operator ticked and lets Core refuse the
-    /// write when that tick is missing — which is why the catch below exists and why its message comes
-    /// from the exception rather than from a string built here. A ViewModel that second-guessed the phone
-    /// would be a second copy of 152-ФЗ ст. 6(1)(5), in a file with no test over it.
-    /// </para>
-    /// <para>
-    /// A dismissed sheet returns <c>null</c> and nothing is written: a dismissal is not an answer, and
-    /// treating it as one would let a stray back-gesture clear a stored number's edit.
-    /// </para>
-    /// </remarks>
+    /// <summary>Adds a phone and a promised time to an order that is already paid for, because the customer thought of them after the money changed hands.</summary>
+    /// <remarks>Почему так — `docs/decisions/order-details.md`</remarks>
+
     private async Task AddContactDetailsAsync()
     {
         if (!CanAddContactDetails || order is null) return;
@@ -489,21 +404,9 @@ public partial class OrderDetailsViewModel
         }
     }
 
-    /// <summary>
-    /// Voids the whole order from this page: the same confirm, stock disposition and reason as the
-    /// board's cancel, in the same order.
-    /// </summary>
-    /// <remarks>
-    /// Kept here as well as on the board because the details page is where an operator already is
-    /// when they have picked one specific order to undo — and until this existed the page had no
-    /// cancel control at all, so a mistake on a paid order had to be fixed by finding the right row
-    /// on a different screen.
-    /// <para>
-    /// Reloads instead of navigating back: the order stays on screen and now reads
-    /// «Отменён, возвращено …» with the refund rows in the ledger beneath it. Going back would hide
-    /// the only confirmation the operator gets that the money actually moved.
-    /// </para>
-    /// </remarks>
+    /// <summary>Voids the whole order from this page: the same confirm, stock disposition and reason as the board's cancel, in the same order.</summary>
+    /// <remarks>Почему так — `docs/decisions/order-details.md`</remarks>
+
     private async Task CancelOrderAsync()
     {
         if (order is null || !CanCancel) return;
@@ -596,28 +499,9 @@ public partial class OrderDetailsViewModel
         NotifyTotal();
     }
 
-    /// <summary>
-    /// One ledger row, rendered so that money going OUT cannot be mistaken for money coming in.
-    /// </summary>
-    /// <remarks>
-    /// A refund is the same row shape as a payment: same table, same method vocabulary, positive
-    /// amount, direction carried by <c>IsRefund</c>. That is right for the invariant and wrong for a
-    /// human reading a list, so before this a refund row rendered exactly like a collection row, one
-    /// going in and one coming out with nothing on screen saying which was which.
-    /// <para>
-    /// Three signals, and all three are needed because this app never signals state by colour alone:
-    /// the word "возврат" in the row text, a leading minus sign on the amount, and the danger colour
-    /// the template applies from <see cref="PaymentLine.IsRefund"/>. Drop the word and a screen
-    /// reader user cannot tell the rows apart; drop the sign and an operator scanning a column of
-    /// figures reads the direction the wrong way; drop the colour and the two rows look like one.
-    /// </para>
-    /// <para>
-    /// The method is still named on a refund even though the operator never chose it, because it is
-    /// the method the money left by, which is exactly what a manager needs when reconciling a drawer
-    /// against a terminal report. It is worded as "возврат наличными" rather than as a collection so
-    /// the sentence matches the direction instead of fighting it.
-    /// </para>
-    /// </remarks>
+    /// <summary>One ledger row, rendered so that money going OUT cannot be mistaken for money coming in.</summary>
+    /// <remarks>Почему так — `docs/decisions/order-details.md`</remarks>
+
     private static PaymentLine BuildPaymentLine(OrderPayment payment)
     {
         var when = payment.PaidAt.ToLocalTime().ToString("dd.MM HH:mm");
@@ -634,13 +518,8 @@ public partial class OrderDetailsViewModel
         };
     }
 
-    /// <summary>Re-raises the order total after an item was added, removed or re-quantitied.</summary>
-    /// <remarks>
-    /// <c>Total</c> is the decimal sum and <c>TotalText</c> is what the footer actually binds — the
-    /// formatted amount in the operator's currency. Both are raised together: the decimal one for
-    /// anything still reading the raw figure, the text one because a bound Label is never told about
-    /// a dependency's change on its own.
-    /// </remarks>
+    /// <remarks>`docs/decisions/order-details.md`</remarks>
+
     private void NotifyTotal()
     {
         OnPropertyChanged(nameof(Total));
@@ -657,12 +536,8 @@ public partial class OrderDetailsViewModel
         OnPropertyChanged(nameof(CanCollectPayment));
         OnPropertyChanged(nameof(CanRefundPayment));
 
-        // «Дописать» is announced here for the same reason as the two above, and it was MISSING at first:
-        // the button bound its IsVisible to this, the page inflated before LoadAsync filled `order`, and
-        // without this line the binding stayed on the inflate-time value of false — so the button was
-        // absent from a paid order and present on nothing. A Can* property nobody announces is invisible,
-        // which is a different failure from being disabled and much harder to notice in a screenshot
-        // review, because an absent button looks like a deliberate decision.
+        /// <summary>«Дописать» is announced here for the same reason as the two above, and it was MISSING at first: the button bound its IsVisible to this, the page inflated before LoadAsync filled `order`, and without this line the binding stayed on the inflate-time value of false — so the button was absent from a paid order and present on nothing. A Can* property nobody announces is invisible, which is a different failure from being disabled and much harder to notice in a screenshot review, because an absent button looks like a deliberate decision.</summary>
+
         OnPropertyChanged(nameof(CanAddContactDetails));
         OnPropertyChanged(nameof(CanCancel));
         OnPropertyChanged(nameof(CancelText));
@@ -670,10 +545,8 @@ public partial class OrderDetailsViewModel
         OnPropertyChanged(nameof(RefundedTotal));
         OnPropertyChanged(nameof(CollectedTotal));
 
-        // Fulfilment, contact and promise. IsOverdue is measured against a clock rather than against
-        // anything on the entity, so it is NOT re-evaluated by a reload — a page left open on a
-        // borderline order would keep claiming a lateness that has since stopped being true. The
-        // wording and the colour follow the flag and are re-raised with it.
+        /// <summary>Fulfilment, contact and promise. IsOverdue is measured against a clock rather than against anything on the entity, so it is NOT re-evaluated by a reload — a page left open on a borderline order would keep claiming a lateness that has since stopped being true. The wording and the colour follow the flag and are re-raised with it.</summary>
+
         OnPropertyChanged(nameof(HasOrderDetails));
         OnPropertyChanged(nameof(OrderTypeText));
         OnPropertyChanged(nameof(CustomerPhoneText));
@@ -689,10 +562,8 @@ public partial class OrderDetailsViewModel
         OnPropertyChanged(nameof(OverdueText));
         OnPropertyChanged(nameof(OverdueColor));
 
-        // The half that is easy to forget: the price and composition taps are recognizers, not
-        // Buttons, so they have no IsEnabled to bind — their liveness comes from Command.CanExecute,
-        // and nothing recomputes that unless it is told. Without this two lines the price stays
-        // tappable on a closed order and the tap opens the re-pricing sheet on a sale that is done.
+        /// <summary>The half that is easy to forget: the price and composition taps are recognizers, not Buttons, so they have no IsEnabled to bind — their liveness comes from Command.CanExecute, and nothing recomputes that unless it is told. Without this two lines the price stays tappable on a closed order and the tap opens the re-pricing sheet on a sale that is done.</summary>
+
         EditItemPriceCommand.NotifyCanExecuteChanged();
         EditItemCompositionCommand.NotifyCanExecuteChanged();
 

@@ -10,19 +10,9 @@ using Microsoft.Extensions.Logging;
 
 namespace CafePos.Presentation.ViewModels;
 
-/// <summary>
-/// Catalogue management list: sections, category filtering, availability toggles and the row
-/// overflow menus.
-/// Create/edit forms live in ViewModels/Catalog/* and open through <see cref="ShowFormRequested"/>;
-/// the page shows <see cref="Views.CatalogFormsPage"/> modally and reloads on save.
-/// </summary>
-/// <remarks>
-/// What used to be here and is not, by the owner's decision: the product SearchBar, the
-/// «Выбрать» selection mode and the bulk percentage-price adjustment it fed, and the CSV
-/// export/import. The last of those moved to <see cref="SettingsViewModel"/> — see
-/// <c>SettingsViewModel.Catalog.cs</c> for why, and for the confirmation the import gained on the
-/// way. Nothing else moved with them, and this ViewModel no longer takes an <c>IFileService</c>.
-/// </remarks>
+/// <summary>Catalogue management list: sections, category filtering, availability toggles and the row overflow menus. Create/edit forms live in ViewModels/Catalog/* and open through ; the page shows modally and reloads on save.</summary>
+/// <remarks>Почему так — `docs/decisions/catalog-management.md`</remarks>
+
 public partial class CatalogManagementViewModel : ObservableObject
 {
     private readonly ICatalogService catalog;
@@ -35,33 +25,15 @@ public partial class CatalogManagementViewModel : ObservableObject
 
     private readonly List<Product> allProducts = [];
 
-    /// <summary>
-    /// How long a filter change waits before re-filtering.
-    /// </summary>
-    /// <remarks>
-    /// This timer used to serve two things — the product SearchBar and the category chips — and the
-    /// SearchBar is gone from this page by the owner's decision. The timer therefore has one caller
-    /// left, <see cref="SelectedProductCategory"/>, and it is still worth having there, which is
-    /// what the previous note got wrong when it described the debounce as having gone with the
-    /// search box. The chip is a single discrete tap with nothing to debounce on its own account;
-    /// what it needs the delay for is <see cref="RebuildCategoryFilters"/>, which reassigns
-    /// <see cref="SelectedProductCategory"/> on every load. Without the delay each load scheduled a
-    /// filter pass that raced the load that scheduled it.
-    /// <para>
-    /// <see cref="ProductSearchText"/> is the second caller and it stays too. Nothing binds it any
-    /// more — that is the whole point of the search's removal — but the in-memory filter and its
-    /// debounce are the property's behaviour, not the control's, so they were left intact rather
-    /// than made conditional on a SearchBar that is not coming back.
-    /// </para>
-    /// </remarks>
+    /// <summary>How long a filter change waits before re-filtering.</summary>
+    /// <remarks>Почему так — `docs/decisions/catalog-management.md`</remarks>
+
     private static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(250);
 
     private CancellationTokenSource? filterCancellation;
 
-    /// <summary>
-    /// True while a load is running. Drives the RefreshView spinner through a TwoWay binding,
-    /// so it must be set back to false on every exit path — see <see cref="LoadAsync"/>.
-    /// </summary>
+    /// <summary>True while a load is running. Drives the RefreshView spinner through a TwoWay binding, so it must be set back to false on every exit path — see .</summary>
+
     private bool isBusy;
     public bool IsBusy { get => isBusy; private set => SetProperty(ref isBusy, value); }
 
@@ -126,22 +98,15 @@ public partial class CatalogManagementViewModel : ObservableObject
     public ObservableCollection<ModifierOptionGroup> ModifierOptionGroups { get; } = new();
     public ObservableCollection<Ingredient> Ingredients { get; } = new();
 
-    /// <summary>
-    /// Bundles, already wrapped for the list because their price is a sum and not a field — see
-    /// <see cref="ComboRowViewModel"/>. The rows are rebuilt on every load, which is how a change to
-    /// a dish's price reaches this screen: the sum is recomputed from the freshly read components.
-    /// </summary>
+    /// <summary>Bundles, already wrapped for the list because their price is a sum and not a field — see . The rows are rebuilt on every load, which is how a change to a dish's price reaches this screen: the sum is recomputed from the freshly read components.</summary>
+
     public ObservableCollection<ComboRowViewModel> Combos { get; } = new();
 
     /// <summary>Category-filter chips: "Все" followed by one chip per category.</summary>
     public ObservableCollection<CategoryFilterChip> CategoryFilters { get; } = new();
 
-    // ─── Responsive width contract ──────────────────────────────────────────────────────────────────
-    // Same pattern as MenuViewModel.ProductColumnSpan: the window width is pushed in from the page
-    // (a Shell-hosted ContentPage never gets OnSizeAllocated), and the product grid's column span
-    // is derived from it. ItemsLayout is a BindableObject outside the visual tree, so {Binding} on
-    // Span does not reliably inherit the page's BindingContext — the span is assigned from code.
-    // The constants mirror Views/CatalogManagementPage.xaml and must be changed with it.
+    /// <summary>─── Responsive width contract ────────────────────────────────────────────────────────────────── Same pattern as MenuViewModel.ProductColumnSpan: the window width is pushed in from the page (a Shell-hosted ContentPage never gets OnSizeAllocated), and the product grid's column span is derived from it. ItemsLayout is a BindableObject outside the visual tree, so {Binding} on Span does not reliably inherit the page's BindingContext — the span is assigned from code. The constants mirror Views/CatalogManagementPage.xaml and must be changed with it.</summary>
+
 
     private const double PageHorizontalPadding = 24;      // content Grid Padding="12" both sides
     private const double ProductColumnSpacing = 4;        // GridItemsLayout HorizontalItemSpacing
@@ -150,10 +115,8 @@ public partial class CatalogManagementViewModel : ObservableObject
 
     private double availableWidth;
 
-    /// <summary>
-    /// The window's width in device independent pixels, pushed in from <c>Views.CatalogManagementPage</c>
-    /// whenever it is resized. Feeds <see cref="ProductColumnSpan"/>; not bound from XAML.
-    /// </summary>
+    /// <summary>The window's width in device independent pixels, pushed in from Views.CatalogManagementPage whenever it is resized. Feeds ; not bound from XAML.</summary>
+
     public double AvailableWidth
     {
         get => availableWidth;
@@ -168,12 +131,8 @@ public partial class CatalogManagementViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Product cards per row: derived from a target minimum card width, not raw breakpoints.
-    /// The column count is floor(contentWidth / (minCardWidth + spacing)), clamped to 1–3.
-    /// Applied by the page to the named <c>GridItemsLayout</c>, which is the only width-related
-    /// member the grid still has (ItemWidth was removed from ItemsLayout in MAUI 10).
-    /// </summary>
+    /// <summary>Product cards per row: derived from a target minimum card width, not raw breakpoints. The column count is floor(contentWidth / (minCardWidth + spacing)), clamped to 1–3. Applied by the page to the named GridItemsLayout, which is the only width-related member the grid still has (ItemWidth was removed from ItemsLayout in MAUI 10).</summary>
+
     public int ProductColumnSpan
     {
         get
@@ -196,14 +155,9 @@ public partial class CatalogManagementViewModel : ObservableObject
     public const string IngredientsSection = "ingredients";
     public const string CombosSection = "combos";
 
-    /// <summary>
-    /// The entity switcher strip. Built once — the five entries are fixed.
-    /// </summary>
-    /// <remarks>
-    /// «Комбо» sits immediately after «Товары», and the order is not cosmetic: a bundle's price is
-    /// the sum of dishes, so the section a manager needs while editing one is the one holding those
-    /// dishes. Putting it last would put «Модификаторы» and «Ингредиенты» between the two.
-    /// </remarks>
+    /// <summary>The entity switcher strip. Built once — the five entries are fixed.</summary>
+    /// <remarks>Почему так — `docs/decisions/catalog-management.md`</remarks>
+
     public ObservableCollection<CatalogSection> Sections { get; } =
     [
         new(ProductsSection, "Товары"),
@@ -221,16 +175,9 @@ public partial class CatalogManagementViewModel : ObservableObject
     public bool IsIngredientsSectionVisible => section == IngredientsSection;
     public bool IsCombosSectionVisible => section == CombosSection;
 
-    /// <summary>
-    /// Label on the add button, which doubles as its screen-reader name.
-    /// </summary>
-    /// <remarks>
-    /// The button adds whatever entity is open, so a static "Добавить" would be wrong on four
-    /// of the five sections. Material 3 asks for one or two words on an extended FAB —
-    /// "Добавить группу модификаторов" was four and pushed the pill across a third of a phone
-    /// screen, so the modifiers section names the thing an operator thinks of instead of the
-    /// record type.
-    /// </remarks>
+    /// <summary>Label on the add button, which doubles as its screen-reader name.</summary>
+    /// <remarks>Почему так — `docs/decisions/catalog-management.md`</remarks>
+
     public string AddButtonText => section switch
     {
         CategoriesSection => "Добавить раздел",
@@ -317,26 +264,14 @@ public partial class CatalogManagementViewModel : ObservableObject
 
     public string LowStockText => $"! {LowStockCount} {Plural(LowStockCount, "ингредиент заканчивается", "ингредиента заканчивается", "ингредиентов заканчивается")}";
 
-    /// <summary>
-    /// Russian plural selection: one / few / many.
-    /// </summary>
-    /// <remarks>
-    /// A one-line delegate to <see cref="TextFormat.Plural"/>. The rule used to live here as a
-    /// private copy, which meant a second screen needing it had to either duplicate the rule — and a
-    /// duplicated rule gets fixed in one place only — or take a dependency on a ViewModel. The word
-    /// choice is a formatting concern and now sits with the rest of them in Core.
-    /// </remarks>
+    /// <summary>Russian plural selection: one / few / many.</summary>
+    /// <remarks>Почему так — `docs/decisions/catalog-management.md`</remarks>
+
     private static string Plural(int count, string one, string few, string many) =>
         TextFormat.Plural(count, one, few, many);
 
-    /// <summary>
-    /// The severity of <see cref="ValidationMessage"/>. The one notice label carries both
-    /// successes ("Скопировано: …") and errors, so the colour and the leading icon are driven
-    /// by this flag — colour alone would not tell them apart.
-    /// </summary>
-    // Named NoticeLevel, not NoticeSeverity: a nested enum may not share its name with a
-    // property of the declaring class (CS0102). The *property* keeps the name NoticeSeverity
-    // because that is what the page binds.
+    /// <summary>The severity of . The one notice label carries both successes ("Скопировано: …") and errors, so the colour and the leading icon are driven by this flag — colour alone would not tell them apart. Named NoticeLevel, not NoticeSeverity: a nested enum may not share its name with a property of the declaring class (CS0102). The *property* keeps the name NoticeSeverity because that is what the page binds.</summary>
+
     public enum NoticeLevel { None, Success, Error }
 
     private string validationMessage = string.Empty;
@@ -397,19 +332,8 @@ public partial class CatalogManagementViewModel : ObservableObject
 
     // ─── Load ───
 
-    /// <summary>
-    /// Loads the whole catalogue. Re-entrancy: the command is constructed without
-    /// <see cref="AsyncRelayCommandOptions.AllowConcurrentExecutions"/> so it cannot start a
-    /// second run, and the method no longer bails on <see cref="IsBusy"/>. The old bare
-    /// <c>if (IsBusy) return;</c> was the pull-to-refresh trap: RefreshView sets IsRefreshing
-    /// true, the TwoWay binding pushed that into IsBusy, and the guard then returned without
-    /// ever clearing the flag — the spinner spun forever (dotnet/maui#12469).
-    /// <para>
-    /// Callers that may overlap (the ShowDeleted setter, which cannot await) start a fresh run
-    /// that re-reads ShowDeleted; the later-started run finishes last, so its value is the one
-    /// on screen.
-    /// </para>
-    /// </summary>
+    /// <summary>Loads the whole catalogue. Re-entrancy: the command is constructed without so it cannot start a second run, and the method no longer bails on . The old bare if (IsBusy) return; was the pull-to-refresh trap: RefreshView sets IsRefreshing true, the TwoWay binding pushed that into IsBusy, and the guard then returned without ever clearing the flag — the spinner spun forever (dotnet/maui#12469). Callers that may overlap (the ShowDeleted setter, which cannot await) start a fresh run that re-reads ShowDeleted; the later-started run finishes last, so its value is the one on screen.</summary>
+
     public async Task LoadAsync()
     {
         IsBusy = true;
@@ -429,12 +353,8 @@ public partial class CatalogManagementViewModel : ObservableObject
 
             Ingredients.SyncWith(await catalog.GetIngredientsAsync(), ingredient => ingredient.Id);
 
-            // Bundles, LIVE ONLY — the «Показывать удалённые» switch above belongs to the products
-            // section and is not consulted here. There is no restore for a soft-deleted bundle
-            // (IComboService has DeleteComboAsync and nothing that brings one back), so listing a
-            // deleted one would put a row on screen with no way to act on it and no way to undo the
-            // deletion. Not listing it is the honest state; the bundle stays in history either way,
-            // because a sold composition is a snapshot.
+            /// <summary>Bundles, LIVE ONLY — the «Показывать удалённые» switch above belongs to the products section and is not consulted here. There is no restore for a soft-deleted bundle (IComboService has DeleteComboAsync and nothing that brings one back), so listing a deleted one would put a row on screen with no way to act on it and no way to undo the deletion. Not listing it is the honest state; the bundle stays in history either way, because a sold composition is a snapshot.</summary>
+
             Combos.SyncWith(
                 (await combos.GetCombosAsync()).Select(combo => new ComboRowViewModel(combo)),
                 combo => combo.Id);
@@ -453,11 +373,8 @@ public partial class CatalogManagementViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Rebuilds the filter chip strip. Chip instances are recreated on every load (the same
-    /// pattern the other lists use), so the selected state is re-applied from
-    /// <see cref="SelectedProductCategory"/> rather than carried across.
-    /// </summary>
+    /// <summary>Rebuilds the filter chip strip. Chip instances are recreated on every load (the same pattern the other lists use), so the selected state is re-applied from rather than carried across.</summary>
+
     private void RebuildCategoryFilters()
     {
         var previousId = SelectedProductCategory?.Id;
@@ -498,11 +415,8 @@ public partial class CatalogManagementViewModel : ObservableObject
         OnPropertyChanged(nameof(ProductsCountText));
     }
 
-    /// <summary>
-    /// Restarts the debounce timer on every filter change, so the filter runs once the operator
-    /// stops acting. It used to fire per keystroke, which re-scanned the whole catalogue and
-    /// re-diffed the list on each character and stutters on a long catalogue.
-    /// </summary>
+    /// <summary>Restarts the debounce timer on every filter change, so the filter runs once the operator stops acting. It used to fire per keystroke, which re-scanned the whole catalogue and re-diffed the list on each character and stutters on a long catalogue.</summary>
+
     private void ScheduleFilterRefresh()
     {
         // Cancel the pending run. Not disposing the source is deliberate: Task.Delay registers a

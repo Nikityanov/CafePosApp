@@ -11,10 +11,8 @@ using Microsoft.Maui.Graphics;
 
 namespace CafePos.Presentation.ViewModels;
 
-/// <summary>
-/// Menu and cart. The cart is autosaved as a draft (crash safe) and can be parked;
-/// the order itself is created by <see cref="ICheckoutService"/> in one transaction.
-/// </summary>
+/// <summary>Menu and cart. The cart is autosaved as a draft (crash safe) and can be parked; the order itself is created by in one transaction.</summary>
+
 public partial class MenuViewModel : ObservableObject
 {
     private readonly ICatalogService catalog;
@@ -36,10 +34,8 @@ public partial class MenuViewModel : ObservableObject
     private readonly ILogger<MenuViewModel> logger;
 
     private readonly SemaphoreSlim loadGate = new(1, 1);
-    // The autosave gate and the pending cancellation moved to DraftAutosave, with the reason for the
-    // gate: two autosaves must never write the active-cart row concurrently. They run on separate
-    // DbContexts, and the loser got DbUpdateConcurrencyException ("expected 1 row, affected 0"),
-    // which meant the draft was silently not persisted at all and a killed app lost the cart.
+    /// <summary>The autosave gate and the pending cancellation moved to DraftAutosave, with the reason for the gate: two autosaves must never write the active-cart row concurrently. They run on separate DbContexts, and the loser got DbUpdateConcurrencyException ("expected 1 row, affected 0"), which meant the draft was silently not persisted at all and a killed app lost the cart.</summary>
+
 
     public MenuViewModel(
         ICatalogService catalog,
@@ -78,14 +74,8 @@ public partial class MenuViewModel : ObservableObject
         this.timeProvider = timeProvider;
         this.logger = logger;
 
-        // The three Collaborators are built HERE, before anything reads them, and that position is
-        // load-bearing twice over. The Cart subscription below reads a proxy onto cart, and the command
-        // lambdas further down close over all three. The compiler caught the second case as CS8602 -
-        // which is the one warning worth having here, because it is not a style complaint but a
-        // genuine "this could be null at run time".
-        //
-        // They cannot be field initialisers either, because they read the constructor's parameters -
-        // a field initialiser cannot see those. See MenuCatalogue for the clock.
+        /// <summary>The three Collaborators are built HERE, before anything reads them, and that position is load-bearing twice over. The Cart subscription below reads a proxy onto cart, and the command lambdas further down close over all three. The compiler caught the second case as CS8602 - which is the one warning worth having here, because it is not a style complaint but a genuine "this could be null at run time". They cannot be field initialisers either, because they read the constructor's parameters - a field initialiser cannot see those. See MenuCatalogue for the clock.</summary>
+
         menu = new MenuCatalogue(catalog, combos, timeProvider);
         fulfilment = new FulfilmentEditor(timeProvider);
         cart = new CartBuilder();
@@ -119,10 +109,8 @@ public partial class MenuViewModel : ObservableObject
             message => Message = message,
             message => (Message, IsErrorMessage) = (message, true));
 
-        // The resolver speaks through the shell's two channels rather than owning them: `announce` is
-        // `Message`, whose setter retires a pending undo, and `sayError` is SetError. Both are written
-        // as the assignment they stand for, so the resolver cannot accidentally retire an undo on a
-        // path that did not mean to - `Message = string.Empty` clears it, and that has to stay true.
+        /// <summary>The resolver speaks through the shell's two channels rather than owning them: `announce` is `Message`, whose setter retires a pending undo, and `sayError` is SetError. Both are written as the assignment they stand for, so the resolver cannot accidentally retire an undo on a path that did not mean to - `Message = string.Empty` clears it, and that has to stay true.</summary>
+
         composition = new CompositionResolver(
             combos,
             comboEditor,
@@ -136,12 +124,8 @@ public partial class MenuViewModel : ObservableObject
                 IsErrorMessage = true;
             });
 
-        // cart.Changed, NOT Cart.CollectionChanged. The collection fires when a line ARRIVES or LEAVES and
-        // stays silent when the operator presses «+» on one that is already there - StepUp writes the
-        // quantity and nothing else. Listening to the collection therefore missed the common case
-        // entirely: a quantity change was never autosaved, and a till killed after one came back with
-        // a draft behind what had been built. Found by testing this extraction on the device, and it
-        // predates the extraction - the wiring at HEAD was identical.
+        /// <summary>cart.Changed, NOT Cart.CollectionChanged. The collection fires when a line ARRIVES or LEAVES and stays silent when the operator presses «+» on one that is already there - StepUp writes the quantity and nothing else. Listening to the collection therefore missed the common case entirely: a quantity change was never autosaved, and a till killed after one came back with a draft behind what had been built. Found by testing this extraction on the device, and it predates the extraction - the wiring at HEAD was identical.</summary>
+
         cart.Changed += () =>
         {
             OnPropertyChanged(nameof(CanCreateOrder));
@@ -181,10 +165,8 @@ public partial class MenuViewModel : ObservableObject
         OpenParkedCommand = new AsyncRelayCommand(OpenParkedAsync);
 
 
-        // The cart owns the total now, but the button that QUOTES it is the shell's, so the shell has to
-        // hear about the total moving. Without this the checkout button goes on quoting the amount the
-        // cart had before the change — a button promising a price the checkout does not charge, and
-        // exactly the defect the old Total setter existed to prevent.
+        /// <summary>The cart owns the total now, but the button that QUOTES it is the shell's, so the shell has to hear about the total moving. Without this the checkout button goes on quoting the amount the cart had before the change — a button promising a price the checkout does not charge, and exactly the defect the old Total setter existed to prevent.</summary>
+
         cart.PropertyChanged += (_, e) =>
         {
             switch (e.PropertyName)
@@ -203,60 +185,31 @@ public partial class MenuViewModel : ObservableObject
         };
     }
 
-    /// <summary>
-    /// The menu board: dishes, bundle tiles and the category strip, with the filter over all three.
-    /// The second Collaborator, and the one with the smallest dependency list the plan predicted.
-    /// </summary>
-    /// <remarks>
-    /// The shell keeps <see cref="Products"/>, <see cref="FilteredProducts"/>, <see cref="Categories"/>
-    /// and <see cref="Combos"/> as one-line proxies because XAML binds them here by name, and the
-    /// catalogue owns them. <see cref="SelectedCategory"/> and <see cref="IsCombosOnly"/> are computed
-    /// from the catalogue's key, which is why the shell has no filter state of its own.
-    /// </remarks>
+    /// <summary>The menu board: dishes, bundle tiles and the category strip, with the filter over all three. The second Collaborator, and the one with the smallest dependency list the plan predicted.</summary>
+    /// <remarks>Почему так — `docs/decisions/menu.md`</remarks>
+
     private readonly MenuCatalogue menu;
 
-    /// <summary>
-    /// The cart, its total and its undo. One of the six Collaborators, and the only one with no
-    /// dependencies of its own.
-    /// </summary>
-    /// <remarks>
-    /// The shell keeps <see cref="Cart"/>, <see cref="Total"/> and <see cref="TotalText"/> as one-line
-    /// proxies because XAML binds them here by name, and keeps <see cref="PayAndCreateText"/> and
-    /// <see cref="CanCreateOrder"/> outright because they quote the total inside a control that also
-    /// depends on <see cref="IsBusy"/>, which is the shell's. The subscription in the constructor is
-    /// what keeps those two honest: without it the checkout button would go on quoting the amount the
-    /// cart had before the change.
-    /// </remarks>
+    /// <summary>The cart, its total and its undo. One of the six Collaborators, and the only one with no dependencies of its own.</summary>
+    /// <remarks>Почему так — `docs/decisions/menu.md`</remarks>
+
     private readonly CartBuilder cart;
 
-    /// <summary>
-    /// Everything about putting a bundle on the cart. The fourth Collaborator.
-    /// </summary>
-    /// <remarks>
-    /// Two commands hand their handlers straight to it, so the shell has no bundle method of its own
-    /// and nothing to keep in step. It is constructed before those commands because the lambdas close
-    /// over it — the same ordering rule as the other three, and see the note above for why.
-    /// </remarks>
+    /// <summary>Everything about putting a bundle on the cart. The fourth Collaborator.</summary>
+    /// <remarks>Почему так — `docs/decisions/menu.md`</remarks>
+
     private readonly CompositionResolver composition;
 
-    /// <summary>
-    /// The draft: the header notice, the debounced write of the cart, and the restore of a saved one.
-    /// The fifth Collaborator.
-    /// </summary>
+    /// <summary>The draft: the header notice, the debounced write of the cart, and the restore of a saved one. The fifth Collaborator.</summary>
+
     private readonly DraftAutosave autosave;
 
-    /// <summary>
-    /// The sale: pre-flight the stock, take the money, book the order. Returns what happened; the
-    /// screen is cleared here, by the shell, because "an order was booked" and "the till is empty" are
-    /// not the same fact. The sixth Collaborator.
-    /// </summary>
+    /// <summary>The sale: pre-flight the stock, take the money, book the order. Returns what happened; the screen is cleared here, by the shell, because "an order was booked" and "the till is empty" are not the same fact. The sixth Collaborator.</summary>
+
     private readonly CheckoutCoordinator checkoutCoordinator;
 
-    /// <summary>
-    /// Parking a receipt under a name, and picking one back up. Not a sale - no money, no stock check,
-    /// no order - which is why it is a separate class from the sale despite sharing a file with it
-    /// until now.
-    /// </summary>
+    /// <summary>Parking a receipt under a name, and picking one back up. Not a sale - no money, no stock check, no order - which is why it is a separate class from the sale despite sharing a file with it until now.</summary>
+
     private readonly ParkedCarts parkedCarts;
 
     /// <summary>The cart's lines, in the order the operator read them.</summary>
@@ -273,44 +226,13 @@ public partial class MenuViewModel : ObservableObject
     /// <summary>The category strip, «Все» first and «Комбо» last.</summary>
     public ObservableCollection<CategoryMenuItemViewModel> Categories => menu.Categories;
 
-    /// <summary>
-    /// The bundles on the menu board, as their own row rather than as more entries in
-    /// <see cref="FilteredProducts"/>.
-    /// </summary>
-    /// <remarks>
-    /// A separate row is the correct shape, not a fallback: <see cref="Combo"/> has no category, so
-    /// folding bundles into the product grid would put them under whatever section chip happened to be
-    /// selected — or hide every bundle the moment one was. They have no section, so they get no
-    /// section filter, and a row of their own is where that reads correctly. It also leaves the
-    /// product grid's measured column-width contract (see
-    /// <see cref="MenuViewModel.ProductColumnSpan"/> and the GridItemsLayout comment in MenuPage.xaml)
-    /// exactly as it was, instead of making a bundle tile fight a product tile for a 140dp column.
-    /// </remarks>
+    /// <summary>The bundles on the menu board, as their own row rather than as more entries in .</summary>
+    /// <remarks>Почему так — `docs/decisions/menu.md`</remarks>
+
     public ObservableCollection<MenuComboViewModel> Combos => menu.Combos;
 
-    // ── Product grid width contract ──────────────────────────────────────────────────────────────────
-    // The two-column grid clipped on narrow windows, and the fix had to be found empirically
-    // because .NET MAUI 10 offers no way to state a column width:
-    //   * ItemsLayout.ItemWidth / ItemHeight were REMOVED from ItemsLayout in 10.0.101 (only
-    //     Orientation, SnapPointsAlignment and SnapPointsType are left), so the grid cannot be told
-    //     how wide a cell is;
-    //   * WidthRequest AND MaxWidthRequest on the card are both ignored for sizing — the platform's
-    //     ItemsWrapGrid sets the container width itself. A literal WidthRequest="150" still
-    //     measured 190px columns; MaxWidthRequest="150" shrank the card's content without moving
-    //     the column at all.
-    // What the grid still honours is Span, so the contract is expressed as the span: two columns
-    // while each one is still wide enough to be useful, one below that. A single full-width column
-    // cannot be clipped, and a café tablet still gets the two-column board.
-    //
-    // This also removes the latch. ItemsWrapGrid keeps whatever column width it settled on, so a
-    // window narrowed after startup kept the wide window's columns and the pair overran the content
-    // box — measured: at a 340px window the first column stayed at 170px and the pair overran by
-    // 7px. Changing the span re-lays the grid out, so the width is derived from the current page
-    // width every time instead of from history.
-    //
-    // The four constants mirror Views/MenuPage.xaml and must be changed with it, and are in device
-    // independent pixels — Window.Width is DIPs, which on this machine's 125% display is 0.8x the
-    // physical window width (measured: a 460px window reports 368).
+    /// <summary>── Product grid width contract ────────────────────────────────────────────────────────────────── The two-column grid clipped on narrow windows, and the fix had to be found empirically because .NET MAUI 10 offers no way to state a column width: * ItemsLayout.ItemWidth / ItemHeight were REMOVED from ItemsLayout in 10.0.101 (only Orientation, SnapPointsAlignment and SnapPointsType are left), so the grid cannot be told how wide a cell is; * WidthRequest AND MaxWidthRequest on the card are both ignored for sizing — the platform's ItemsWrapGrid sets the container width itself. A literal WidthRequest="150" still measured 190px columns; MaxWidthRequest="150" shrank the card's content without moving the column at all. What the grid still honours is Span, so the contract is expressed as the span: two columns while each one is still wide enough to be useful, one below that. A single full-width column cannot be clipped, and a café tablet still gets the two-column board. This also removes the latch. ItemsWrapGrid keeps whatever column width it settled on, so a window narrowed after startup kept the wide window's columns and the pair overran the content box — measured: at a 340px window the first column stayed at 170px and the pair overran by 7px. Changing the span re-lays the grid out, so the width is derived from the current page width every time instead of from history. The four constants mirror Views/MenuPage.xaml and must be changed with it, and are in device independent pixels — Window.Width is DIPs, which on this machine's 125% display is 0.8x the physical window width (measured: a 460px window reports 368).</summary>
+
     private const double PageHorizontalPadding = 32;      // Grid Padding="16", both sides
     private const int ProductColumns = 2;                 // GridItemsLayout Span when there is room
     private const double ProductColumnSpacing = 4;        // GridItemsLayout HorizontalItemSpacing
@@ -321,10 +243,8 @@ public partial class MenuViewModel : ObservableObject
 
     private double availableWidth;
 
-    /// <summary>
-    /// The window's width in device independent pixels, pushed in from <c>Views.MenuPage</c>
-    /// whenever it is resized. Feeds <see cref="ProductColumnSpan"/>; not bound from XAML.
-    /// </summary>
+    /// <summary>The window's width in device independent pixels, pushed in from Views.MenuPage whenever it is resized. Feeds ; not bound from XAML.</summary>
+
     public double AvailableWidth
     {
         get => availableWidth;
@@ -341,11 +261,8 @@ public partial class MenuViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Product cards per row: two while each column would still be at least
-    /// <see cref="MinimumProductCardWidth"/> wide, one below that. Applied by the page to the
-    /// named <c>GridItemsLayout</c>, which is the only width-related member the grid still has.
-    /// </summary>
+    /// <summary>Product cards per row: two while each column would still be at least wide, one below that. Applied by the page to the named GridItemsLayout, which is the only width-related member the grid still has.</summary>
+
     public int ProductColumnSpan
     {
         get
@@ -364,22 +281,9 @@ public partial class MenuViewModel : ObservableObject
     /// <summary>The cart total in the active currency, e.g. «740,00 ₿».</summary>
     public string TotalText => cart.TotalText;
 
-    /// <summary>
-    /// The checkout button's caption, which is the ACTION and the AMOUNT it will charge:
-    /// «Оплатить 220.00 ₽».
-    /// </summary>
-    /// <remarks>
-    /// <b>Why the figure is inside the button and not beside it.</b> The owner's decision, over
-    /// placing the total in the row to the left of the button: both cost the same row, and this leaves
-    /// one focus point instead of a figure and a verb the operator has to associate before pressing
-    /// anything. A button that NAMES what it charges also answers the question Baymard's 2024 study
-    /// recorded a tester asking verbatim — «I'm not sure if I click the 'Next' button, will it
-    /// charge?» — which is a question about this exact control.
-    /// <para>
-    /// The «Итого» row this replaced is gone from the markup rather than hidden, and the separator
-    /// above the footer stayed: what it divided (the cart lines from the footer) still exists.
-    /// </para>
-    /// </remarks>
+    /// <summary>The checkout button's caption, which is the ACTION and the AMOUNT it will charge: «Оплатить 220.00 ₽».</summary>
+    /// <remarks>Почему так — `docs/decisions/menu.md`</remarks>
+
     public string PayAndCreateText => $"Оплатить {TotalText}";
 
     private bool isBusy;
@@ -399,60 +303,32 @@ public partial class MenuViewModel : ObservableObject
             if (SetProperty(ref message, value)) OnPropertyChanged(nameof(HasMessage));
             if (!string.IsNullOrWhiteSpace(value)) IsErrorMessage = false;
 
-            // …and it retires the pending undo. One message owns the strip, so an «Отменить»
-            // left sitting beside "Номер сохранён." would offer to put back a line whose
-            // removal the operator has long since moved past. A removal therefore arms its
-            // undo AFTER writing its own message — see RemoveItem.
+            /// <summary>…and it retires the pending undo. One message owns the strip, so an «Отменить» left sitting beside "Номер сохранён." would offer to put back a line whose removal the operator has long since moved past. A removal therefore arms its undo AFTER writing its own message — see RemoveItem.</summary>
+
             ClearPendingUndo();
         }
     }
     public bool HasMessage => !string.IsNullOrWhiteSpace(Message);
 
-    /// <summary>The header continuation that says the cart came from a saved draft.</summary>
-    /// <remarks>
-    /// The state is DraftAutosave's; this is a read, because MenuPage.xaml binds the pair by name
-    /// and the header alternates between this and the word «Корзина» depending on it. The long
-    /// reasoning about why it is not a message moved with it.
-    /// </remarks>
+    /// <remarks>`docs/decisions/menu.md`</remarks>
+
     public string DraftNotice => autosave.DraftNotice;
 
     /// <summary>Whether the header shows the notice instead of the word «Корзина».</summary>
     public bool HasDraftNotice => autosave.HasDraftNotice;
 
-    // ── Undo of a removal ───────────────────────────────────────────────────────────────────────
-    // Baymard's five requirements for a cart include "provide an undo option if a cart item is
-    // removed", and NN/g found users "accidentally added the same item to their cart multiple
-    // times" — both point the same way: removing is the mistake worth making recoverable, adding
-    // is not, because a second add is obvious on the row itself.
-    //
-    // NO TIMER, and that is the design rather than an omission. The undo lives in the message strip
-    // that was already there, so it costs no additional row: the strip is present whenever a
-    // message is, and absent otherwise. It is retired by the NEXT message rather than by a clock
-    // (Message's setter calls ClearPendingUndo), so «Отменить» is offered for exactly the outcome it
-    // belongs to and can never sit beside an unrelated one. Nothing has to be torn down on a timer,
-    // so nothing leaks if the page is left.
-    //
-    // The removed line is put back at the INDEX it was removed from, not appended: a cart read
-    // top-to-bottom is a sequence, and a cashier who removes the third line and undoes it expects
-    // the third line back.
+    /// <summary>── Undo of a removal ─────────────────────────────────────────────────────────────────────── Baymard's five requirements for a cart include "provide an undo option if a cart item is removed", and NN/g found users "accidentally added the same item to their cart multiple times" — both point the same way: removing is the mistake worth making recoverable, adding is not, because a second add is obvious on the row itself. NO TIMER, and that is the design rather than an omission. The undo lives in the message strip that was already there, so it costs no additional row: the strip is present whenever a message is, and absent otherwise. It is retired by the NEXT message rather than by a clock (Message's setter calls ClearPendingUndo), so «Отменить» is offered for exactly the outcome it belongs to and can never sit beside an unrelated one. Nothing has to be torn down on a timer, so nothing leaks if the page is left. The removed line is put back at the INDEX it was removed from, not appended: a cart read top-to-bottom is a sequence, and a cashier who removes the third line and undoes it expects the third line back.</summary>
 
-    /// <summary>Whether the message strip is currently offering to put a line back.</summary>
-    /// <remarks>
-    /// A proxy, like <see cref="Cart"/> and <see cref="Total"/>. The state itself is
-    /// <see cref="CartBuilder"/>'s; the shell re-announces it because the strip that shows it is
-    /// bound here.
-    /// </remarks>
+
+    /// <remarks>`docs/decisions/menu.md`</remarks>
+
     public bool HasUndo => cart.HasUndo;
 
     /// <summary>Retires a pending undo, as <c>Message</c>'s setter does for every message.</summary>
     private void ClearPendingUndo() => cart.ClearPendingUndo();
 
-    /// <summary>Puts the line the last message removed back where it was, and says so.</summary>
-    /// <remarks>
-    /// The restore itself is <see cref="CartBuilder.Restore"/>'s, down to the quantity and the index —
-    /// the two things that cost an emulator session when they were wrong. What stays here is the two
-    /// things the cart must not know about: the sentence, and the haptic.
-    /// </remarks>
+    /// <remarks>`docs/decisions/menu.md`</remarks>
+
     private void UndoRemove()
     {
         var restored = cart.Restore();
@@ -464,12 +340,8 @@ public partial class MenuViewModel : ObservableObject
 
 
     private bool isErrorMessage;
-    /// <summary>
-    /// Whether <see cref="Message"/> reports a failure. One string carried both outcomes
-    /// and the label was styled SecondaryLabel either way, so the confirmation of a created
-    /// order and a failed add looked alike — and the confirmation sat last on the screen,
-    /// under the button, in the flow where it matters most. Set via <see cref="SetError"/>.
-    /// </summary>
+    /// <summary>Whether reports a failure. One string carried both outcomes and the label was styled SecondaryLabel either way, so the confirmation of a created order and a failed add looked alike — and the confirmation sat last on the screen, under the button, in the flow where it matters most. Set via .</summary>
+
     public bool IsErrorMessage
     {
         get => isErrorMessage;
@@ -481,28 +353,9 @@ public partial class MenuViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// The ink for <see cref="Message"/>: red on a failure, green otherwise.
-    /// </summary>
-    /// <remarks>
-    /// This label was MEASURED wrong on a Pixel 7 in dark theme: it painted
-    /// <c>Success #2E7D32</c> on <c>#1E1E1E</c>, 3.28:1, because the colour arrived as a
-    /// <c>Setter</c> inside a <c>DataTrigger</c> holding a bare <c>{StaticResource Success}</c> —
-    /// and a trigger Setter takes a VALUE, not a binding expression, so the token is resolved
-    /// once at parse time against the light theme and no later theme change can re-resolve it.
-    /// Two triggers, one per outcome, so both branches were latched.
-    /// <para>
-    /// The fix is to stop using a trigger for a colour at all and resolve it here, against the
-    /// live theme — <c>SuccessDark</c> measures 8.28:1 on <c>SurfaceDark</c>, which is the figure
-    /// the measured 3.28:1 should have been.
-    /// </para>
-    /// <para>
-    /// Both outcomes carry their own token, so unlike the untinted case elsewhere there is no
-    /// "leave it to the implicit style" branch to reproduce. The text always says which one it is
-    /// ("Заказ #1 создан…", "Добавьте товары в заказ."), so the colour reinforces the sentence and
-    /// never carries the meaning alone.
-    /// </para>
-    /// </remarks>
+    /// <summary>The ink for : red on a failure, green otherwise.</summary>
+    /// <remarks>Почему так — `docs/decisions/menu.md`</remarks>
+
     public Color MessageColor => IsErrorMessage
         ? PaletteAccess.Resolve("Danger", "DangerDark")
         : PaletteAccess.Resolve("Success", "SuccessDark");
@@ -514,40 +367,18 @@ public partial class MenuViewModel : ObservableObject
     /// <summary>The chosen category, or <c>null</c> for everything. The catalogue's, computed.</summary>
     public Category? SelectedCategory => menu.SelectedCategory;
 
-    // ── Which chip is selected ──────────────────────────────────────────────────────────────────
-    // A KEY, not a Category, and it belongs to the catalogue now. The strip holds three kinds of chip —
-    // «Все», the real categories and «Комбо» — and two of them have no Category at all. The old test
-    // was chip.Category?.Id == SelectedCategory?.Id || (chip.IsAll && SelectedCategory is null), which
-    // reads correctly for a strip of one kind of chip and is WRONG for this one: when no category is
-    // selected both sides are null, so every category-less chip — «Все» AND «Комбо» — compared equal
-    // and lit up together. Comparing the chip's own identity removes the whole class of bug rather
-    // than adding a case to it. See MenuFilter.
+    /// <summary>── Which chip is selected ────────────────────────────────────────────────────────────────── A KEY, not a Category, and it belongs to the catalogue now. The strip holds three kinds of chip — «Все», the real categories and «Комбо» — and two of them have no Category at all. The old test was chip.Category?.Id == SelectedCategory?.Id || (chip.IsAll && SelectedCategory is null), which reads correctly for a strip of one kind of chip and is WRONG for this one: when no category is selected both sides are null, so every category-less chip — «Все» AND «Комбо» — compared equal and lit up together. Comparing the chip's own identity removes the whole class of bug rather than adding a case to it. See MenuFilter.</summary>
+
     public Guid SelectedFilterKey => menu.SelectedFilterKey;
 
-    /// <summary>
-    /// True while the «Комбо» chip is selected. The product grid is then hidden, because a bundle
-    /// is not a <c>Product</c> and no amount of filtering <see cref="FilteredProducts"/> can produce
-    /// one — «filter to combos only» means the grid is empty, not narrowed.
-    /// </summary>
-    public bool IsCombosOnly => menu.IsBundlesOnly;
-    // ─ Fulfilment, contact and time ────────────────────────────────────────────────────────────────────────────────────
-    // Three facts about the ORDER rather than about any line, all of them now FulfilmentEditor's.
-    //
-    // EVERY MEMBER IN THIS SECTION IS GET-ONLY, AND THAT IS THE POINT. The first version of these
-    // proxies kept their own backing fields and setters, so a write landed in the shell's field
-    // while the getter read the editor's - two states, and the write invisible to every read.
-    // The_cart_starts_as_counter_service_and_the_toggle_moves_it caught it. Removing the write
-    // surface altogether makes that class of bug unrepresentable rather than merely fixed.
-    // Writes go through the editor's named operations - Select, SetPhone, SetPromise,
-    // SetExpanded, Reset. See the editor for why those are named rather than properties.
+    /// <summary>True while the «Комбо» chip is selected. The product grid is then hidden, because a bundle is not a Product and no amount of filtering can produce one — «filter to combos only» means the grid is empty, not narrowed.</summary>
 
-    /// <summary>The three facts about the ORDER: fulfilment, phone, promised time.</summary>
-    /// <remarks>
-    /// The third Collaborator. Every member below is a proxy onto
-    /// <see cref="FulfilmentEditor"/> because MenuPage.xaml binds them here by name; the state is
-    /// the editor's and the values are not mirrored. The constructor subscribes and re-announces, so
-    /// a binding reads the editor's value rather than a stale copy.
-    /// </remarks>
+    public bool IsCombosOnly => menu.IsBundlesOnly;
+    /// <summary>─ Fulfilment, contact and time ──────────────────────────────────────────────────────────────────────────────────── Three facts about the ORDER rather than about any line, all of them now FulfilmentEditor's. EVERY MEMBER IN THIS SECTION IS GET-ONLY, AND THAT IS THE POINT. The first version of these proxies kept their own backing fields and setters, so a write landed in the shell's field while the getter read the editor's - two states, and the write invisible to every read. The_cart_starts_as_counter_service_and_the_toggle_moves_it caught it. Removing the write surface altogether makes that class of bug unrepresentable rather than merely fixed. Writes go through the editor's named operations - Select, SetPhone, SetPromise, SetExpanded, Reset. See the editor for why those are named rather than properties.</summary>
+
+
+    /// <remarks>`docs/decisions/menu.md`</remarks>
+
     private readonly FulfilmentEditor fulfilment;
 
     /// <summary>Whether the fulfilment block is open.</summary>
@@ -579,16 +410,12 @@ public partial class MenuViewModel : ObservableObject
     /// <summary>What the button says it will do, including what switching will cost.</summary>
     public string ToggleOrderTypeHint => fulfilment.ToggleOrderTypeHint;
 
-    /// <summary>
-    /// The number kept for a takeaway order. Held only while the order is on the cart and written by
-    /// <see cref="ICheckoutService"/>, which is the only place that decides to keep one at all.
-    /// </summary>
+    /// <summary>The number kept for a takeaway order. Held only while the order is on the cart and written by , which is the only place that decides to keep one at all.</summary>
+
     public string? CustomerPhone => fulfilment.CustomerPhone;
 
-    /// <summary>The number as the cashier reads it back, masked.</summary>
-    /// <remarks>
-    /// The cart is the customer-facing surface, so the mask goes here and nowhere else on this screen.
-    /// </remarks>
+    /// <remarks>`docs/decisions/menu.md`</remarks>
+
     public string PhoneDisplayText => fulfilment.PhoneDisplayText;
 
     /// <summary>Whether a number has been entered.</summary>
@@ -600,12 +427,8 @@ public partial class MenuViewModel : ObservableObject
     /// <summary>When the customer was told it would be ready, or <c>null</c> for as soon as possible.</summary>
     public DateTimeOffset? RequestedAt => fulfilment.RequestedAt;
 
-    /// <summary>Whether the promised time has already passed.</summary>
-    /// <remarks>
-    /// A computed reading of the wall clock, not a stored flag, so it cannot disagree with the order —
-    /// and therefore goes stale on its own, which is why <c>LoadAsync</c> re-reads it on every return to
-    /// the tab.
-    /// </remarks>
+    /// <remarks>`docs/decisions/menu.md`</remarks>
+
     public bool IsRequestedTimeLate => fulfilment.IsRequestedTimeLate;
 
     /// <summary>What the "когда" control reads: «сейчас», or the chosen clock time.</summary>
@@ -630,34 +453,17 @@ public partial class MenuViewModel : ObservableObject
     /// <summary>Opens the composition sheet for a bundle line, pre-filled and editable.</summary>
     public IAsyncRelayCommand<CartItemViewModel> EditLineCompositionCommand { get; }
 
-    /// <summary>
-    /// Flips the order between eating in and taking away, in one tap, from one button.
-    /// </summary>
-    /// <remarks>
-    /// Replaces <c>SelectCounterServiceCommand</c> and <c>SelectTakeawayCommand</c>, which existed only
-    /// to back the two segments. It calls the same <c>SelectOrderType</c> either way, so the legal and
-    /// privacy consequences still run exactly as they did — a switch back to counter service still
-    /// DROPS the phone rather than hiding the row (152-ФЗ ст. 6(1)(5)). One command also means there is
-    /// no pair that can disagree about which state is live: the button reads
-    /// <see cref="ToggleOrderTypeText"/>, which is derived from the same <see cref="OrderType"/>.
-    /// <para>
-    /// Neither direction writes to the message strip any more, because the state it used to announce is
-    /// now on screen twice already — and a switch that DOES destroy a typed phone still does announce
-    /// itself, since that loss is not readable off a row. See <c>SelectOrderType</c> for both halves.
-    /// </para>
-    /// </remarks>
+    /// <summary>Flips the order between eating in and taking away, in one tap, from one button.</summary>
+    /// <remarks>Почему так — `docs/decisions/menu.md`</remarks>
+
     public IRelayCommand ToggleOrderTypeCommand { get; }
 
     /// <summary>Enters a phone, checks it, and has the cashier read it back to the customer.</summary>
     public IAsyncRelayCommand EditPhoneCommand { get; }
 
-    /// <summary>
-    /// Opens and closes the fulfilment/contact/time block in place.
-    /// </summary>
-    /// <remarks>
-    /// A toggle rather than two commands, so the control that is on screen and the state it moves
-    /// cannot disagree: there is no «Открыть» button that stays live after the block is already open.
-    /// </remarks>
+    /// <summary>Opens and closes the fulfilment/contact/time block in place.</summary>
+    /// <remarks>Почему так — `docs/decisions/menu.md`</remarks>
+
     public IRelayCommand ToggleFulfilmentCommand { get; }
 
     /// <summary>Puts back the line the last message removed. See the undo notes near <see cref="HasUndo"/>.</summary>
@@ -666,12 +472,8 @@ public partial class MenuViewModel : ObservableObject
     /// <summary>Opens the "когда" sheet: as soon as possible, or a clock time.</summary>
     public IAsyncRelayCommand PickTimeCommand { get; }
 
-    /// <summary>
-    /// Takes the payment and books the order paid — or books it to be paid on collection, which the
-    /// operator chooses inside the sheet. «Оплата при выдаче» left this screen and became a second
-    /// exit from the payment sheet, so <c>CreateWithoutPaymentCommand</c> went with the button that
-    /// used to carry it and this command now owns both outcomes.
-    /// </summary>
+    /// <summary>Takes the payment and books the order paid — or books it to be paid on collection, which the operator chooses inside the sheet. «Оплата при выдаче» left this screen and became a second exit from the payment sheet, so CreateWithoutPaymentCommand went with the button that used to carry it and this command now owns both outcomes.</summary>
+
     public IAsyncRelayCommand PayAndCreateCommand { get; }
 
     public IAsyncRelayCommand ParkOrderCommand { get; }
