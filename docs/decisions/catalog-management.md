@@ -158,3 +158,50 @@ private void ScheduleFilterRefresh()
 Restarts the debounce timer on every filter change, so the filter runs once the operator
 stops acting. It used to fire per keystroke, which re-scanned the whole catalogue and
 re-diffed the list on each character and stutters on a long catalogue.
+
+## The two chip strips
+
+```xml
+<HorizontalStackLayout BindableLayout.ItemsSource="{Binding Sections}"
+                       BindableLayout.ItemTemplate="{StaticResource SectionChipTemplate}"
+                       Spacing="6" />
+```
+
+**FlexLayout was the defect, and it was not cosmetic.** Both strips were a `FlexLayout`
+with `Direction="Row" Wrap="NoWrap"` inside a horizontal `ScrollView`. FlexLayout does not
+honour a child's `HeightRequest`: the chips measured **25dp tall instead of the 44dp the
+style asked for**, and the 1dp stroke with `RoundRectangle 22` on a box that was 25dp tall
+and only as wide as its text drew just the two corner arcs. A chip appeared as two loose
+curves with the label jammed between them — no top edge, no bottom edge, no side padding.
+`HorizontalStackLayout` measures children properly and honours `HeightRequest`; measured on
+the emulator afterwards, 44.2dp, with the pill whole.
+
+Why `Spacing` and not a margin on each chip: FlexLayout has no spacing property at all, so
+the 6dp gutter had to be a `Margin` per chip. `HorizontalStackLayout` has `Spacing`, so the
+gutter is one number. (Naming a spacing property on FlexLayout is not a build error — Debug
+builds parse this XAML at runtime and only `ApplyPropertiesVisitor.SetPropertyValue` rejects
+it, at inflation time.)
+
+**Scrolling, not wrapping.** Five sections measure 75.8 + 69.3 + 80.8 + 122.3 + 114.7 = 463dp
+of chip plus 24dp of gutter, and the emulator is 411dp wide. No padding change fits five on a
+phone, so the strip scrolls and no width is hardcoded — there is no breakpoint in this file.
+
+**One line per chip.** `Button` has no `MaxLines`; that is a `Label` property, and setting it
+on a Button style is XamlC `XC0001`. `Button` does take `LineBreakMode`. `FilterChipText` is a
+`Label` and takes both. A chip that wraps is what pushed a tab off the right edge in the first
+place.
+
+**`MinimumWidthRequest="64"` on `FilterChip`.** A chip is as wide as its label, so «Все» (three
+letters) came out 50dp wide and 44dp tall, and a 22dp corner radius on that is a circle — it
+read as a radio button parked next to real chips. 64dp keeps every chip reading as a pill.
+
+### Known remaining weakness, stated rather than hidden
+
+The section strip has no reliable "there is more to the right" signal. `HorizontalScrollBarVisibility="Default"`
+was chosen for exactly that reason, but on Android the bar did not appear in a screenshot taken
+straight after a swipe. The only cue left is a chip running past the right edge, and after these
+measurements the fourth chip ends at 1032px of 1080 — inside the screen, so the fifth is hidden
+by about 17px with nothing to show for it. A right-edge fade would fix it but needs a gradient
+matched to the page background in both themes, and a permanent fade would smudge the edge on a
+tablet where all five fit. Left alone deliberately; worth doing properly if the section count grows.
+

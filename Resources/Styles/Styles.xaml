@@ -209,6 +209,11 @@
         <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
         <Setter Property="BackgroundColor" Value="Transparent" />
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}" />
+        <!-- A chip is one line. Button has no MaxLines - that is a Label property - but it does
+             take LineBreakMode, and a Button that wraps is what pushed «Модификатор» off the right
+             edge. The real fix for that was the strip measuring its children properly (see the
+             HorizontalStackLayout at the two chip strips); this only stops a long name mid-word. -->
+        <Setter Property="LineBreakMode" Value="TailTruncation" />
     </Style>
 
     <!-- The active state is NOT a second style. It is a DataTrigger inside the single chip
@@ -230,6 +235,10 @@
         <Setter Property="Padding" Value="14,0" />
         <Setter Property="HeightRequest" Value="44" />
         <Setter Property="MinimumHeightRequest" Value="44" />
+        <!-- A chip is as wide as its label, so a short one («Все», 3 letters) came out 50dp wide
+             and 44dp tall - and a 22dp corner radius on that is a circle, not a pill, which read as
+             a radio button sitting next to real chips. 64dp keeps every chip reading as a pill. -->
+        <Setter Property="MinimumWidthRequest" Value="64" />
         <Setter Property="StrokeThickness" Value="1" />
         <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
         <Setter Property="StrokeShape" Value="RoundRectangle 22" />
@@ -241,6 +250,8 @@
         <Setter Property="FontAttributes" Value="Bold" />
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}" />
         <Setter Property="VerticalTextAlignment" Value="Center" />
+        <Setter Property="MaxLines" Value="1" />
+        <Setter Property="LineBreakMode" Value="TailTruncation" />
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->

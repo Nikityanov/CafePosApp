@@ -72,43 +72,17 @@
     <Grid RowDefinitions="Auto,Auto,*">
 
         <!-- ═══ HEADER: entity switcher ═══ -->
-            <!-- Four equal columns gave "Модификаторы" ~81dp on a 360dp phone, less than the word needs
-                 at 13pt bold, and SectionTab pinned HeightRequest=36 so the overflow was clipped rather
-                 than wrapped. The buttons now size to their text and the strip scrolls: on a 320dp
-                 phone it scrolls sideways, on a tablet it fits. No width is hardcoded anywhere, which
-                 is the whole point — there was no breakpoint in this file before.
-                 MAUI's FlexLayout has no spacing property at all (not Spacing, not ColumnSpacing /
-                 RowSpacing — those are Grid's), so the 6dp gutter between chips is a Margin on each
-                 chip instead. Naming a spacing property here is not a build error: Debug builds parse
-                 this XAML at runtime and only ApplyPropertiesVisitor.SetPropertyValue rejects it, at
-                 inflation time.
-                 Wrap is NoWrap, not Wrap: a horizontal ScrollView measures its content with an
-                 infinite width, so a wrapping FlexLayout can never find a line to break on and its
-                 measure pass comes back with a bogus height — the strip reserved ~230dp of blank space
-                 below the chips. The old comment claimed the chips "take two rows" on a narrow phone,
-                 which a horizontal ScrollView cannot do anyway. The category strip below was already
-                 NoWrap for the same reason.
-
-                 «Обновить» is gone from this header too, by the same owner decision as the orders,
-                 shift report and analytics pages. The single trailing Auto column existed to hold it,
-                 so the header is one wide scrolling strip again and the chips get the whole width —
-                 which on a narrow phone is the difference between "Модификаторы" being fully visible
-                 and being clipped mid-word. This page does not poll, so the reload is
-                 leave-and-re-enter, which OnAppearing already does. -->
+            <!-- Five sections, and the widest two («Модификаторы» 122dp, «Ингредиенты» 115dp) put them
+                 at 487dp — wider than any phone, so the strip scrolls. HorizontalStackLayout, not
+                 FlexLayout: FlexLayout does not honour a child's HeightRequest, which squashed these
+                 chips to 25dp and collapsed each pill outline to two loose arcs.
+                 Why so — `docs/decisions/catalog-management.md` -->
         <Grid x:Name="HeaderRow" Grid.Row="0" HorizontalOptions="Center" MaximumWidthRequest="1400" Padding="12,8,12,4">
-                <!-- The strip scrolls with the scrollbar visible, because the scrollbar is the affordance:
-                 a chip clipped mid-word at the right edge reads as a broken layout rather than as
-                 "there is more to the right" — measured on the emulator, "Модификатор" was cut
-                 after the "р" against the old «Обновить» button. "Default" is the setting that
-                 shows the bar exactly when there is something to scroll to. It is one of exactly
-                 three members — Default, Always, Never — and ScrollView exposes no thickness
-                 property, so nothing else is available; "Visible" and "Auto" are not members and
-                 each of them aborted the process at inflation. -->
             <ScrollView Orientation="Horizontal"
                         HorizontalScrollBarVisibility="Default" VerticalScrollBarVisibility="Never">
-                <FlexLayout BindableLayout.ItemsSource="{Binding Sections}"
-                            BindableLayout.ItemTemplate="{StaticResource SectionChipTemplate}"
-                            Direction="Row" Wrap="NoWrap" AlignItems="Start" />
+                <HorizontalStackLayout BindableLayout.ItemsSource="{Binding Sections}"
+                                       BindableLayout.ItemTemplate="{StaticResource SectionChipTemplate}"
+                                       Spacing="6" />
             </ScrollView>
             </Grid>
 
@@ -180,13 +154,13 @@
                                VerticalOptions="Center" Margin="4,0" />
 
                         <!-- The category filter. It replaces a fixed 120dp Picker: on Android that opens a
-                             blocking modal, swallows the system Back key (dotnet/maui#30430), and cannot show
-                             the active filter. A chip strip shows every category at once and wraps. -->
+                             blocking modal and swallows the system Back key (dotnet/maui#30430). The strip
+                             scrolls sideways rather than wrapping - see docs/decisions/catalog-management.md. -->
                         <ScrollView Grid.Row="1" Orientation="Horizontal" Margin="0,2,0,0"
                                     HorizontalScrollBarVisibility="Never" VerticalScrollBarVisibility="Never">
-                            <FlexLayout BindableLayout.ItemsSource="{Binding CategoryFilters}"
-                                        BindableLayout.ItemTemplate="{StaticResource CategoryChipTemplate}"
-                                        Direction="Row" Wrap="NoWrap" AlignItems="Center" />
+                            <HorizontalStackLayout BindableLayout.ItemsSource="{Binding CategoryFilters}"
+                                                   BindableLayout.ItemTemplate="{StaticResource CategoryChipTemplate}"
+                                                   Spacing="6" />
                         </ScrollView>
 
                         <!-- The whole row toggles the switch. The Switch was scaled to 0.8, which put its

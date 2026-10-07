@@ -11,6 +11,7 @@
                     BackgroundColor="{Binding ChipBackground}">
                 <Label Text="{Binding Name}"
                        HorizontalOptions="Center"
+                       MaxLines="1"
                        LineBreakMode="TailTruncation"
                        TextColor="{Binding ChipTextColor}"
                        FontSize="13"
