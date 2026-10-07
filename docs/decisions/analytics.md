@@ -210,3 +210,13 @@ private double ShiftRevenueShare(decimal value) =>
 The denominator is the WHOLE shift, never the visible subset. A share that moves when the
 filter moves is not a share of anything the manager can hold in their head, and a chip that
 said «34% выручки» on one tap and «91%» on the next would be worse than saying nothing.
+
+## IOrderReporting и IShiftLedger
+
+```csharp
+private readonly IOrderReporting reporting;
+private readonly IShiftLedger ledger;
+```
+
+Two ports, not the old flat `IOrderService`. This screen read aggregates and a list of shifts, and held an interface that also closed the till — a report reconciling a drawer it only ever displays. The shift list comes from `IShiftLedger` because that IS a shift question; the numbers come from `IOrderReporting`, which is where their definitions live. Named `ledger` and `reporting` rather than `shifts`/`reports` because both methods below declare locals of those names, and a field a local silently shadows is a bug waiting for someone to add one line to the wrong scope.
+
