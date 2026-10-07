@@ -3,7 +3,7 @@
 - **Started:** 2026-10-07 14:05
 - **Branch:** chore/drop-superseded-analytics-branch
 - **Kind:** chore
-- **Status:** in progress
+- **Status:** merged — `a377144` (merge commit), `c0e2f76` (branch)
 
 ## Why
 
