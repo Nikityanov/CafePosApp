@@ -458,13 +458,12 @@ public partial class MenuViewModel
     /// </remarks>
     private void SelectOrderType(OrderType value)
     {
-        // The decision is FulfilmentSwitch's; this applies it. See that type for why the phone is read
-        // before it is dropped and why silence means not touching Message at all.
-        var change = FulfilmentSwitch.Decide(OrderType, value, !string.IsNullOrWhiteSpace(CustomerPhone));
+        // The DECISION is FulfilmentEditor's, down to the phone it reads before dropping and the
+        // silence it returns for a no-op. See FulfilmentSwitch for why those three are one thing and
+        // why silence means not touching Message at all. All this method has left is the two things
+        // the editor cannot do for itself: speak, and buzz.
+        var change = fulfilment.Select(value);
         if (!change.Changed) return;
-
-        OrderType = change.OrderType;
-        if (change.ClearsPhone) CustomerPhone = null;
 
         // Assigned ONLY on the loss. Setting Message to an empty string would still retire a pending
         // undo (its setter calls ClearPendingUndo), so a silent switch must not touch the property at
@@ -486,7 +485,9 @@ public partial class MenuViewModel
     /// a no-op, which is what a toggle wants.
     /// </remarks>
     private void SwitchOrderType() =>
-        SelectOrderType(OrderType == OrderType.CounterService ? OrderType.Takeaway : OrderType.CounterService);
+        // The other type is the editor's to answer: it is the counterpart of the state it holds, and
+        // spelling the comparison out here would give the shell a second copy of that rule.
+        SelectOrderType(fulfilment.Other);
 
     /// <summary>
     /// Enters a phone, checks that it is one, and has the cashier read it back before it is kept.
@@ -534,7 +535,7 @@ public partial class MenuViewModel
 
             if (string.IsNullOrWhiteSpace(raw))
             {
-                CustomerPhone = null;
+                fulfilment.SetPhone(null);
                 Message = "Номер не указан. Заказ можно оформить без телефона.";
                 return;
             }
@@ -568,7 +569,7 @@ public partial class MenuViewModel
                 continue;
             }
 
-            CustomerPhone = normalized;
+            fulfilment.SetPhone(normalized);
             Message = "Номер сохранён.";
             haptics.Click();
             return;
@@ -590,18 +591,23 @@ public partial class MenuViewModel
 
         if (choice.IsAsSoonAsPossible)
         {
-            RequestedAt = null;
+            fulfilment.SetPromise(null);
             Message = OrderPromise.AsSoonAsPossibleMessage;
             haptics.Click();
             return;
         }
 
-        RequestedAt = OrderPromise.At(choice.TimeOfDay, timeProvider.GetLocalNow(), timeProvider.LocalTimeZone);
+        var promised = OrderPromise.At(choice.TimeOfDay, timeProvider.GetLocalNow(), timeProvider.LocalTimeZone);
+        fulfilment.SetPromise(promised);
 
         // Overdue is stated, because it is not obvious from the figure. «Заказ к 14:20» at 15:05 is a
         // different order from «Заказ к 14:20» at 13:00 and the sentence has to say which one this is —
         // otherwise the operator reads their own confirmation as a mistake.
-        Message = OrderPromise.Describe(RequestedAt!.Value, timeProvider.GetLocalNow(), timeProvider.LocalTimeZone);
+        //
+        // Describing the LOCAL `promised` rather than re-reading the property: the sheet was opened on
+        // the order's current state, so a dismissal is a null and this is the only write. Reading it
+        // back would be a second source of truth for a value that is already in hand.
+        Message = OrderPromise.Describe(promised, timeProvider.GetLocalNow(), timeProvider.LocalTimeZone);
         haptics.Click();
     }
 

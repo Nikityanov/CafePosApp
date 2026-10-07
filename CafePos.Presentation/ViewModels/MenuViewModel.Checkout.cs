@@ -183,9 +183,11 @@ public partial class MenuViewModel
     {
         Cart.Clear();
         Recalculate();
-        OrderType = OrderType.CounterService;
-        CustomerPhone = null;
-        RequestedAt = null;
+
+        // One call, not three assignments. These were cleared field by field, which meant a fourth
+        // fact added to the order later would silently survive the reset unless someone remembered
+        // this line. FulfilmentEditor.Reset is where the list of what a new order starts without lives.
+        fulfilment.Reset();
         // The cart is no longer the restored draft; it is a new, unstarted one. Left in place it
         // would head an empty «Корзина» with a note about an order that has now been paid for.
         DraftNotice = string.Empty;
@@ -223,9 +225,7 @@ public partial class MenuViewModel
             // into the next order instead. The Core side needed is: an OrderDetailsIntent parameter on
             // ParkAsync/SaveActiveCartAsync and on CartSnapshot, plus a ThenInclude on Components in
             // LoadActiveCartAsync/TakeAsync.
-            OrderType = OrderType.CounterService;
-            CustomerPhone = null;
-            RequestedAt = null;
+            fulfilment.Reset();
 
             await drafts.ClearActiveCartAsync();
             Message = $"Чек отложен: {parked.Name}.";
