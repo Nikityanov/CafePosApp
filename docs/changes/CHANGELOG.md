@@ -28,6 +28,7 @@ the question you ask when a revert is being considered.
 
 | Date | Kind | Change | Detail | Branch | Merged |
 |---|---|---|---|---|---|
+| 2026-10-07 16:19 | fix | Editing an order writes no stock movement, and checks no stock | [record](2026-10-07-1619-fix-order-edit-stock.md) | `fix/order-edit-stock` | `—` |
 | 2026-10-07 14:05 | chore | Delete fix/analytics-scrolling, superseded | [record](2026-10-07-1405-chore-drop-superseded-analytics-branch.md) | `chore/drop-superseded-analytics-branch` | [`a377144`](https://github.com/Nikityanov/CafePosApp/commit/a377144) |
 | 2026-10-07 13:40 | docs | One changelog index over the change records | [record](2026-10-07-1340-docs-changelog-index.md) | `docs/changelog-index` | [`95a49e3`](https://github.com/Nikityanov/CafePosApp/commit/95a49e3) |
 | 2026-10-07 13:05 | chore | Merge, then delete the branch | [record](2026-10-07-1305-chore-delete-branch-after-merge.md) | `chore/delete-branch-after-merge` | [`59a3905`](https://github.com/Nikityanov/CafePosApp/commit/59a3905) |
