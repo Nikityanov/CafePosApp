@@ -32,15 +32,9 @@ public class PriceHistoryEntry
     public DateTimeOffset ChangedAt { get; set; } = DateTimeOffset.UtcNow;
     public string Reason { get; set; } = string.Empty;
 
-    /// <summary>
-    /// One-line summary of the change, e.g. "12.05.2026: 200 → 250 ₽" or "… → 250 ₿". Bound
-    /// directly so the history list does not need a MultiBinding over three paths.
-    /// </summary>
-    /// <remarks>
-    /// Whole units on both sides, deliberately: this is a price-change audit line, and "200 → 250"
-    /// is what a manager reads. The symbol comes from <see cref="Currencies.Default"/> via
-    /// <see cref="TextFormat"/>, so it follows the operator's setting.
-    /// </remarks>
+    // One-line summary of the change, e.g. "12.05.2026: 200 → 250 ₽" or "… → 250 ₿". Bound directly so the history list does not need a MultiBinding over three paths.
+    // Почему так — `docs/decisions/schema.md`
+
     [NotMapped]
     public string ChangeText
     {

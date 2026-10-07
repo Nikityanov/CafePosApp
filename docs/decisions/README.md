@@ -25,14 +25,28 @@
 
 | Файл | О чём | Из исходников |
 |---|---|---|
-| [menu.md](menu.md) | Меню, корзина, оформление | `MenuViewModel.Methods.cs`, `MenuViewModel.Load.cs` |
+| [menu.md](menu.md) | Меню, корзина, оформление | `MenuViewModel.*` |
 | [orders-board.md](orders-board.md) | Доска заказов, карточка строки | `OrdersViewModel.cs` |
-| [order-details.md](order-details.md) | Карточка заказа, оплата и отмена | `OrderDetailsViewModel.cs`, `.Commands.cs` |
+| [order-details.md](order-details.md) | Карточка заказа, оплата и отмена | `OrderDetailsViewModel.*` |
 | [payment-sheet.md](payment-sheet.md) | Лист оплаты | `PaymentSheetPopup.xaml.cs` |
-| [analytics.md](analytics.md) | Аналитика смены, разбивка по блюдам | `ShiftAnalyticsViewModel.cs`, `.List.cs` |
-| [shift-report.md](shift-report.md) | Отчёт по смене | `ShiftReportViewModel.Methods.cs` |
+| [analytics.md](analytics.md) | Аналитика смены, разбивка по блюдам | `ShiftAnalyticsViewModel.*` |
+| [shift-report.md](shift-report.md) | Отчёт по смене | `ShiftReportViewModel.*` |
 | [catalog-management.md](catalog-management.md) | Управление каталогом | `CatalogManagementViewModel.cs` |
 | [testing-cash.md](testing-cash.md) | Тесты кассы и сверки | `CashReconciliationTests.cs`, `CashLedgerTests.cs` |
+
+### `Core/` — правила предметной области
+
+Это самые важные документы: здесь то, что не даёт вернуть уже найденные баги.
+
+| Файл | О чём |
+|---|---|
+| [orders.md](orders.md) | Правила заказа: статусы, переходы, обещание времени, выручка |
+| [combos.md](combos.md) | Комбо: цена, состав, развёртка, правило «продавать можно» |
+| [checkout.md](checkout.md) | Оформление, оплата, книга платежей |
+| [cash.md](cash.md) | Касса, смена, сверка, движение денег |
+| [stock.md](stock.md) | Склад: списание, возврат, чего не хватает |
+| [shared.md](shared.md) | Общее: телефон, время, коллекции, решения из фазы 2 |
+| [schema.md](schema.md) | Миграции и схема |
 
 ## Чего здесь нет и почему
 

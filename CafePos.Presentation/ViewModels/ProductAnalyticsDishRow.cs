@@ -35,7 +35,8 @@ public sealed partial class ProductAnalyticsDishRow : ObservableObject
 
     private bool isExpanded = true;
 
-    /// <summary>Whether the modifier lines are shown. OPEN by default: the shift breakdown is a handful of rows, and hiding content behind a tap the reader has to discover is the wrong default for a report. A filter or a re-sort does not change it — see — while a SHIFT change folds everything, because there the dishes are different ones.</summary>
+    /// <summary>Whether the modifier lines are shown.</summary>
+    /// <remarks>Почему так - `docs/decisions/combos.md`</remarks>
 
     public bool IsExpanded
     {
@@ -59,7 +60,8 @@ public sealed partial class ProductAnalyticsDishRow : ObservableObject
 
     public string RevenueText => TextFormat.Money(Revenue);
 
-    /// <summary>The header as one sentence for a screen reader: what it is, how much, and whether it is open. Without the last part a non-sighted reader cannot tell a folded dish from a dish with nothing under it.</summary>
+    /// <summary>The header as one sentence for a screen reader: what it is, how much, and whether it is open.</summary>
+    /// <remarks>Почему так - `docs/decisions/combos.md`</remarks>
 
     public string Hint => $"{Name}. {QuantityText}, {RevenueText}. {Share}. {(isExpanded ? "Развёрнуто" : "Свёрнуто")}";
 }

@@ -28,7 +28,9 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
 
     private bool keypadOpen;
 
-    /// <summary>True while the prefilled balance is behaving as if it were SELECTED text: the next digit replaces it rather than appending to it. The keypad has no cursor and no selection, so this flag is what «the text is selected» means here, and it is cleared by the first key — which includes «Сброс» and «Стереть», because those are deliberate acts rather than typing.</summary>
+    /// <summary>True while the prefilled balance behaves as SELECTED text: the next digit replaces it.</summary>
+    /// <remarks>Why so — `docs/decisions/payment-sheet.md`</remarks>
+    /// <remarks>Почему так - `docs/decisions/payment-sheet.md`</remarks>
 
     private bool replaceEnteredOnNextDigit;
 
@@ -308,7 +310,10 @@ public partial class PaymentSheetPopup : Popup<PaymentSheetResult?>
         }
     }
 
-    /// <summary>The height of the system navigation bar in device-independent pixels, or 0 when there is none. Android-only: the other platforms either have no bottom bar or inset their content themselves.</summary>
+    /// <summary>    /// <summary>The height of the system navigation bar in device-independent pixels, or 0 when there isnone.</summary></summary>
+    /// <summary>/// <remarks>Почему так - docs/decisions/</remarks>none.</summary>
+    /// <remarks>Why so - docs/decisions/</remarks>
+    /// <remarks>Почему так - `docs/decisions/payment-sheet.md`</remarks>
 
     private static double GetBottomInset()
     {

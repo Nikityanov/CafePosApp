@@ -78,7 +78,8 @@ public partial class OrderDetailsViewModel
                 }
 
                 var (product, label) = sold.Value;
-                /// <summary>The dish's price, not the slot's stored override — see the same change in ComboFormViewModel.UnitKopecks. The override has had no control in the form since it was cut, so feeding it here would show the operator a component price in the composition editor that the form cannot produce and the form's own total does not use. The 4th argument is the dish's real price and is now the same figure twice rather than two different ones, which is the honest thing to hand the editor.</summary>
+                /// <summary>The dish's price, not the slot's stored override — see the same change in ComboFormViewModel.UnitKopecks.</summary>
+                /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
                 options.Add(new ComboSlotOption(
                     slot.ProductId,

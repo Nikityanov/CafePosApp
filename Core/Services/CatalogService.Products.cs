@@ -6,15 +6,9 @@ using Microsoft.Extensions.Logging;
 
 namespace CafePos.Core.Services;
 
-/// <summary>
-/// One half of the catalogue service: products.
-/// </summary>
-/// <remarks>
-/// The class is already partial and was already 416 lines with 24 methods over five aggregates.
-/// Splitting it by aggregate is pure movement: no type changes, no namespace change, no change
-/// to the primary constructor or to DI. Only this part declares the constructor and the
-/// interface - the others repeat neither.
-/// </remarks>
+/// <summary>One half of the catalogue service: products.</summary>
+/// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
 public sealed partial class CatalogService
 {
     // ─── Products ───
@@ -95,10 +89,8 @@ public sealed partial class CatalogService
     }
 
 
-    /// <summary>
-    /// Updates variants in place instead of deleting and recreating them: identifiers survive,
-    /// so price history (and any future reference to a variant) stays valid.
-    /// </summary>
+    /// <summary>Updates variants in place instead of deleting and recreating them: identifiers survive, so price history (and any future reference to a variant) stays valid.</summary>
+
     private void SyncVariants(AppDbContext db, Product existing, IReadOnlyCollection<ProductVariant> incoming, DateTimeOffset now)
     {
         var keptIds = new List<Guid>();
@@ -110,10 +102,9 @@ public sealed partial class CatalogService
 
             if (current is null)
             {
-                // Add through the DbSet, not through the loaded navigation: an entity pushed into
-                // the Variants collection of a tracked product is tracked as Modified (its key is
-                // already set, so EF cannot tell it is new), and EF then issues an UPDATE that
-                // matches no row → DbUpdateConcurrencyException.
+                /// <summary>Add through the DbSet, not through the loaded navigation: an entity pushed into the Variants collection of a tracked product is tracked as Modified (i…</summary>
+                /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
                 db.ProductVariants.Add(new ProductVariant
                 {
                     Id = variantId,

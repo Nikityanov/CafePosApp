@@ -1,9 +1,7 @@
 namespace CafePos.Core.Models;
 
-/// <summary>
-/// Status transition log. Orders now carry a full audit trail
-/// (who changed what and when) instead of only the current status.
-/// </summary>
+/// <summary>Status transition log. Orders now carry a full audit trail (who changed what and when) instead of only the current status.</summary>
+
 public class OrderStatusHistory
 {
     public Guid Id { get; set; } = Guid.NewGuid();

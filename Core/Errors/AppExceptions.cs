@@ -1,10 +1,7 @@
 namespace CafePos.Core.Errors;
 
-/// <summary>
-/// Base class for expected ("known") application errors.
-/// Everything that is not an <see cref="AppException"/> is treated as an unexpected failure
-/// and is reported with a log reference instead of a raw message.
-/// </summary>
+/// <summary>Base class for expected ("known") application errors. Everything that is not an is treated as an unexpected failure and is reported with a log reference instead of a raw message.</summary>
+
 public abstract class AppException(string message, Exception? innerException = null)
     : Exception(message, innerException)
 {

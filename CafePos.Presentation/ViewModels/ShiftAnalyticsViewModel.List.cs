@@ -10,7 +10,8 @@ namespace CafePos.Presentation.ViewModels;
 
 public partial class ShiftAnalyticsViewModel
 {
-    /// <summary>The breakdown exactly as the query returned it. Held rather than re-queried on every filter change: it is one shift's distinct products, it is bounded, and re-asking SQLite for a chip tap would put a disk round trip between the finger and the list moving.</summary>
+    /// <summary>The breakdown exactly as the query returned it.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     private IReadOnlyList<ProductAnalyticsRowData> unfilteredRows = [];
 
@@ -103,14 +104,18 @@ public partial class ShiftAnalyticsViewModel
         ? "по возрастанию"
         : "по убыванию";
 
-    /// <summary>── Grouping visibility ──────────────────────────────────────────────────────────────────── Exactly one of the three list shapes is bound at a time. Three flags rather than one enum binding, because XAML has no way to compare a bound enum to a literal without a converter and a converter would be a second place to keep the names in step.</summary>
+    /// <summary>── Grouping visibility ──────────────────────────────────────────────────────────────────── Exactly one of the three list shapes is bound at a time.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
 
     public bool IsSectionGrouping => grouping == ProductAnalyticsGrouping.SectionsAndDishes;
     public bool IsDishGrouping => grouping == ProductAnalyticsGrouping.Dishes;
     public bool IsFlatGrouping => grouping == ProductAnalyticsGrouping.None;
 
-    /// <summary>The section's own heading, which is no longer the constant «Продажи по блюдам и модификаторам» that was always wrong the moment a header went above a modifier row. Under there are no headers at all, and the wording says so rather than promising rows that are not there.</summary>
+    /// <summary>    /// <summary>The section's own heading, which is no longer the constant «Продажи по блюдам и модификаторам»that was always wrong the moment a head...</summary>
+    /// <summary>/// <remarks>Почему так - docs/decisions/</remarks>that was always wrong the moment a header went above a modifier r...</summary>
+    /// <remarks>Why so - docs/decisions/</remarks>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     public string ProductSectionTitle => grouping switch
     {
@@ -172,7 +177,8 @@ public partial class ShiftAnalyticsViewModel
 
     // ── Loading ───────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Takes a fresh breakdown from the query and rebuilds the list, the chips and the summary. Named for what it is not: it does not re-run the statistics, so «Обновить аналитику» and a filter change take visibly different amounts of work. Takes a fresh breakdown from the query and rebuilds the list, the chips and the summary.</summary>
+    /// <summary>Takes a fresh breakdown from the query and rebuilds the list, the chips and the summary.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
     /// <remarks>Почему так — `docs/decisions/analytics.md`</remarks>
 
     private void ApplyAnalytics(IReadOnlyList<ProductAnalyticsRowData> rows)
@@ -190,7 +196,8 @@ public partial class ShiftAnalyticsViewModel
 
     private void RebuildSectionChips()
     {
-        /// <summary>The section each line belongs to, straight off the query. Keyed by the category id so a RENAME keeps the chip selected instead of silently dropping the selection, and so two sections that differ only in case stay apart. THE KEY IS A SENTINEL, NOT NULL, and that was the bug that emptied the list. «Без раздела» arrives as a null CategoryId, and Dictionary refuses a null key outright — TryGetValue(null) throws ArgumentNullException rather than reporting "not found", so the very first unfiled line took the whole breakdown down with it and the screen said «За выбранную смену нет закрытых заказов» about a shift that had sold 30 items. Guid.Empty stands in for the unfiled section and is mapped back to null on the way out; it cannot collide, because no row is ever created with an empty id.</summary>
+        /// <summary>The section each line belongs to, straight off the query.</summary>
+        /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
         var bySection = new Dictionary<Guid, (string Name, int Quantity, decimal Revenue)>();
         foreach (var row in unfilteredRows)
@@ -205,7 +212,8 @@ public partial class ShiftAnalyticsViewModel
             bySection[key] = (current.Name, current.Quantity + row.Quantity, current.Revenue + row.Revenue);
         }
 
-        /// <summary>DROPPED FIRST, and the order matters. A section this shift does not sell must not stay selected: the filter is ANDed with the selection, so a stale id would hide every row while the chip for it claimed a section that is not on screen. Pruning before the selection is read below means a chip can never come back pre-selected for a section that is absent.</summary>
+        /// <summary>DROPPED FIRST, and the order matters.</summary>
+        /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
         var available = bySection.Keys.ToHashSet();
         selectedSections.RemoveWhere(id => !available.Contains(id ?? UnfiledSectionKey));
@@ -224,7 +232,8 @@ public partial class ShiftAnalyticsViewModel
             })
             .ToList();
 
-        /// <summary>Keyed on the (id, name) PAIR, not on the id. SectionId is a Guid? because null is a real chip («Без раздела») rather than "unknown", and SyncWith's TKey is constrained to notnull (CS8714). The usual shortcut — `SectionId ?? Guid.Empty` — would work and would be wrong in a way nobody could see: it silently merges «Без раздела» into a section that happens to have the empty GUID, and the two chips would then swap contents instead of coexisting. A ValueTuple is a struct, so it satisfies notnull, and null ids compare by the name.</summary>
+        /// <summary>Keyed on the (id, name) PAIR, not on the id.</summary>
+        /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
         SectionChips.SyncWith(chips, chip => (chip.SectionId, chip.Name));
         foreach (var chip in SectionChips) chip.SetShare(ShiftRevenueShare(chip.Revenue));
@@ -294,7 +303,10 @@ public partial class ShiftAnalyticsViewModel
         return row;
     }
 
-    /// <summary>Forgets every fold and opens every dish, called when the selected shift changes: the next shift sells different dishes, and a manager who folded «Капучино» away to read the rest of the day does not expect the fold to follow them to yesterday and hide a dish they have never seen folded.</summary>
+    /// <summary>    /// <summary>Forgets every fold and opens every dish, called when the selected shift changes: the nextshift sells different dishes, and a manager...</summary>
+    /// <summary>/// <remarks>Почему так - docs/decisions/</remarks>shift sells different dishes, and a manager who folded «Капучино» away...</summary>
+    /// <remarks>Why so - docs/decisions/</remarks>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     private void OpenAllDishes()
     {
@@ -315,7 +327,8 @@ public partial class ShiftAnalyticsViewModel
 
     // ── Commands ───────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Folds or unfolds one dish, and remembers which way it went. Every handler below takes its row as NULLABLE and returns on null. IRelayCommand declares Execute(object? parameter), so null is part of the contract whether or not the page supplies a CommandParameter: one of these rows losing its binding, or a tap landing before the template is realised, hands the command a null and the handler used to dereference it straight away. The compiler said so four times (CS8622) and the argument for leaving it was that the current XAML always passes a parameter — which is a property of a file, not of a type. `is not { } row` reads "and does nothing without a row", which is what a filter chip should do.</summary>
+    /// <summary>Folds or unfolds one dish, and remembers which way it went.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
     /// <remarks>Почему так — `docs/decisions/analytics.md`</remarks>
 
     private void ToggleDish(ProductAnalyticsDishRow? dish)

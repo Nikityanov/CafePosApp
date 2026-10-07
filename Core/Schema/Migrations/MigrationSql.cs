@@ -34,11 +34,8 @@ internal static class MigrationSql
         }
     }
 
-    /// <summary>
-    /// Converts a legacy TEXT money column (rubles, e.g. "220.5") into an INTEGER kopeck column.
-    /// Safe to call repeatedly: it does nothing when the target column already exists
-    /// or when the source column is already an integer.
-    /// </summary>
+    /// <summary>Converts a legacy TEXT money column (rubles, e.g. "220.5") into an INTEGER kopeck column. Safe to call repeatedly: it does nothing when the target column already exists or when the source column is already an integer.</summary>
+
     public static async Task ConvertMoneyColumnAsync(AppDbContext db, string table, string oldColumn, string newColumn, CancellationToken cancellationToken)
     {
         if (!await SqliteSchemaHelper.TableExistsAsync(db, table, cancellationToken).ConfigureAwait(false)) return;
@@ -58,10 +55,8 @@ internal static class MigrationSql
         await DropColumnIfExistsAsync(db, table, oldColumn, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Rewrites legacy local timestamps (no offset suffix) as UTC ISO-8601 values with
-    /// an explicit "+00:00" offset, so the provider can never misread them as local time.
-    /// </summary>
+    /// <summary>Rewrites legacy local timestamps (no offset suffix) as UTC ISO-8601 values with an explicit "+00:00" offset, so the provider can never misread them as local time.</summary>
+
     public static async Task ConvertToUtcAsync(AppDbContext db, string table, string column, CancellationToken cancellationToken)
     {
         if (!await SqliteSchemaHelper.TableExistsAsync(db, table, cancellationToken).ConfigureAwait(false)) return;

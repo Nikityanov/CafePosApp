@@ -10,7 +10,8 @@ using Microsoft.Extensions.Logging;
 
 namespace CafePos.Presentation.ViewModels;
 
-/// <summary>Catalogue management list: sections, category filtering, availability toggles and the row overflow menus. Create/edit forms live in ViewModels/Catalog/* and open through ; the page shows modally and reloads on save.</summary>
+/// <summary>Catalogue management list: sections, category filtering, availability toggles and the row overflow menus.</summary>
+/// <remarks>Почему так - `docs/decisions/catalog-management.md`</remarks>
 /// <remarks>Почему так — `docs/decisions/catalog-management.md`</remarks>
 
 public partial class CatalogManagementViewModel : ObservableObject
@@ -98,14 +99,15 @@ public partial class CatalogManagementViewModel : ObservableObject
     public ObservableCollection<ModifierOptionGroup> ModifierOptionGroups { get; } = new();
     public ObservableCollection<Ingredient> Ingredients { get; } = new();
 
-    /// <summary>Bundles, already wrapped for the list because their price is a sum and not a field — see . The rows are rebuilt on every load, which is how a change to a dish's price reaches this screen: the sum is recomputed from the freshly read components.</summary>
-
+    /// <summary>Bundles, already wrapped for the list because their price is a sum, not a field.</summary>
+    /// <remarks>Why so — `docs/decisions/catalog-management.md`</remarks>
     public ObservableCollection<ComboRowViewModel> Combos { get; } = new();
 
     /// <summary>Category-filter chips: "Все" followed by one chip per category.</summary>
     public ObservableCollection<CategoryFilterChip> CategoryFilters { get; } = new();
 
-    /// <summary>─── Responsive width contract ────────────────────────────────────────────────────────────────── Same pattern as MenuViewModel.ProductColumnSpan: the window width is pushed in from the page (a Shell-hosted ContentPage never gets OnSizeAllocated), and the product grid's column span is derived from it. ItemsLayout is a BindableObject outside the visual tree, so {Binding} on Span does not reliably inherit the page's BindingContext — the span is assigned from code. The constants mirror Views/CatalogManagementPage.xaml and must be changed with it.</summary>
+    /// <summary>─── Responsive width contract ────────────────────────────────────────────────────────────────── Same pattern as MenuViewModel.ProductColumnSpan: the window wid...</summary>
+    /// <remarks>Почему так - `docs/decisions/catalog-management.md`</remarks>
 
 
     private const double PageHorizontalPadding = 24;      // content Grid Padding="12" both sides
@@ -131,7 +133,8 @@ public partial class CatalogManagementViewModel : ObservableObject
         }
     }
 
-    /// <summary>Product cards per row: derived from a target minimum card width, not raw breakpoints. The column count is floor(contentWidth / (minCardWidth + spacing)), clamped to 1–3. Applied by the page to the named GridItemsLayout, which is the only width-related member the grid still has (ItemWidth was removed from ItemsLayout in MAUI 10).</summary>
+    /// <summary>Product cards per row: derived from a target minimum card width, not raw breakpoints.</summary>
+    /// <remarks>Почему так - `docs/decisions/catalog-management.md`</remarks>
 
     public int ProductColumnSpan
     {
@@ -270,7 +273,8 @@ public partial class CatalogManagementViewModel : ObservableObject
     private static string Plural(int count, string one, string few, string many) =>
         TextFormat.Plural(count, one, few, many);
 
-    /// <summary>The severity of . The one notice label carries both successes ("Скопировано: …") and errors, so the colour and the leading icon are driven by this flag — colour alone would not tell them apart. Named NoticeLevel, not NoticeSeverity: a nested enum may not share its name with a property of the declaring class (CS0102). The *property* keeps the name NoticeSeverity because that is what the page binds.</summary>
+    /// <summary>The severity of .</summary>
+    /// <remarks>Почему так - `docs/decisions/catalog-management.md`</remarks>
 
     public enum NoticeLevel { None, Success, Error }
 
@@ -332,7 +336,8 @@ public partial class CatalogManagementViewModel : ObservableObject
 
     // ─── Load ───
 
-    /// <summary>Loads the whole catalogue. Re-entrancy: the command is constructed without so it cannot start a second run, and the method no longer bails on . The old bare if (IsBusy) return; was the pull-to-refresh trap: RefreshView sets IsRefreshing true, the TwoWay binding pushed that into IsBusy, and the guard then returned without ever clearing the flag — the spinner spun forever (dotnet/maui#12469). Callers that may overlap (the ShowDeleted setter, which cannot await) start a fresh run that re-reads ShowDeleted; the later-started run finishes last, so its value is the one on screen.</summary>
+    /// <summary>Loads the whole catalogue.</summary>
+    /// <remarks>Почему так - `docs/decisions/catalog-management.md`</remarks>
 
     public async Task LoadAsync()
     {
@@ -353,7 +358,8 @@ public partial class CatalogManagementViewModel : ObservableObject
 
             Ingredients.SyncWith(await catalog.GetIngredientsAsync(), ingredient => ingredient.Id);
 
-            /// <summary>Bundles, LIVE ONLY — the «Показывать удалённые» switch above belongs to the products section and is not consulted here. There is no restore for a soft-deleted bundle (IComboService has DeleteComboAsync and nothing that brings one back), so listing a deleted one would put a row on screen with no way to act on it and no way to undo the deletion. Not listing it is the honest state; the bundle stays in history either way, because a sold composition is a snapshot.</summary>
+            /// <summary>Bundles, LIVE ONLY — the «Показывать удалённые» switch above belongs to the products section and is not consulted here.</summary>
+            /// <remarks>Почему так - `docs/decisions/catalog-management.md`</remarks>
 
             Combos.SyncWith(
                 (await combos.GetCombosAsync()).Select(combo => new ComboRowViewModel(combo)),
@@ -373,7 +379,8 @@ public partial class CatalogManagementViewModel : ObservableObject
         }
     }
 
-    /// <summary>Rebuilds the filter chip strip. Chip instances are recreated on every load (the same pattern the other lists use), so the selected state is re-applied from rather than carried across.</summary>
+    /// <summary>Rebuilds the filter chip strip.</summary>
+    /// <remarks>Почему так - `docs/decisions/catalog-management.md`</remarks>
 
     private void RebuildCategoryFilters()
     {
@@ -415,7 +422,8 @@ public partial class CatalogManagementViewModel : ObservableObject
         OnPropertyChanged(nameof(ProductsCountText));
     }
 
-    /// <summary>Restarts the debounce timer on every filter change, so the filter runs once the operator stops acting. It used to fire per keystroke, which re-scanned the whole catalogue and re-diffed the list on each character and stutters on a long catalogue.</summary>
+    /// <summary>Restarts the debounce timer on every filter change, so the filter runs once the operator stops acting.</summary>
+    /// <remarks>Why so - docs/decisions/catalog-management.md</remarks>
 
     private void ScheduleFilterRefresh()
     {

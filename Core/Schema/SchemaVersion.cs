@@ -1,10 +1,7 @@
 namespace CafePos.Core.Data;
 
-/// <summary>
-/// Applied database schema version. Replaces the previous mixture of
-/// <c>EnsureCreated()</c> + ad-hoc <c>ALTER TABLE</c> calls and the EF migrations
-/// that were never applied (and referenced already deleted models).
-/// </summary>
+/// <summary>Applied database schema version. Replaces the previous mixture of EnsureCreated() + ad-hoc ALTER TABLE calls and the EF migrations that were never applied (and referenced already deleted models).</summary>
+
 public class SchemaVersion
 {
     /// <summary>Monotonic migration number (primary key).</summary>

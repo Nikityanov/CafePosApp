@@ -10,7 +10,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CafePosApp.Tests;
 
-/// <summary>The drawer movements that never had a customer behind them: the change put in to open a shift or top it up, the cash carried out for collection, and the correcting entries that cancel either.</summary>
+/// <summary>The drawer movements that never had a customer behind them: the change put in to open a shift or top it up, the cash carried out for collection, and the correct...</summary>
+/// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 /// <remarks>Почему так — `docs/decisions/testing-cash.md`</remarks>
 
 public class CashLedgerTests
@@ -95,7 +96,10 @@ public class CashLedgerTests
         Assert.Contains("уже открыта", exception.Message);
     }
 
-    /// <summary>Zero is ALLOWED, and it is not the same thing as nothing having been recorded: "I opened the till and there is none of my money in it" is a statement, and a café that runs that way has to be able to make it.</summary>
+    /// <summary>    /// <summary>Zero is ALLOWED, and it is not the same thing as nothing having been recorded: "I opened thetill and there is none of my money in it"...</summary>
+    /// <summary>/// <remarks>Почему так - docs/decisions/</remarks>till and there is none of my money in it" is a statement, and a caf...</summary>
+    /// <remarks>Why so - docs/decisions/</remarks>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task The_change_may_be_zero_but_the_movement_is_still_written()
@@ -126,7 +130,10 @@ public class CashLedgerTests
 
     // ── The drawer figure ───────────────────────────────────────────────────────────────────────
 
-    /// <summary>THE reason the whole feature exists. A café opens with 500 ₿ of change, takes 220 ₿ of cash sales, and finds 720 ₿ at the count. Reconciling against the payments alone would call that 500 ₿ of missing money — a shortage made entirely of the change the operator put in.</summary>
+    /// <summary>    /// <summary>Zero is ALLOWED, and it is not the same thing as nothing having been recorded: "I opened thetill and there is none of my money in it"...</summary>
+    /// <summary>/// <remarks>Почему так - docs/decisions/</remarks>till and there is none of my money in it" is a statement, and a caf...</summary>
+    /// <remarks>Why so - docs/decisions/</remarks>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task The_drawer_holds_the_change_plus_the_sales()
@@ -153,7 +160,10 @@ public class CashLedgerTests
         Assert.Equal(CashDifference.Matched, (await orders.GetShiftStatsAsync(shift.Id)).Reconciliation!.Difference);
     }
 
-    /// <summary>Cash taken out for collection lowers what the drawer is expected to hold. Were it only an audit note, the close would report a shortage of exactly the amount the operator legitimately carried away.</summary>
+    /// <summary>    /// <summary>Zero is ALLOWED, and it is not the same thing as nothing having been recorded: "I opened thetill and there is none of my money in it"...</summary>
+    /// <summary>/// <remarks>Почему так - docs/decisions/</remarks>till and there is none of my money in it" is a statement, and a caf...</summary>
+    /// <remarks>Why so - docs/decisions/</remarks>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task Cash_taken_out_for_collection_lowers_the_expectation()
@@ -442,7 +452,10 @@ public class CashLedgerTests
 
     // ── The negative balance ───────────────────────────────────────────────────────────────────
 
-    /// <summary>The one case the code cannot prevent, decided rather than discovered: a refund taken AFTER a collection leaves money the drawer no longer holds. Every step is legitimate — the refund rules are the carefully tested part of this app, and physically the money comes from a reserve outside the drawer — so the balance goes negative and is shown rather than blocked.</summary>
+    /// <summary>    /// <summary>Zero is ALLOWED, and it is not the same thing as nothing having been recorded: "I opened thetill and there is none of my money in it"...</summary>
+    /// <summary>/// <remarks>Почему так - docs/decisions/</remarks>till and there is none of my money in it" is a statement, and a caf...</summary>
+    /// <remarks>Why so - docs/decisions/</remarks>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task A_refund_after_a_collection_may_leave_the_drawer_negative_and_is_reported()
@@ -475,7 +488,10 @@ public class CashLedgerTests
 
     // ── The schema ─────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The upgrade path for version 9. The three columns that would carry a history cannot be reconstructed for a shift that has already closed, so the table stays EMPTY: an empty table says "this terminal did not record drawer movements before version 9", which is true, whereas a backfilled figure would be money nobody ever counted sitting in the one table an auditor reads expecting exactly that.</summary>
+    /// <summary>    /// <summary>Zero is ALLOWED, and it is not the same thing as nothing having been recorded: "I opened thetill and there is none of my money in it"...</summary>
+    /// <summary>/// <remarks>Почему так - docs/decisions/</remarks>till and there is none of my money in it" is a statement, and a caf...</summary>
+    /// <remarks>Why so - docs/decisions/</remarks>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task Migration_009_creates_the_table_and_leaves_history_empty()

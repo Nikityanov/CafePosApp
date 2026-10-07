@@ -1,10 +1,8 @@
 namespace CafePos.Core.Common;
 
-/// <summary>
-/// All monetary values are persisted as integer kopecks, because SQLite stores decimals as TEXT:
-/// TEXT columns break SUM/ORDER BY/comparisons in SQL and are not supported by decimal aggregates.
-/// The domain exposes decimals through <see cref="Money"/> so that callers keep using rubles.
-/// </summary>
+/// <summary>All monetary values are persisted as integer kopecks, because SQLite stores decimals as TEXT: TEXT columns break SUM/ORDER BY/comparisons in SQL and a…</summary>
+/// <remarks>Почему так — `docs/decisions/shared.md`</remarks>
+
 public static class Money
 {
     public const int KopecksPerRuble = 100;

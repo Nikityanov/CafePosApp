@@ -4,15 +4,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CafePos.Core.Services;
 
-/// <summary>
-/// One half of the catalogue service: modifiers.
-/// </summary>
-/// <remarks>
-/// The class is already partial and was already 416 lines with 24 methods over five aggregates.
-/// Splitting it by aggregate is pure movement: no type changes, no namespace change, no change
-/// to the primary constructor or to DI. Only this part declares the constructor and the
-/// interface - the others repeat neither.
-/// </remarks>
+/// <summary>One half of the catalogue service: modifiers.</summary>
+/// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
 public sealed partial class CatalogService
 {
     // ─── Modifiers ───

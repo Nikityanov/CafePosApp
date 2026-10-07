@@ -202,3 +202,23 @@ Android window the navigation bar covers that edge, so the confirm button would 
 without this. Read from the `navigation_bar_height` resource — the same one MAUI's own
 platform code reads — so it tracks the actual bar. Zero on platforms with no bottom bar.
 
+## replaceEnteredOnNextDigit
+
+```csharp
+private bool replaceEnteredOnNextDigit;
+```
+
+True while the prefilled balance is behaving as if it were SELECTED text: the next digit
+replaces it rather than appending to it. The keypad has no cursor and no selection, so this
+flag is what «the text is selected» means here, and it is cleared by the first key — which
+includes «Сброс» and «Стереть», because those are deliberate acts rather than typing.
+
+## GetBottomInset
+
+```csharp
+private static double GetBottomInset()
+```
+
+The height of the system navigation bar in device-independent pixels, or 0 when there is
+none. Android-only: the other platforms either have no bottom bar or inset their content
+themselves.

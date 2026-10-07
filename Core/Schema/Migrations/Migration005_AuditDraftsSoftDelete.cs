@@ -2,10 +2,8 @@ using CafePos.Core.Data;
 
 namespace CafePos.Core.Schema.Migrations;
 
-/// <summary>
-/// Version 5 — parked carts (crash-safe drafts), stock movement journal, order status history
-/// and soft delete for products.
-/// </summary>
+/// <summary>Version 5 — parked carts (crash-safe drafts), stock movement journal, order status history and soft delete for products.</summary>
+
 internal sealed class Migration005_AuditDraftsSoftDelete : ISchemaMigration
 {
     public int Version => 5;

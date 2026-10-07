@@ -24,10 +24,8 @@ public class RecipeItem
     [Column(TypeName = "decimal(18,4)")]
     public decimal Quantity { get; set; }
 
-    /// <summary>
-    /// Quantity with the ingredient's unit, e.g. "0,02 кг". Bound directly so the recipe list
-    /// does not need a MultiBinding over <see cref="Quantity"/> and <c>Ingredient.Unit</c>.
-    /// </summary>
+    // Quantity with the ingredient's unit, e.g. "0,02 кг". Bound directly so the recipe list does not need a MultiBinding over and Ingredient.Unit.
+
     [NotMapped]
     public string QuantityText => TextFormat.Quantity(Quantity, Ingredient?.Unit);
 }

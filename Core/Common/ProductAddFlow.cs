@@ -8,20 +8,14 @@ public enum AddToCartStepOutcome
     /// <summary>The step is satisfied and the flow may move on to the next one.</summary>
     Proceed,
 
-    /// <summary>
-    /// The user dismissed the picker. Nothing was chosen, so the whole add is abandoned —
-    /// deliberately without a message, because a cancel is not an error.
-    /// </summary>
+    /// <summary>The user dismissed the picker. Nothing was chosen, so the whole add is abandoned — deliberately without a message, because a cancel is not an error.</summary>
+
     Dismissed
 }
 
-/// <summary>
-/// The decisions of the "add a product to the cart" flow: modifier sheet → variant sheet → price.
-///
-/// The sheets are platform UI, so this type never awaits anything: the caller passes in what each
-/// picker returned and gets back the verdict. That split is the point — the three cancel paths are
-/// the part of the flow that actually goes wrong, and none of them needs a UI to be reasoned about.
-/// </summary>
+/// <summary>The decisions of the "add a product to the cart" flow: modifier sheet → variant sheet → price.</summary>
+/// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
 public sealed class ProductAddFlow
 {
     /// <summary>Shown when a product claims to have variants but none of them is purchasable.</summary>
@@ -50,17 +44,12 @@ public sealed class ProductAddFlow
         return new ProductAddFlow(product, available);
     }
 
-    /// <summary>
-    /// The group the modifier sheet must offer, or <c>null</c> when the product has none and the
-    /// whole step is skipped.
-    /// </summary>
+    /// <summary>The group the modifier sheet must offer, or null when the product has none and the whole step is skipped.</summary>
+
     public ModifierGroup? ModifierGroup => product.ModifierGroup;
 
-    /// <summary>
-    /// True when the variant step runs at all. This is the product's own
-    /// <see cref="Product.HasVariants"/> flag, not "are there purchasable variants" — the two can
-    /// disagree, which is exactly what <see cref="CanOfferVariantChoice"/> has to catch.
-    /// </summary>
+    /// <summary>True when the variant step runs at all. This is the product's own flag, not "are there purchasable variants" — the two can disagree, which is exactly what has to catch.</summary>
+
     public bool RequiresVariantChoice => product.HasVariants;
 
     /// <summary>
@@ -68,33 +57,24 @@ public sealed class ProductAddFlow
     /// </summary>
     public List<ProductVariant> AvailableVariants { get; }
 
-    /// <summary>
-    /// Whether the variant step can be completed at all. A product flagged as having variants whose
-    /// variants are all sold out has nothing to show and no price to charge, so the add fails
-    /// outright. That is a different outcome from a dismiss and the caller has to say why.
-    /// </summary>
+    /// <summary>Whether the variant step can be completed at all.</summary>
+    /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
     public bool CanOfferVariantChoice => !RequiresVariantChoice || AvailableVariants.Count > 0;
 
-    /// <summary>
-    /// Feeds the modifier picker's result back in. A null result only counts as a dismiss when
-    /// there was a sheet to dismiss: without a group the step never ran, and "nothing chosen" is
-    /// the normal answer.
-    /// </summary>
+    /// <summary>Feeds the modifier picker's result back in. A null result only counts as a dismiss when there was a sheet to dismiss: without a group the step never ran, and "nothing chosen" is the normal answer.</summary>
+
     public AddToCartStepOutcome SubmitModifier(string? picked) =>
         ModifierGroup is not null && picked is null ? AddToCartStepOutcome.Dismissed : AddToCartStepOutcome.Proceed;
 
-    /// <summary>
-    /// Feeds the variant picker's result back in. Unlike the modifier step there is no "leave it
-    /// empty" option — a variant is required — so a null result can only mean the sheet went away.
-    /// </summary>
+    /// <summary>Feeds the variant picker's result back in. Unlike the modifier step there is no "leave it empty" option — a variant is required — so a null result can only mean the sheet went away.</summary>
+
     public AddToCartStepOutcome SubmitVariant(string? picked) =>
         picked is null ? AddToCartStepOutcome.Dismissed : AddToCartStepOutcome.Proceed;
 
-    /// <summary>
-    /// The price the cart line is charged. A chosen variant replaces the product price outright
-    /// rather than adding to it; an unrecognised name (a picker that returned something the catalog
-    /// does not have) falls back to the product price instead of charging zero.
-    /// </summary>
+    /// <summary>The price the cart line is charged.</summary>
+    /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
     public decimal ResolvePrice(string? variant) => variant is null
         ? product.Price
         : product.Variants.FirstOrDefault(item => item.Name == variant)?.Price ?? product.Price;

@@ -4,11 +4,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CafePos.Core.Services;
 
-/// <summary>
-/// Allocates the next per-shift order number with a single atomic SQL statement.
-/// The previous implementation used MAX(OrderNumber) + 1, which throws a unique index
-/// violation as soon as two checkouts happen at the same time.
-/// </summary>
+/// <summary>Allocates the next per-shift order number with a single atomic SQL statement. The previous implementation used MAX(OrderNumber) + 1, which throws a unique index violation as soon as two checkouts happen at the same time.</summary>
+
 internal static class OrderNumberAllocator
 {
     public static async Task<int> AllocateAsync(AppDbContext db, Shift shift, CancellationToken cancellationToken)

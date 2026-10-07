@@ -11,7 +11,10 @@ using System.Globalization;
 
 namespace CafePosApp.Tests;
 
-/// <summary>The end-of-shift cash count: what the drawer was expected to hold, what was counted, the difference and its reason, and the two facts that are easy to break — a count of 0 is a real count, and the stored expectation never moves again after the close.</summary>
+/// <summary>/// <summary>The end-of-shift cash count: what the drawer was expected to hold, what was counted, thedifference and its reason, and the two facts that...</summary>
+/// <summary>/// <remarks>Почему так - docs/decisions/</remarks>difference and its reason, and the two facts that are easy to break — a...</summary>
+/// <remarks>Why so - docs/decisions/</remarks>
+/// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
 public class CashReconciliationTests
 {
@@ -81,7 +84,8 @@ public class CashReconciliationTests
         return stats.Reconciliation!;
     }
 
-    /// <summary>THE most important single case: an empty drawer against a full expectation. The count of 0 is stored as a count — not as the absence of one, which is what a ?? 0 or a HasValue check would turn it into — and it is reported as a shortage with the reason the operator gave.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task A_count_of_zero_closes_the_shift_and_is_stored_as_a_real_count()
@@ -149,7 +153,8 @@ public class CashReconciliationTests
         Assert.Null(row.EndTime);
     }
 
-    /// <summary>A mismatch without a reason is refused in the DOMAIN, not merely in the dialog: the button that asks for the reason can be bypassed, and the ledger would then hold a shift that does not balance with nobody able to say why. Whitespace is no reason either.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task A_mismatch_without_a_reason_is_refused_and_writes_nothing()
@@ -176,7 +181,8 @@ public class CashReconciliationTests
         Assert.Null((await orders.GetShiftStatsAsync(shiftId)).Reconciliation);
     }
 
-    /// <summary>A reason is required iff the count differs, and accepted when it does not: demanding one for a drawer that came out exact would train the operator to type filler into an audit field. The second close here also pins that a closed shift's count is NOT re-editable — nothing rewrites those four columns, so an "исправить пересчёт" path cannot appear quietly.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task A_matching_count_needs_no_reason_and_accepts_one()
@@ -217,7 +223,8 @@ public class CashReconciliationTests
         Assert.Null(firstRow.CashDiscrepancyReason);
     }
 
-    /// <summary>Over-long input is REJECTED, not truncated — a deliberate inconsistency with PaymentRecorder.TruncateNote, which shortens a refund reason. This one is the only record of why a drawer did not balance and DisplayPromptAsync has no MaxLength to stop a paste, so silently rewriting it would alter what the operator stated and still look complete.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task An_over_long_reason_is_refused_rather_than_truncated()
@@ -248,7 +255,8 @@ public class CashReconciliationTests
         Assert.Equal(reason, (await ShiftRowAsync(host, shiftId)).CashDiscrepancyReason);
     }
 
-    /// <summary>ORDERING IS LOAD-BEARING. The open-order guard runs before the count validation and before the reason check, so an operator with orders still on the bar is told THAT rather than being sent away for a missing reason about a count they cannot yet know. This test also pins the count validation behind the guard, and that a refused close writes nothing.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task The_open_order_guard_runs_before_the_reconciliation_checks()
@@ -275,7 +283,8 @@ public class CashReconciliationTests
         Assert.Null((await orders.GetShiftStatsAsync(shiftId)).Reconciliation);
     }
 
-    /// <summary>A refund taken against an ALREADY CLOSED shift is allowed and moves that shift's LIVE drawer figure — the money physically left the drawer that shift owned. The frozen snapshot does not move: "the drawer was 20 short at the close" has to keep meaning exactly that after the fact, and IsReconciliationStale is what reports that the two figures have parted company.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task The_frozen_snapshot_survives_a_refund_taken_after_the_shift_closed()
@@ -319,7 +328,8 @@ public class CashReconciliationTests
         Assert.Equal(0m, (await orders.GetShiftStatsAsync(fresh.Id)).ExpectedCashNow);
     }
 
-    /// <summary>A late CARD refund moves neither figure — the card terminal is not in the drawer — while a late CASH refund moves only the live one. Together they pin which of the two numbers is allowed to move after the close.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task A_late_card_refund_moves_neither_figure_and_a_cash_refund_only_the_live_one()
@@ -356,7 +366,8 @@ public class CashReconciliationTests
         Assert.True(afterCash.IsReconciliationStale);
     }
 
-    /// <summary>A shift whose orders were all given back reconciles against zero, not against a negative number: the expectation is a non-negative amount by construction, so a fully emptied drawer is a MATCH rather than the impossible case it used to look like.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task A_fully_refunded_shift_reconciles_against_a_non_negative_expectation()
@@ -384,7 +395,8 @@ public class CashReconciliationTests
         Assert.True((await orders.GetShiftStatsAsync(shiftId)).ExpectedCashNow >= 0);
     }
 
-    /// <summary>The invariant that keeps the expectation non-negative, checked on a multi-order shift with refunds interleaved across orders and methods: a shift's payments and refunds come from the shift's OWN orders (the ledger is joined to Orders on order.ShiftId, never filtered by timestamp), so per-order refunded &lt;= collected sums to the same inequality for the shift. The stale comment in ShiftReportViewModel claimed this could go negative; it cannot, and this is the test that says so.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task The_drawer_figure_stays_non_negative_across_interleaved_partial_refunds()
@@ -466,7 +478,8 @@ public class CashReconciliationTests
         Assert.NotNull(closedRow.ExpectedCashKopecks);
     }
 
-    /// <summary>The export is what a manager takes to the till, so the block has to name the MOMENT of the expectation and, when a refund landed after the count, the difference between the two figures. A bare "Ожидалось" with no time attached is the ambiguity the feature exists to remove: read a week later it is a claim about an unspecified drawer.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task The_shift_csv_prints_the_reconciliation_block_with_its_moment()
@@ -501,7 +514,8 @@ public class CashReconciliationTests
             < csv.IndexOf("Пересчёт кассы (", StringComparison.Ordinal));
     }
 
-    /// <summary>The rest of the three states in the export: an overage is named, and a matching count prints no difference line at all — the expected and counted figures already say "same", and a fourth "Совпадает" line would be one more thing to keep in step. With no drift there is nothing to report after the count either.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task The_csv_names_an_overage_and_prints_no_difference_line_for_a_match()
@@ -540,7 +554,8 @@ public class CashReconciliationTests
         Assert.DoesNotContain("Излишек", match);
     }
 
-    /// <summary>The upgrade path for version 8: a database that already has the payment ledger and a real shift with real cash in it. Four nullable columns, NO default and NO backfill — so the historical shift keeps NULL and the domain reports it as never counted, even though its ledger says the drawer held 500 ₽. A default here would fabricate a count of 0 for every shift nobody ever counted, which is a false audit record on the rows checked first.</summary>
+    /// <summary>THE most important single case: an empty drawer against a full expectation.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     [Fact]
     public async Task Migration_008_adds_the_reconciliation_columns_to_a_populated_v7_database()
@@ -631,7 +646,10 @@ public class CashReconciliationTests
         Assert.Null((await host.Get<IOrderService>().GetShiftStatsAsync(shiftId)).Reconciliation);
     }
 
-    /// <summary>The database the version 8 upgrade actually meets: the first release of the schema, migrations 1–5 on top, then the ledger migrations, with a shift and a paid order already in the tables. The identifiers are written the way the provider writes them (UPPER-case "D"), or a parameterised EF query would not find the row and the assertions below would pass vacuously.</summary>
+    /// <summary>    /// <summary>The database the version 8 upgrade actually meets: the first release of the schema, migrations1–5 on top, then the ledger migrations,...</summary>
+    /// <summary>/// <remarks>Почему так - docs/decisions/</remarks>1–5 on top, then the ledger migrations, with a shift and a paid o...</summary>
+    /// <remarks>Why so - docs/decisions/</remarks>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     private static async Task<Guid> BuildV7DatabaseAsync(TestHost.Host host)
     {
@@ -655,7 +673,8 @@ public class CashReconciliationTests
         await new Migration006_OrderPayments().ApplyAsync(db, CancellationToken.None);
         await new Migration007_Refunds().ApplyAsync(db, CancellationToken.None);
 
-        /// <summary>NOT 008: the tests that use this fixture are about 008's four columns, and 008 is applied by those tests themselves so they can watch it happen. 009 IS applied, because the domain now reads CashMovements on every shift report — without it, a test about the reconciliation columns fails with 'no such table' and never reaches the assertion it was written for.</summary>
+        /// <summary>NOT 008: the tests that use this fixture are about 008's four columns, and 008 is applied by those tests themselves so they can watch it happen.</summary>
+        /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
         await new Migration009_CashMovements().ApplyAsync(db, CancellationToken.None);
         return shiftId;

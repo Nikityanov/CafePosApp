@@ -8,11 +8,9 @@ namespace CafePos.Core.Schema;
 /// <summary>Outcome of a schema upgrade, used by diagnostics and the settings screen.</summary>
 public sealed record SchemaMigrationResult(int FinalVersion, bool FreshDatabase, IReadOnlyList<string> AppliedMigrations);
 
-/// <summary>
-/// Applies ordered schema migrations to the local SQLite database.
-/// Replaces the previous combination of EnsureCreated() + ad-hoc ALTER TABLE statements
-/// and the EF migrations folder that was never applied and referenced deleted models.
-/// </summary>
+/// <summary>Applies ordered schema migrations to the local SQLite database.</summary>
+/// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
 public sealed class SchemaMigrator(
     IDbContextFactory<AppDbContext> factory,
     TimeProvider timeProvider,

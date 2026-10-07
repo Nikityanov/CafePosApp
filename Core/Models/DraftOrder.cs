@@ -3,18 +3,9 @@ using CafePos.Core.Common;
 
 namespace CafePos.Core.Models;
 
-/// <summary>
-/// Parked ("held") cart. Unsent carts are persisted so a crash or an accidental
-/// page reload never destroys a half-finished order.
-/// </summary>
-/// <remarks>
-/// The order-level facts the till collected are mirrored here — <see cref="OrderType"/>,
-/// <see cref="CustomerPhone"/>, <see cref="RequestedAt"/> — so that parking and forgetting does not
-/// throw away what the operator entered. A parked cart is not an order: it is in no queue, it is
-/// promised to nobody and it is reconciled against no drawer, which is why the promise arithmetic of
-/// <see cref="Order.PromisedAt"/> is deliberately NOT duplicated here. Nothing would read it, and a
-/// second copy of a derived figure is a second thing to go stale.
-/// </remarks>
+/// <summary>Parked ("held") cart. Unsent carts are persisted so a crash or an accidental page reload never destroys a half-finished order.</summary>
+/// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
 public class DraftOrder
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -29,11 +20,8 @@ public class DraftOrder
     /// <summary>How the parked order is fulfilled. Decides whether <see cref="CustomerPhone"/> is kept.</summary>
     public OrderType OrderType { get; set; }
 
-    /// <summary>
-    /// Contact for a takeaway order, in E.164. Held here only because the operator entered it before
-    /// the order existed; the checkout still decides whether it may be written to the order itself
-    /// (see <see cref="Order.CustomerPhone"/>).
-    /// </summary>
+    /// <summary>Contact for a takeaway order, in E.164. Held here only because the operator entered it before the order existed; the checkout still decides whether it may be written to the order itself (see ).</summary>
+
     public string? CustomerPhone { get; set; }
 
     /// <summary>What the customer asked for, or <c>null</c> for as soon as possible.</summary>
@@ -69,11 +57,9 @@ public class DraftOrderItem
     public string? SelectedVariantName { get; set; }
     public int Quantity { get; set; }
 
-    /// <summary>
-    /// The composition of a bundle line, carried through the parking lot exactly as
-    /// <see cref="OrderItem.Components"/> carries it through checkout. Rewritten with the line on
-    /// every autosave, which is why it is a separate table and not a column.
-    /// </summary>
+    /// <summary>The composition of a bundle line, carried through the parking lot exactly as `OrderItem.Components` carries it through checkout.</summary>
+    /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
     public List<DraftOrderItemComponent> Components { get; set; } = new();
 
     [NotMapped]

@@ -1,21 +1,8 @@
 namespace CafePos.Core.Models;
 
-/// <summary>
-/// The composition of a parked cart line, held while the cart waits to be taken.
-/// </summary>
-/// <remarks>
-/// A duplicate of <see cref="OrderItemComponent"/> on <see cref="DraftOrderItemId"/> rather than a
-/// shared parent, because the two rows are written by different operations at different times: a
-/// draft is rewritten wholesale on every cart autosave (see <c>DraftOrderService</c>, where old lines
-/// are deleted and re-inserted), while an order item's snapshot is written once, inside the
-/// checkout transaction, and never rewritten. Sharing a table would put those two lifetimes in one
-/// cascade and make an autosave touch order history.
-/// <para>
-/// The columns mirror the order-side ones exactly, including both prices, so that taking a parked
-/// cart and checking it out produces the same snapshot a cart that was never parked would — the
-/// operator typed those prices once and must not lose them to a round trip through the parking lot.
-/// </para>
-/// </remarks>
+/// <summary>The composition of a parked cart line, held while the cart waits to be taken.</summary>
+/// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
 public class DraftOrderItemComponent
 {
     public Guid Id { get; set; }

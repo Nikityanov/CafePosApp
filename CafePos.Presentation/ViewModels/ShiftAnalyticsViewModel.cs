@@ -44,7 +44,8 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
 
     public ObservableCollection<ShiftChoice> Shifts { get; } = [];
 
-    /// <summary>── The product breakdown: three shapes, one at a time ─────────────────────────────────── The projection returns whichever tree the grouping asks for, and only that one is bound. Three collections rather than one union type, because a BindableLayout has no way to pick a DataTemplate by runtime type — a single list would mean one template rendering three different things behind IsVisible panels.</summary>
+    /// <summary>── The product breakdown: three shapes, one at a time ─────────────────────────────────── The projection returns whichever tree the grouping asks for, and only...</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     public ObservableCollection<ProductAnalyticsSectionRow> SectionRows { get; } = [];
     public ObservableCollection<ProductAnalyticsDishRow> DishRows { get; } = [];
@@ -57,7 +58,8 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
 
     private bool isFilterPanelOpen;
 
-    /// <summary>Whether the filter/sort panel is open. CLOSED by default: it is five controls and a search box, and a manager opening the page to read the shift does not want them between the cards and the breakdown. The trigger carries the current state in words, so a collapsed panel is never "what is this list showing" — see .</summary>
+    /// <summary>Whether the filter/sort panel is open.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     public bool IsFilterPanelOpen
     {
@@ -88,7 +90,8 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
             OnPropertyChanged(nameof(FilterPanelSummary));
             OnPropertyChanged(nameof(FilterPanelHint));
 
-            /// <summary>Re-projected on every keystroke, which is affordable ONLY because the rows are already in hand and nothing here touches the database — see ProductAnalyticsProjection. The alternative, waiting for a submit, makes a filter feel like it ignored the first letters.</summary>
+            /// <summary>Re-projected on every keystroke, which is affordable ONLY because the rows are already in hand and nothing here touches the database — see ProductAnalyticsProje...</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             RebuildProductRows();
         }
@@ -96,7 +99,8 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
 
     public bool HasSearch => !string.IsNullOrWhiteSpace(SearchText);
 
-    /// <summary>The five commands behind the filter panel and the collapsible dish headers. Declared HERE, on the page's own type, rather than in the List partial: a compiled binding on the page resolves against ShiftAnalyticsViewModel, and a property the compiler cannot see on that type is a build failure rather than a silently unbound tap.</summary>
+    /// <summary>The five commands behind the filter panel and the collapsible dish headers.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     public IRelayCommand ToggleFilterPanelCommand { get; }
 
@@ -114,7 +118,8 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
 
     private bool hasNoProductRows;
 
-    /// <summary>True while the list has nothing to show. Split three ways by , because "the shift sold nothing", "the filter excluded everything" and "the search found nothing" are three different facts and the one sentence that used to sit here could only state the first of them.</summary>
+    /// <summary>True while the list has nothing to show.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     public bool HasNoProductRows
     {
@@ -122,7 +127,10 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
         private set => SetProperty(ref hasNoProductRows, value);
     }
 
-    /// <summary>The list is empty because a filter or a search hid everything — which is a different fact from a shift with no closed orders, and is what the second empty state has to be keyed on.</summary>
+    /// <summary>    /// <summary>The list is empty because a filter or a search hid everything — which is a different factfrom a shift with no closed orders, and is w...</summary>
+    /// <summary>/// <remarks>Почему так - docs/decisions/</remarks>from a shift with no closed orders, and is what the second empty state...</summary>
+    /// <remarks>Why so - docs/decisions/</remarks>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     public bool IsFilteredToNothing { get; private set; }
 
@@ -174,14 +182,16 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
     private int itemsCount;
     public int ItemsCount { get => itemsCount; private set => SetProperty(ref itemsCount, value); }
 
-    /// <summary>── Money through the till ──────────────────────────────────────────────────────────────── The two halves the shift's revenue is made of, so that the reconciled figure has a company. The cash side is the same countable number the shift report counts out and the shift close compares against, taken from ShiftStats.ExpectedCashNow rather than subtracted here — one definition of "what is in the drawer", computed where both halves already exist. This page is the only one that can read a CLOSED shift, so a manager reading yesterday's totals anywhere else in the app has no way to see the cash that was actually reconciled.</summary>
+    /// <summary>── Money through the till ──────────────────────────────────────────────────────────────── The two halves the shift's revenue is made of, so that the reconciled...</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
 
     private decimal cashInDrawer;
     public decimal CashInDrawer
     {
         get => cashInDrawer;
-        /// <summary>Raises the staleness note as well, because its sentence quotes THIS figure. The frozen count is a record, so re-reading the same shift reports it as equal and publishes nothing — and a refund taken against a closed shift moves the live figure while the snapshot stays exactly where it is. Without this the note would go on quoting the figure from the previous load, which is the exact failure the note exists to report.</summary>
+        /// <summary>Raises the staleness note as well, because its sentence quotes THIS figure.</summary>
+        /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
         private set { if (SetProperty(ref cashInDrawer, value)) NotifyStale(); }
     }
@@ -191,7 +201,8 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
     public decimal FloatCash
     {
         get => floatCash;
-        /// <summary>Raises the formatted twin, because THAT is what the card binds: the page shows FloatCashText, so a raise of FloatCash alone reaches no binding at all. These two setters used to raise only themselves, and the texts were republished from NotifyStale instead — which runs from the CashInDrawer setter, three lines EARLIER in AnalyzeAsync, while these fields are still zero. So the card showed «Размен: 0.00 ₿» and «Изъято: 0.00 ₿» under a drawer total that was itself correct, and kept showing them until the values happened to return to zero. Found on device, not by a test: the total is bound to CashInDrawerText and was right, so the page looked healthy.</summary>
+        /// <summary>Raises the formatted twin, because THAT is what the card binds: the page shows FloatCashText, so a raise of FloatCash alone reaches no binding at all.</summary>
+        /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
         private set { if (SetProperty(ref floatCash, value)) OnPropertyChanged(nameof(FloatCashText)); }
     }
@@ -246,7 +257,8 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
     private string peakHour = "нет данных";
     public string PeakHour { get => peakHour; private set => SetProperty(ref peakHour, value); }
 
-    /// <summary>── The end-of-shift cash count ─────────────────────────────────────────────────────────── The shift report CANNOT show this block: it rebinds to the new shift after a close and its route carries no shift id, so it can only ever display the open shift, which by definition has no count. This page is the one screen that can read a closed shift, so it is the only place the reconciliation can be read after the fact. The Russian wording is HERE rather than in Core on purpose: Core exposes the enum and the signed value and stops there, because a domain that ships sentences stops being one. See CashWording for why the direction lives in the word and the number is printed unsigned.</summary>
+    /// <summary>── The end-of-shift cash count ─────────────────────────────────────────────────────────── The shift report CANNOT show this block: it rebinds to the new shift...</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
 
     /// <summary>True when the selected shift was counted at all. Drives the whole card's visibility.</summary>
@@ -316,7 +328,8 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
         ? string.Empty
         : $"Пересчёт кассы: {CashWording.Describe(Reconciliation.DiscrepancyKopecks)}";
 
-    /// <summary>── Staleness ───────────────────────────────────────────────────────────────────────────── "Did the cashier err at close" and "are the books right now" are two different questions and they have different answers on purpose: a refund taken against a CLOSED shift moves the live drawer figure and leaves the frozen count alone, because the money physically left a drawer that shift owned. The count is not rewritten, and the drift is shown rather than hidden.</summary>
+    /// <summary>── Staleness ───────────────────────────────────────────────────────────────────────────── "Did the cashier err at close" and "are the books right now" are two...</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
 
     private bool reconciliationStale;
@@ -334,11 +347,13 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
         // figure as an amount has to be republished with it — otherwise the sentence updates and
         // the number beside it stays on the previous load's value.
         OnPropertyChanged(nameof(CashInDrawerText));
-        /// <summary>FloatCashText and PayoutCashText used to be raised here too, on the reasoning that this is where every derived amount gets republished. It is the wrong place and was the cause of a wrong figure on screen: this method runs from the CashInDrawer setter, which AnalyzeAsync reaches BEFORE assigning FloatCash and PayoutCash, so it recomputed both texts from a pair of still-zero fields and the card froze on «0.00 ₿» under a correct total. Each setter now raises its own twin, where the value is known to be current.</summary>
+        /// <summary>FloatCashText and PayoutCashText used to be raised here too, on the reasoning that this is where every derived amount gets republished.</summary>
+        /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     }
 
-    /// <summary>── Formatted money ─────────────────────────────────────────────────────────────────────── The four headline cards were bound as StringFormat="{0:F2} ₽", fixed at XAML parse time and therefore locked to a ruble sign with two decimals. Formatting moves here so it can read the operator's selected currency; the cards keep their own Russian captions.</summary>
+    /// <summary>── Formatted money ─────────────────────────────────────────────────────────────────────── The four headline cards were bound as StringFormat="{0:F2} ₽", fixed...</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
 
     /// <summary>Revenue in the active currency, e.g. "12 480,00 ₿".</summary>
@@ -367,7 +382,8 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
         OnPropertyChanged(nameof(AverageCheckText));
     }
 
-    /// <summary>Both figures and the moment, in one sentence. Self-contained on purpose: a drift note that only said "the ledger moved" leaves the reader to reconstruct the two numbers from the lines above it.</summary>
+    /// <summary>Both figures and the moment, in one sentence.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     public string StaleText => Reconciliation is not { } count
         ? string.Empty
@@ -409,7 +425,8 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
                     shift.EndTime.HasValue)),
                 choice => choice.Id);
 
-            /// <summary>THE DEFAULT IS THE SHIFT THAT IS OPEN RIGHT NOW — the owner's instruction, and it reverses the previous "prefer a closed shift" default. The reasoning for the reversal is that the closed-first rule fixed a real case and created a larger one: during a shift, the number an operator actually wants is today's live hour, and a page that opens on yesterday forces a manual pick every single time. WHAT THE REVERSAL COSTS, stated plainly rather than discovered later. The old comment recorded a genuine complaint: an operator who closes a shift, taps «Анализировать смену» to check the count landed, and is shown an empty hour. That regresses — but only on FIRST open after a close. The common path is covered by `previousId`: the page holds the open shift while the shift runs, so closing it and coming back keeps the same selection, now marked «Завершённая». Shell keeps one page per tab, so this ViewModel instance usually survives the close. The uncovered case is a cold open of this tab straight after closing, which shows the new shift rather than the old one. EndTime is the closed test rather than !IsActive, because the domain's own definition of "this shift ended" is the moment it ended, not a flag that happened to be flipped at the time — the same reasoning as before, and it is what makes "is it open now" a question about the data instead of about bookkeeping.</summary>
+            /// <summary>THE DEFAULT IS THE SHIFT THAT IS OPEN RIGHT NOW — the owner's instruction, and it reverses the previous "prefer a closed shift" default.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             var next = Shifts.FirstOrDefault(choice => choice.Id == previousId)
                 ?? Shifts.FirstOrDefault(choice => !choice.IsClosed)
@@ -417,11 +434,13 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
                 ?? Shifts.FirstOrDefault();
             var switched = next?.Id != previousId;
 
-            /// <summary>Folds are per-SHIFT state, not per-session state: a manager who folded away «Капучино» to read the rest of the day does not expect the fold to survive moving to yesterday, where it would hide a dish they have never seen folded. OPEN, not folded, is the reset: the previous shift's folds are meaningless here.</summary>
+            /// <summary>Folds are per-SHIFT state, not per-session state: a manager who folded away «Капучино» to read the rest of the day does not expect the fold to survive moving to...</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             if (switched) OpenAllDishes();
 
-            /// <summary>Assigned with the reload suppressed: the analysis this method runs next IS the analysis for this selection, and letting the setter start one too would run the two queries concurrently against a DbContext each — harmless in result, wasteful, and a race on whichever finished last.</summary>
+            /// <summary>Assigned with the reload suppressed: the analysis this method runs next IS the analysis for this selection, and letting the setter start one too would run the t...</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             suppressShiftReload = true;
             try
@@ -484,7 +503,8 @@ public partial class ShiftAnalyticsViewModel : ObservableObject
             // means the setter above raised nothing.
             NotifyCardComposition();
 
-            /// <summary>ORDERING: the staleness sentence is built from all three of these, and each setter republishes it. CashInDrawer goes first and Reconciliation last, so the last raise sees the current live figure and the current frozen one together — the reverse order would publish a sentence quoting the previous shift's count against this shift's drawer for as long as the bindings took to settle.</summary>
+            /// <summary>ORDERING: the staleness sentence is built from all three of these, and each setter republishes it.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             Reconciliation = stats.Reconciliation;
             IsReconciliationStale = stats.IsReconciliationStale;

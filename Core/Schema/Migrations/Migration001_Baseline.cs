@@ -2,11 +2,9 @@ using CafePos.Core.Data;
 
 namespace CafePos.Core.Schema.Migrations;
 
-/// <summary>
-/// Version 1 — brings any legacy database (created by the old EnsureCreated + ALTER TABLE
-/// hybrid, at any intermediate revision) up to the "structural baseline" of the model and
-/// removes the dead variant tables that the removed VariantGroup/VariantOption models left behind.
-/// </summary>
+/// <summary>Version 1 — brings any legacy database (created by the old EnsureCreated + ALTER TABLE hybrid, at any intermediate revision) up to the "structural bas…</summary>
+/// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
 internal sealed class Migration001_Baseline : ISchemaMigration
 {
     public int Version => 1;

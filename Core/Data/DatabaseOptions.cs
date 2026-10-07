@@ -15,16 +15,9 @@ public sealed class DatabaseOptions
     /// <summary>Seed a small demo menu the first time the app runs on an empty database.</summary>
     public bool SeedDemoData { get; init; } = true;
 
-    /// <summary>
-    /// Minutes an order with no requested time is promised to take — what the menu shows as "about
-    /// 10 minutes" and what the queue sorts against. Assigned once at startup to
-    /// <see cref="Models.Order.LeadTimeMinutes"/>.
-    /// <para>
-    /// It lives here and not in a table of settings because the app has no settings store, and a new
-    /// table is not the price of one number. It is read at startup and never from the database, so an
-    /// order can never have its promise recomputed after the fact.
-    /// </para>
-    /// </summary>
+    /// <summary>Minutes an order with no requested time is promised to take — what the menu shows as "about 10 minutes" and what the queue sorts against.</summary>
+    /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
     public int LeadTimeMinutes { get; init; } = Models.Order.DefaultLeadTimeMinutes;
 
     public string ConnectionString => $"Data Source={DatabasePath}";

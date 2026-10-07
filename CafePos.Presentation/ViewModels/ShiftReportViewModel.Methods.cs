@@ -17,7 +17,8 @@ public partial class ShiftReportViewModel
         IsBusy = true;
         try
         {
-            /// <summary>NO SHIFT IS A NORMAL STATE NOW, not something to paper over by creating one. This screen is what the operator comes to when there is nothing open, and it offers to open a shift rather than quietly opening one with no float — which is the state the whole cash ledger feature exists to stop.</summary>
+            /// <summary>NO SHIFT IS A NORMAL STATE NOW, not something to paper over by creating one.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             var shift = await orders.GetActiveShiftAsync();
             await shiftSession.RefreshAsync();
@@ -61,11 +62,13 @@ public partial class ShiftReportViewModel
             PaymentsCard = stats.PaymentsCard;
             RefundsCash = stats.RefundsCash;
             RefundsCard = stats.RefundsCard;
-            /// <summary>The change put in and the cash carried out, so the drawer line below is a SUM the operator can check on the screen instead of a number they have to trust. Both are net of correcting entries, which is why an uncorrected mistake and a corrected one show the same figure here and differ only in the list underneath.</summary>
+            /// <summary>The change put in and the cash carried out, so the drawer line below is a SUM the operator can check on the screen instead of a number they have to trust.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             FloatCash = stats.FloatCash;
             PayoutCash = stats.PayoutCash;
-            /// <summary>The net, copied from the one place it is computed. It used to be PaymentsCash - RefundsCash written here, plus a hand-written OnPropertyChanged(nameof(CashInDrawer)) to re-notify a derived property; both are gone, because a drawer figure that the presentation layer recomputes is a second definition of it, and the shift close now compares a stored count against this number.</summary>
+            /// <summary>The net, copied from the one place it is computed.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             CashInDrawer = stats.ExpectedCashNow;
 
@@ -76,16 +79,19 @@ public partial class ShiftReportViewModel
 
             SyncMovements(await cashLedger.GetMovementsAsync(shift.Id));
 
-            /// <summary>GetShiftOrderHistoryAsync (Completed AND Cancelled), not GetCompletedOrdersAsync. Cancelling a paid order flips it to Cancelled, so under the old query the one sale a manager most needs to see after a bad void vanished from the only list they read. ONE `now`, taken here and handed to every row. OrderRowViewModel judges each order against the instant it was given rather than reading a clock of its own, so that two orders promised for the same minute cannot land in different sections because their rows were built microseconds apart. The loader is the only place that knows what "now" means for a whole list, which is why it is passed in rather than derived.</summary>
+            /// <summary>GetShiftOrderHistoryAsync (Completed AND Cancelled), not GetCompletedOrdersAsync.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             var now = DateTimeOffset.Now;
             var history = await orders.GetShiftOrderHistoryAsync(shift.Id);
             ShiftHistory.SyncWith(history.Select(order => new OrderRowViewModel(order, settings, now)), row => row.Model.Id);
-            /// <summary>BindableLayout has no EmptyView, so «Закрытых заказов пока нет.» is a label bound to this flag. The flag is derived from the count and therefore notifies itself when it has to — but only if something asks it to, and SyncWith raises collection changes without consulting the ViewModel. This is the one line that keeps a shift with no closed orders from rendering a bare section heading.</summary>
+            /// <summary>BindableLayout has no EmptyView, so «Закрытых заказов пока нет.» is a label bound to this flag.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             OnPropertyChanged(nameof(HasNoShiftHistory));
 
-            /// <summary>The price control. Read from the domain rather than derived here, and deliberately NOT folded into any of the figures above: a voided order's line is in this list and its money is not in the revenue, so a total computed over the two would be a figure that describes nothing. Read after the history so a failure in the extra query still leaves the report above it populated.</summary>
+            /// <summary>The price control.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             SyncDiscountedLines(await orders.GetDiscountedLinesAsync(shift.Id));
 
@@ -184,7 +190,8 @@ public partial class ShiftReportViewModel
     {
         try
         {
-            /// <summary>Says what happens and nothing more. It used to promise "и открыта новая", because the close did open one; it does not any more, and a dialog that describes a behaviour the app no longer has is worse than no dialog at all — the operator waits for a shift that never arrives. The terminal sits empty until someone opens the next one, which is the whole point of counting the drawer onto paper first.</summary>
+            /// <summary>Says what happens and nothing more.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             if (!await dialogs.ConfirmAsync("Закрыть смену?", "Текущая смена будет закрыта. Следующую нужно будет открыть заново.", "Закрыть смену", "Отмена"))
             {
@@ -197,7 +204,8 @@ public partial class ShiftReportViewModel
                 return;
             }
 
-            /// <summary>Captured BEFORE the close, and this is the whole reason the post-close export works at all. The close ends the shift and the reload below rebinds this ViewModel to whatever is open - which, right after a close, is nothing - so `shiftId`, the id every export in this ViewModel reads, would be empty. Exporting against that produced a CSV of a shift with no orders in it, which is how a reconciliation became unexportable: the one file that carries the counted cash was the file about the wrong shift. The start time is captured for the same reason: the file is named after the SHIFT it describes, not after the moment it was exported, or every shift closed within the same hour would be ambiguous on the device it landed on. The default is reachable — a load that failed leaves startTime unset while the button is still live — and a report named shift-00010101-0000.csv helps nobody, so it falls back to now rather than to a lie about when the shift began.</summary>
+            /// <summary>Captured BEFORE the close, and this is the whole reason the post-close export works at all.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             var closingShiftId = shiftId;
             var closingShiftStartedAt = startTime == default ? DateTimeOffset.Now : startTime;
@@ -210,17 +218,20 @@ public partial class ShiftReportViewModel
             // rewrites it, which is why the retry pre-fill has to be dropped at this exact point.
             pendingCount = null;
 
-            /// <summary>No shift is open now, and the terminal cannot be used until one is. The cache is updated BEFORE the reload so the page renders the closed state rather than the last open one, and the opening screen pre-fills the counted drawer - the number the operator has just written on paper.</summary>
+            /// <summary>No shift is open now, and the terminal cannot be used until one is.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             shiftSession.SetKnownState(false, null);
 
             await LoadAsync();
-            /// <summary>The count result is the one thing the operator cannot read off the screen they are on: a balance is stated here and then, for a shift with no orders, there is nothing left on this page to compare it against. The time is the moment the shift ENDED, which is what it always was — it was being labelled as the start of the next shift, which never came.</summary>
+            /// <summary>The count result is the one thing the operator cannot read off the screen they are on: a balance is stated here and then, for a shift with no orders, there is n...</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             Message = $"Смена закрыта в {closed.EndTime?.ToLocalTime():HH:mm}. "
                       + CashWording.Describe(entry.CountedKopecks - entry.ExpectedKopecks);
 
-            /// <summary>The report of the shift that was just closed, NOT the archive. The archive is still available from Настройки, so nothing is lost by asking here instead — but the archive's own shift-report.csv is written from whatever shift it is handed, and after a close there is no open shift to hand it, so the reconciliation was never in it. This CSV is the only artefact that carries the count, and it is about the right shift.</summary>
+            /// <summary>The report of the shift that was just closed, NOT the archive.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             if (await dialogs.ConfirmAsync("Экспорт отчёта?",
                     "Отправить отчёт по закрытой смене с пересчётом кассы?", "Отправить", "Позже"))
@@ -231,7 +242,8 @@ public partial class ShiftReportViewModel
                 await files.ShareFileAsync(path, "Отчёт смены");
             }
 
-            /// <summary>LAST, after the export question, because that dialog is the only thing left that belongs to the shift being closed. Then the opening screen, for the same reason the startup path shows it: the terminal cannot be used until a shift exists, and its field arrives pre-filled with the figure the operator just wrote on paper. Staying on this page would leave them looking at "Смена не открыта" with a button, which is the same fact said more weakly.</summary>
+            /// <summary>LAST, after the export question, because that dialog is the only thing left that belongs to the shift being closed.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             await navigation.GoToOpenShiftAsync();
         }
@@ -247,7 +259,8 @@ public partial class ShiftReportViewModel
         }
     }
 
-    /// <summary>Asks for the counted cash and, when it does not match, for the reason. Returns null when the operator backed out or the entry was unusable, in which case nothing at all has been written.</summary>
+    /// <summary>Asks for the counted cash and, when it does not match, for the reason.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
     /// <remarks>Почему так — `docs/decisions/shift-report.md`</remarks>
 
     private async Task<CashCountEntry?> CollectCashCountAsync()
@@ -258,7 +271,8 @@ public partial class ShiftReportViewModel
         var expectedKopecks = Money.ToKopecks(CashInDrawer);
         var expected = Money.FromKopecks(expectedKopecks);
 
-        /// <summary>A previous entry wins over the live figure ONLY while the drawer it was counted against is the same drawer. After a refused close the operator is being asked the same question about the same money, and their answer is still true — unless the drawer moved while they were away closing orders, which is exactly what happens after that refusal. So the previous entry carries the figure it was counted against and is used only when that still matches; otherwise the live figure, which the sentence above already states. WHICH entry to offer is decided in the core (CashCountPrefill.Resolve) and only formatted here: the rule is tested rather than trusted, and no arithmetic about money lives in a dialog. This ViewModel no longer knows how to tell a fresh count from a stale one.</summary>
+        /// <summary>A previous entry wins over the live figure ONLY while the drawer it was counted against is the same drawer.</summary>
+        /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
         var prefillKopecks = CashCountPrefill.Resolve(pendingCount, expectedKopecks);
 
@@ -275,14 +289,16 @@ public partial class ShiftReportViewModel
             "Закрыть смену",
             "Отмена");
 
-        /// <summary>DisplayPromptAsync returns null for BOTH "Отмена" and an empty field, so the two cannot be told apart and neither is guessed at here — the same refusal OrderDetailsViewModel makes on the refund reason. Whitespace is therefore an abort, and the count is not written: a close the operator cancelled must not leave a reconciliation behind.</summary>
+        /// <summary>DisplayPromptAsync returns null for BOTH "Отмена" and an empty field, so the two cannot be told apart and neither is guessed at here — the same refusal OrderDet...</summary>
+        /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
         if (string.IsNullOrWhiteSpace(entry))
         {
             return null;
         }
 
-        /// <summary>Group separators are removed before parsing, not after. ru-RU's is U+00A0, a hand-typed "4 320,00" is a realistic input, and NumberStyles accepts a thousands separator only in the culture's own form — rejecting a number of the shape the app itself displays would be a self-inflicted wound. Everything else is left to TextFormat.TryParseDecimal, which handles the comma/dot ambiguity.</summary>
+        /// <summary>Group separators are removed before parsing, not after.</summary>
+        /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
         var normalized = entry.Replace(" ", string.Empty).Replace("\u00a0", string.Empty);
         if (!TextFormat.TryParseDecimal(normalized, out var amount))
@@ -303,7 +319,8 @@ public partial class ShiftReportViewModel
         var countedKopecks = Money.ToKopecks(amount);
         string? reason = null;
 
-        /// <summary>Pre-checked against the figure already on screen, so a matching count never shows the reason dialog — demanding a reason for an exact drawer would train the operator to type filler into an audit field. The domain re-checks against the truth and throws if the two disagree, which is the point: this is a UX pre-check, not the rule, and the rule is the domain's.</summary>
+        /// <summary>Pre-checked against the figure already on screen, so a matching count never shows the reason dialog — demanding a reason for an exact drawer would train the ope...</summary>
+        /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
         if (countedKopecks != expectedKopecks)
         {
@@ -321,7 +338,8 @@ public partial class ShiftReportViewModel
         return new CashCountEntry(countedKopecks, expectedKopecks, reason);
     }
 
-    /// <summary>The reason for a mismatch, or null when the operator did not give a usable one. Required by the domain and asked for as such, because an unexplained shortage is the one entry nobody can reconstruct a week later.</summary>
+    /// <summary>The reason for a mismatch, or null when the operator did not give a usable one.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
     /// <remarks>Почему так — `docs/decisions/shift-report.md`</remarks>
 
     private async Task<string?> PromptDiscrepancyReasonAsync(decimal expected, long countedKopecks)
@@ -345,7 +363,8 @@ public partial class ShiftReportViewModel
         var trimmed = reason.Trim();
         if (trimmed.Length > MaxDiscrepancyReasonLength)
         {
-            /// <summary>Pre-checked here even though the domain refuses an over-long reason too. The domain's refusal is correct and must not be weakened — this string is the only record of why a drawer did not balance, and DisplayPromptAsync has no MaxLength to stop a paste — but it costs the operator the entire dialog to learn it, and pasting 300+ characters into a phone prompt is not a rare accident. Mirrors the private OrderService.MaxDiscrepancyReasonLength; the domain stays the authority, this only keeps what was typed on screen instead of throwing it away.</summary>
+            /// <summary>Pre-checked here even though the domain refuses an over-long reason too.</summary>
+            /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
             Message = $"Причина расхождения длиннее {MaxDiscrepancyReasonLength} символов. Смена не закрыта.";
             return null;
@@ -354,7 +373,8 @@ public partial class ShiftReportViewModel
         return trimmed;
     }
 
-    /// <summary>What the operator entered at the close prompt, in the units the domain takes. The physical count. 0 is a real count, not an absent one. The live drawer figure the count was compared against, carried back so the outcome message can be worded from the pair that was actually submitted. Set iff differs from the expectation.</summary>
+    /// <summary>What the operator entered at the close prompt, in the units the domain takes.</summary>
+    /// <remarks>Почему так - `docs/decisions/cash.md`</remarks>
 
     private readonly record struct CashCountEntry(long CountedKopecks, long ExpectedKopecks, string? Reason);
 

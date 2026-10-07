@@ -33,14 +33,8 @@ public sealed class BackupService(
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
 
         // VACUUM INTO produces a consistent snapshot while the app keeps running.
-        //
-        // EF1002 is suppressed deliberately, not ignored. ExecuteSqlInterpolatedAsync would
-        // bind the path as a parameter, and SQLite's VACUUM INTO requires a string *literal* —
-        // the parameterised form is a syntax error. The value is escaped instead: EscapeLiteral
-        // doubles single quotes, which is the complete escaping for a SQLite string literal, and
-        // the path is not user input — it is Path.Combine(BackupDirectory, <generated name>),
-        // where BackupDirectory comes from FileSystem.AppDataDirectory. The analyzer cannot see
-        // either fact, so it warns on every build and the warning had become background noise.
+        // Почему так — `docs/decisions/schema.md`
+
 #pragma warning disable EF1002 // interpolated path into ExecuteSqlRawAsync; see above
         await db.Database.ExecuteSqlRawAsync($"VACUUM INTO '{EscapeLiteral(filePath)}'", cancellationToken);
 #pragma warning restore EF1002
@@ -141,14 +135,9 @@ public sealed class BackupService(
         var productsCsv = await catalog.ExportProductsCsvAsync(cancellationToken);
         var salesCsv = await reports.ExportSalesCsvAsync(cancellationToken);
 
-        // The shift the report is about: the open one, or the last one closed when nothing is open.
-        //
-        // It used to be GetOrCreateActiveShiftAsync, which both created a shift and could not fail.
-        // Now that a shift is opened deliberately there is a legitimate state with no open shift —
-        // a terminal between shifts — and an export that threw there would lose the products and
-        // sales CSVs too, because they were already built by then. Falling back to the most recent
-        // closed shift keeps the archive useful at exactly the moment somebody is most likely to
-        // take one.
+        /// <summary>The shift the report is about: the open one, or the last one closed when nothing is open.</summary>
+        /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
         var shift = await orders.GetLatestShiftAsync(cancellationToken);
         var shiftCsv = shift is null
             ? string.Empty

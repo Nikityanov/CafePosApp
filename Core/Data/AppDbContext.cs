@@ -31,10 +31,9 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) : DbCo
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // NOTE: SQLite stores decimals as TEXT, hence:
-        //  * every monetary value is persisted as INTEGER kopecks (see Common/Money.cs);
-        //  * fractional quantities (stock, recipe amounts) keep decimal storage, but all
-        //    comparisons/orderings on them happen in memory (see InventoryService).
+        /// <summary>NOTE: SQLite stores decimals as TEXT, hence: * every monetary value is persisted as INTEGER kopecks (see Common/Money.cs); * fractional quantities (st…</summary>
+        /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
         ConfigureCatalog(modelBuilder);
         ConfigureOrders(modelBuilder);
         ConfigureInventory(modelBuilder);

@@ -4,15 +4,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CafePos.Core.Services;
 
-/// <summary>
-/// One half of the catalogue service: ingredients.
-/// </summary>
-/// <remarks>
-/// The class is already partial and was already 416 lines with 24 methods over five aggregates.
-/// Splitting it by aggregate is pure movement: no type changes, no namespace change, no change
-/// to the primary constructor or to DI. Only this part declares the constructor and the
-/// interface - the others repeat neither.
-/// </remarks>
+/// <summary>One half of the catalogue service: ingredients.</summary>
+/// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
 public sealed partial class CatalogService
 {
     // ─── Ingredients & recipes ───
@@ -41,20 +35,9 @@ public sealed partial class CatalogService
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// Hard delete, with one exception that is not cosmetic: an ingredient that has ever been
-    /// written off cannot be deleted.
-    /// <para>
-    /// Ingredients have no IsDeleted flag (unlike products), and StockMovements.IngredientId is
-    /// ON DELETE CASCADE — so deleting one physically destroys its stock journal. A cancellation
-    /// with StockDisposition.ReturnToStock reverses the write-off by reading that journal, which
-    /// means a deleted ingredient leaves nothing to invert while the operator is being told the
-    /// stock went back. That is a lie about the shelf, and a lie nobody could audit afterwards: the
-    /// rows that would have shown it are the rows that were deleted. Switching the ingredient off
-    /// (IsAvailable = false) hides it from the catalogue and keeps the journal intact, which is why
-    /// that is the action the message points at.
-    /// </para>
-    /// </summary>
+    /// <summary>Hard delete, with one exception that is not cosmetic: an ingredient that has ever been written off cannot be deleted.</summary>
+    /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
     public async Task DeleteIngredientAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);

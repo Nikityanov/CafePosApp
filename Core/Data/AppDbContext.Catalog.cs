@@ -62,32 +62,24 @@ public partial class AppDbContext
         {
             entity.HasKey(combo => combo.Id);
             entity.Property(combo => combo.Name).IsRequired().HasMaxLength(160);
-            // PriceKopecks keeps the default INTEGER mapping with no converter, like Product's: it is
-            // money the catalogue already speaks in kopecks, and a conversion would only be a second way
-            // to spell the same integer. It is NOT NULL, and SaveComboAsync refuses zero — a sellable
-            // item at no price is a catalogue error, and a NULL here would have to become 0 at every
-            // read, i.e. a second silent place where a missing price turns into a free meal.
+            /// <summary>PriceKopecks keeps the default INTEGER mapping with no converter, like Product's: it is money the catalogue already speaks in kopecks, and a conversio…</summary>
+            /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
             entity.HasMany(combo => combo.Components)
                 .WithOne(component => component.Combo)
                 .HasForeignKey(component => component.ComboId)
                 .OnDelete(DeleteBehavior.Cascade);
-            // No index on IsDeleted, unlike Product: a catalogue of bundles is a handful of rows
-            // where the menu screen reads all of them anyway, and a second single-column index here
-            // would be a column SQLite has to keep in step with one it never chooses.
-            // And no index on PriceKopecks for the same reason stated there: nothing queries a bundle
-            // BY its price, so an index on it would be a second column SQLite keeps in step with one
-            // it never chooses. Migration012 therefore creates no index at all — the model declares
-            // none for Combos, and the parity test reads columns, so nothing would ever notice.
+            // No index on IsDeleted, unlike Product: a catalogue of bundles is a handful of rows where the menu screen reads all of them anyway, and a second single…
+            // Почему так — `docs/decisions/schema.md`
+
         });
 
         modelBuilder.Entity<ComboComponent>(entity =>
         {
             entity.HasKey(component => component.Id);
-            // Two references to Products, so both navigations are named: the slot's dish and its
-            // substitute. ComponentPriceKopecks keeps the default nullable long? mapping — its three
-            // states (null = the dish price, 0 = free, a number = this price) are exactly what makes
-            // it usable, and a non-nullable default of 0 would collapse "free" into "the dish is
-            // free", which is a different statement about the catalogue.
+            /// <summary>Two references to Products, so both navigations are named: the slot's dish and its substitute.</summary>
+            /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
             entity.HasOne(component => component.Product)
                 .WithMany()
                 .HasForeignKey(component => component.ProductId)
@@ -99,9 +91,9 @@ public partial class AppDbContext
             // slots that use a dish without loading the bundles themselves — hence both indexes.
             entity.HasIndex(component => component.ComboId);
             entity.HasIndex(component => component.ProductId);
-            // SubstituteProductId gets EF's conventional index as a foreign key, and Migration010
-            // creates it by name: it is never queried on its own (a sale loads the bundle's slots),
-            // but a fresh install would have it and an upgraded one would not.
+            // SubstituteProductId gets EF's conventional index as a foreign key, and Migration010 creates it by name: it is never queried on its own (a sale loads t…
+            // Почему так — `docs/decisions/schema.md`
+
         });
     }
 
@@ -112,18 +104,18 @@ public partial class AppDbContext
             entity.HasKey(order => order.Id);
             entity.Property(order => order.Status).HasConversion<string>().HasMaxLength(30);
             entity.Property(order => order.CancellationReason).HasMaxLength(300);
-            // TEXT like Status and OrderPayment.Method, so an order's fulfilment mode is readable
-            // straight out of SQLite during an investigation. 24 characters is the E.164 cap plus
-            // room for the '+', and the value is written by PhoneNumber.Normalize, never typed free.
+            /// <summary>TEXT like Status and OrderPayment.Method, so an order's fulfilment mode is readable straight out of SQLite during an investigation.</summary>
+            /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
             entity.Property(order => order.OrderType).HasConversion<string>().HasMaxLength(30);
             entity.Property(order => order.CustomerPhone).HasMaxLength(24);
             entity.HasIndex(order => new { order.ShiftId, order.OrderNumber }).IsUnique();
             entity.HasIndex(order => order.Status);
             entity.HasIndex(order => order.CreatedAt);
             entity.HasIndex(order => order.ShiftId);
-            // The schedule section reads this column, and it is also what makes a later move to SQL
-            // ordering possible without a migration. Useless on its own today: SQLite cannot ORDER BY
-            // a DateTimeOffset, so the queue sorts in memory over a materialised projection.
+            /// <summary>The schedule section reads this column, and it is also what makes a later move to SQL ordering possible without a migration.</summary>
+            /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
             entity.HasIndex(order => order.RequestedAt);
             entity.HasMany(order => order.Items)
                 .WithOne(item => item.Order)
@@ -154,12 +146,9 @@ public partial class AppDbContext
                 .WithOne(component => component.OrderItem)
                 .HasForeignKey(component => component.OrderItemId)
                 .OnDelete(DeleteBehavior.Cascade);
-            // ListPriceKopecks keeps the default INTEGER mapping with no converter, like
-            // DraftOrder.IsActiveCart: it is money the product price already wrote, so a conversion
-            // would only be a second way to spell the same integer.
-            // OrderItemComponent.ProductId is deliberately NOT a foreign key. The snapshot has to
-            // outlive the catalogue entry it names — a sale does not stop having happened because the
-            // dish was later renamed or removed.
+            // ListPriceKopecks keeps the default INTEGER mapping with no converter, like DraftOrder.IsActiveCart: it is money the product price already wrote, so a…
+            // Почему так — `docs/decisions/schema.md`
+
         });
 
         modelBuilder.Entity<OrderItemComponent>(entity =>
@@ -175,14 +164,13 @@ public partial class AppDbContext
         {
             entity.HasKey(payment => payment.Id);
             entity.Property(payment => payment.Method).HasConversion<string>().HasMaxLength(30);
-            // IsRefund deliberately keeps the default bool mapping (INTEGER), no converter — the
-            // same reasoning as DraftOrder.IsActiveCart. Every row that exists before the refund
-            // feature is a collection, so the column's DEFAULT 0 is already the correct backfill
-            // and a value converter would only add a second way for a zero to be spelled.
+            /// <summary>IsRefund deliberately keeps the default bool mapping (INTEGER), no converter — the same reasoning as DraftOrder.IsActiveCart.</summary>
+            /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
             entity.Property(payment => payment.Note).HasMaxLength(300);
-            // Payments of one order are read in payment order; the index serves the details screen,
-            // the migration's NOT IN (SELECT OrderId ...) reconciliation check and the refund
-            // walk, which reads one order's non-refunded rows in PaidAt order (FIFO mirroring).
+            /// <summary>Payments of one order are read in payment order; the index serves the details screen, the migration's NOT IN (SELECT OrderId ...) reconciliation check…</summary>
+            /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
             entity.HasIndex(payment => new { payment.OrderId, payment.PaidAt });
         });
 
@@ -190,14 +178,13 @@ public partial class AppDbContext
         {
             entity.HasKey(shift => shift.Id);
             entity.HasIndex(shift => shift.IsActive);
-            // Declared length matches OrderPayment.Note (300). CloseShiftAsync REFUSES an over-long
-            // discrepancy reason rather than truncating it, the opposite of PaymentRecorder's note
-            // handling on purpose — this one is the only record of why a drawer did not balance.
+            /// <summary>Declared length matches OrderPayment.Note (300).</summary>
+            /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
             entity.Property(shift => shift.CashDiscrepancyReason).HasMaxLength(300);
             // CountedCashKopecks / ExpectedCashKopecks / ReconciledAt keep the default nullable long?
-            // / DateTimeOffset? mapping. No value converter: NULL means "never counted", and a
-            // converter or a 0 default would erase that distinction — a counted 0 is missing money,
-            // while NULL is a shift nobody stood at the till for.
+            // Почему так — `docs/decisions/schema.md`
+
         });
 
         modelBuilder.Entity<CashMovement>(entity =>
@@ -206,19 +193,16 @@ public partial class AppDbContext
             // TEXT like OrderPayment.Method, so the ledger is readable straight out of SQLite during
             // an investigation rather than being a column of ordinals only this build understands.
             entity.Property(movement => movement.Kind).HasConversion<string>().HasMaxLength(30);
-            // Matches OrderPayment.Note (300) and Shift.CashDiscrepancyReason (300). The reason is
-            // REFUSED rather than truncated when over-long, so this bound is an integrity guarantee
-            // and never a silent cut — see CashLedgerService.
+            /// <summary>Matches OrderPayment.Note (300) and Shift.CashDiscrepancyReason (300). The reason is REFUSED rather than truncated when over-long, so this bound is an integrity guarantee and never a silent cut — see CashLedgerService.</summary>
+
             entity.Property(movement => movement.Reason).HasMaxLength(300);
-            // Every read of this table is "this shift's movements", both for the balance and for the
-            // list on screen, so the index is on ShiftId alone and not on ShiftId + CreatedAt: the
-            // balance sums without an order and the list orders in memory, and a composite index
-            // would only make the second read pay for a sort the first one does not use.
+            /// <summary>Every read of this table is "this shift's movements", both for the balance and for the list on screen, so the index is on ShiftId alone and not on Shi…</summary>
+            /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
             entity.HasIndex(movement => movement.ShiftId);
-            // ReversesMovementId is deliberately NOT a foreign key. A self-reference that SQLite
-            // enforces would mean deleting a movement — which nothing in the app does, but a
-            // hand-edited database could — silently cascade a second deletion or fail the write.
-            // The link is checked in CashLedgerService, where the refusal can be explained.
+            // ReversesMovementId is deliberately NOT a foreign key.
+            // Почему так — `docs/decisions/schema.md`
+
         });
     }
 }

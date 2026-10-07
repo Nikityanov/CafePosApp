@@ -2,11 +2,8 @@ using CafePos.Core.Data;
 
 namespace CafePos.Core.Schema.Migrations;
 
-/// <summary>
-/// Version 2 — money becomes INTEGER kopecks.
-/// Previously decimals were stored as TEXT: SUM(decimal) is not supported by SQLite at all
-/// and ORDER BY/comparisons on money columns compared strings ("1000" sorts before "250").
-/// </summary>
+/// <summary>Version 2 — money becomes INTEGER kopecks. Previously decimals were stored as TEXT: SUM(decimal) is not supported by SQLite at all and ORDER BY/comparisons on money columns compared strings ("1000" sorts before "250").</summary>
+
 internal sealed class Migration002_MoneyToKopecks : ISchemaMigration
 {
     public int Version => 2;

@@ -16,9 +16,8 @@ public sealed class InventoryService(
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
 
-        // SQLite keeps decimals as TEXT, so "StockQuantity <= MinStockLevel" would be a string
-        // comparison in SQL (and "100" < "20" alphabetically). Ingredients are few, so the
-        // comparison is done in memory instead.
+        /// <summary>SQLite keeps decimals as TEXT, so "StockQuantity <= MinStockLevel" would be a string comparison in SQL (and "100" < "20" alphabetically). Ingredients are few, so the comparison is done in memory instead.</summary>
+
         var ingredients = await db.Ingredients.AsNoTracking()
             .Where(ingredient => ingredient.IsAvailable)
             .ToListAsync(cancellationToken);
@@ -65,20 +64,9 @@ public sealed class InventoryService(
         logger.LogInformation("Restocked {Ingredient} by {Quantity}; new stock {Stock}", ingredient.Name, quantity, ingredient.StockQuantity);
     }
 
-    /// <summary>
-    /// Shortages for a cart, before it is sold.
-    /// <para>
-    /// The tuple shape is kept on PURPOSE, even though the planner behind it now takes expanded
-    /// <c>ProductDemand</c>s. This is the method the menu screen calls while the customer is still
-    /// standing there, and it has always answered for "the dishes on this cart". Bundles reach it the
-    /// same way they reach the sale — through <c>ComboExpander</c> — so the preview and the write-off
-    /// ask the planner about the same dishes and cannot disagree about what is missing.
-    /// <para>
-    /// The empty <c>Name</c> is not a placeholder that leaks: <c>BuildAsync</c> reads the identifier
-    /// and the quantity, and a shortage is described from the INGREDIENT's own row, so there is no
-    /// demand name on screen anywhere in that path.
-    /// </para>
-    /// </summary>
+    /// <summary>Shortages for a cart, before it is sold.</summary>
+    /// <remarks>Почему так — `docs/decisions/stock.md`</remarks>
+
     public async Task<List<StockShortage>> PreviewShortagesAsync(IReadOnlyList<(Guid ProductId, int Quantity)> lines, CancellationToken cancellationToken = default)
     {
         var demands = lines

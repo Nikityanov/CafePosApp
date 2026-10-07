@@ -1,9 +1,7 @@
 namespace CafePos.Core.Models;
 
-/// <summary>
-/// Audit trail of every stock change (order write-off, delivery, manual correction).
-/// Without it a mismatch between the recipe and the shelf cannot be investigated.
-/// </summary>
+/// <summary>Audit trail of every stock change (order write-off, delivery, manual correction). Without it a mismatch between the recipe and the shelf cannot be investigated.</summary>
+
 public class StockMovement
 {
     public Guid Id { get; set; } = Guid.NewGuid();

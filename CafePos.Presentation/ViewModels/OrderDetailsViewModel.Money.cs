@@ -11,7 +11,8 @@ namespace CafePos.Presentation.ViewModels;
 public partial class OrderDetailsViewModel
 {
 
-    /// <summary>Opens the payment sheet for this order and books what the operator declares. A dismissed sheet leaves the order untouched. Returns money on a finished order: the amount off the keypad, the reason from a prompt.</summary>
+    /// <summary>Opens the payment sheet for this order and books what the operator declares.</summary>
+    /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
     /// <remarks>Почему так — `docs/decisions/order-details.md`</remarks>
 
     private async Task RefundPaymentAsync()

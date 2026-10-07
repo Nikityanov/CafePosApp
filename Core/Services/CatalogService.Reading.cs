@@ -3,15 +3,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CafePos.Core.Services;
 
-/// <summary>
-/// One half of the catalogue service: reading.
-/// </summary>
-/// <remarks>
-/// The class is already partial and was already 416 lines with 24 methods over five aggregates.
-/// Splitting it by aggregate is pure movement: no type changes, no namespace change, no change
-/// to the primary constructor or to DI. Only this part declares the constructor and the
-/// interface - the others repeat neither.
-/// </remarks>
+/// <summary>One half of the catalogue service: reading.</summary>
+/// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
 public sealed partial class CatalogService
 {
     // ─── Reads ───
@@ -71,11 +65,9 @@ public sealed partial class CatalogService
             .OrderBy(group => group.Name)
             .ToListAsync(cancellationToken);
 
-        // AsNoTracking means EF does not fix up the inverse navigation, so every
-        // ModifierOption.ModifierGroup stays null and the catalogue row renders an empty
-        // "Группа: " label. GetProductsAsync does not hit this because it loads the group
-        // from the product side. Set the back-reference explicitly — it is a pure in-memory
-        // assignment on already-materialised entities.
+        /// <summary>AsNoTracking means EF does not fix up the inverse navigation, so every ModifierOption.ModifierGroup stays null and the catalogue row renders an empty…</summary>
+        /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
         foreach (var group in groups)
             foreach (var option in group.Options)
                 option.ModifierGroup = group;

@@ -42,11 +42,8 @@ public sealed partial class CatalogService
         return builder.ToString();
     }
 
-    /// <summary>
-    /// Imports products, updating existing rows with the same name instead of creating
-    /// duplicates (the previous implementation always inserted, so a repeated import
-    /// doubled the catalogue).
-    /// </summary>
+    /// <summary>Imports products, updating existing rows with the same name instead of creating duplicates (the previous implementation always inserted, so a repeated import doubled the catalogue).</summary>
+
     public async Task<ProductImportResult> ImportProductsCsvAsync(string csvContent, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(csvContent)) throw new ValidationFailureException("Файл пуст.");

@@ -2,76 +2,28 @@ using System.Globalization;
 
 namespace CafePos.Core.Common;
 
-/// <summary>
-/// Formats a clock time of day — «14:20» — from the two things this app holds one as: a
-/// <see cref="TimeSpan"/> inside the "when" sheet, and a <see cref="DateTimeOffset"/> on the order.
-/// </summary>
-/// <remarks>
-/// <b>WHY THIS EXISTS AT ALL: <c>TimeSpan.ToString("HH:mm")</c> THROWS.</b> A <see cref="TimeSpan"/>
-/// has its own, much smaller set of custom format specifiers than a <see cref="DateTime"/>: they are
-/// <c>d h m s f F</c>, all lowercase, and a colon has to be escaped. <c>"HH:mm"</c> therefore raises
-/// <see cref="FormatException"/> — measured, not inferred:
-/// <code>
-/// "HH:mm"  =&gt; FormatException: Input string was not in a correct format.
-/// "hh:mm"  =&gt; FormatException: Input string was not in a correct format.
-/// "hh\:mm" =&gt; 14:20
-/// </code>
-/// On a <see cref="DateTimeOffset"/> the same pattern is fine, which is what makes the mistake so easy
-/// to make: half this app's times are timestamps and half are durations, and the two accept different
-/// format strings.
-/// <para>
-/// That one format string is not a typo — it was the whole of the crash reported as «выбор ко времени
-/// вылетает». <c>TimePickerPopup.SetMode</c> formatted the chosen time with it to build the confirm
-/// button's caption, on the UI thread, from an event handler, so the process died the instant the
-/// operator chose anything other than «сейчас». Both routes reached it: pressing
-/// «К выбранному времени», and moving the native dial (the dialog's own <c>onTimeSet</c> callback
-/// assigns <c>TimePicker.Time</c>, which raises <c>PropertyChanged</c>, which called <c>SetMode</c>).
-/// </para>
-/// <para>
-/// One method for both shapes rather than two call sites, so the escaping is decided once. It is here,
-/// It is in Core rather than beside the sheet because the ORDER PROMISED TIME NEEDS IT, not the sheet:
-/// <c>OrderPromise</c> describes an order's promise in the same words the sheet offers, and that is a
-/// domain rule with no UI in it.
-/// a rule a test can reach.
-/// </para>
-/// </remarks>
+/// <summary>Formats a clock time of day — «14:20» — from the two things this app holds one as: a inside the "when" sheet, and a on the order.</summary>
+/// <remarks>Почему так — `docs/decisions/shared.md`</remarks>
+
 public static class ClockTime
 {
-    /// <summary>«14:20» for any time of day, in the operator's own 24-hour convention.</summary>
-    /// <remarks>
-    /// Explicitly 24-hour, and not the current culture's short time pattern: a coffee shop's promise is
-    /// quoted back to the customer in the same words all day long, and a locale that renders «2:20
-    /// PM» beside a «22:20» on the order board produces exactly the ambiguity this sheet exists to
-    /// remove. The escaped colon is the load-bearing part — see the remarks above.
-    /// </remarks>
+    /// <remarks>`docs/decisions/shared.md`</remarks>
+
     public static string Format(TimeSpan timeOfDay) =>
         timeOfDay.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
 
-    /// <summary>«14:20» for a timestamp, in the operator's own 24-hour convention.</summary>
-    /// <remarks>
-    /// The mirror of <see cref="Format(TimeSpan)"/>, and it needs no escaping — <see cref="DateTimeOffset"/>
-    /// really does accept «HH:mm». Both overloads exist so the two call sites read alike and nobody has
-    /// to remember which type they are holding.
-    /// </remarks>
+    /// <remarks>`docs/decisions/shared.md`</remarks>
+
     public static string Format(DateTimeOffset moment) => Format(moment, TimeZoneInfo.Local);
 
-    /// <summary>
-    /// «14:20» for a timestamp read in a named zone.
-    /// </summary>
-    /// <remarks>
-    /// Exists so a promise PLACED in one zone can be READ BACK in the same one. The default overload
-    /// converts with <see cref="DateTimeOffset.ToLocalTime"/>, which uses the machine's zone — fine in
-    /// production where there is only ever one zone, and wrong in a test where the ViewModel's clock is
-    /// pinned elsewhere: the message the operator reads back would be an hour out from the time they
-    /// chose.
-    /// </remarks>
+    /// <summary>«14:20» for a timestamp read in a named zone.</summary>
+    /// <remarks>Почему так — `docs/decisions/shared.md`</remarks>
+
     public static string Format(DateTimeOffset moment, TimeZoneInfo? zone) =>
         Format(TimeZoneInfo.ConvertTime(moment, zone ?? TimeZoneInfo.Local).TimeOfDay);
 
-    /// <summary>
-    /// The next moment on the <paramref name="gridMinutes"/> grid at or after <paramref name="timeOfDay"/>,
-    /// wrapping at midnight.
-    /// </summary>
+    /// <summary>The next moment on the grid at or after , wrapping at midnight.</summary>
+
     public static TimeSpan SnapUp(TimeSpan timeOfDay, int gridMinutes)
     {
         if (gridMinutes <= 1) return timeOfDay;
@@ -86,14 +38,9 @@ public static class ClockTime
         return TimeSpan.FromTicks(next % TimeSpan.TicksPerDay);
     }
 
-    /// <summary>
-    /// «Сейчас плюс <paramref name="minutes"/>», on the <paramref name="gridMinutes"/> grid — the seed of the
-    /// "when" sheet and each of its three presets.
-    /// </summary>
-    /// <remarks>
-    /// ONE method because the seed and the presets must agree, and a preset landing on a time the seed's
-    /// grid could never reach would be a control that sets something the sheet cannot then show.
-    /// </remarks>
+    /// <summary>«Сейчас плюс », on the grid — the seed of the "when" sheet and each of its three presets.</summary>
+    /// <remarks>Почему так — `docs/decisions/shared.md`</remarks>
+
     public static TimeSpan NowPlus(int minutes, int gridMinutes) =>
         SnapUp(DateTime.Now.TimeOfDay + TimeSpan.FromMinutes(minutes), gridMinutes);
 }

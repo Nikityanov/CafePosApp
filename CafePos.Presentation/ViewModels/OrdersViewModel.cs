@@ -90,7 +90,8 @@ public partial class OrderRowViewModel : ObservableObject
         ? QueueSection.Scheduled
         : IsOverdue ? QueueSection.Urgent : QueueSection.Working;
 
-    /// <summary>Section this order belongs to in the single-list layout. The orders board is one scrolling list, not two columns, because a kanban on a 411dp phone gave each card ~190dp and clipped "Подробнее" to "Подробн". Grouping keeps the visual split the board had while giving every card the full width.</summary>
+    /// <summary>Section this order belongs to in the single-list layout.</summary>
+    /// <remarks>Почему так - `docs/decisions/orders-board.md`</remarks>
     /// <remarks>Почему так — `docs/decisions/orders-board.md`</remarks>
 
     public string QueueSectionName => QueueSection switch
@@ -114,7 +115,8 @@ public partial class OrderRowViewModel : ObservableObject
 
     private bool showGroupHeader;
 
-    /// <summary>── Promise, lateness and contact ───────────────────────────────────────────────────────────── THE SORT KEY AND THE LATE MARKER ARE TWO SEPARATE MEASUREMENTS, AND THEY ARE NOT MERGED. Where a card SITS answers "what should be worked on, in what order" — measured by PromisedAt, then CreatedAt. The warning marker answers "has this one passed the moment it was promised" — measured by now against PromisedAt alone, with no reference to where the card is. In a real KDS those are different timers for different reasons: the warning colour on a kitchen screen measures how long an ITEM has been cooking, which is not how late the order's promise is. Folding one into the other would mean a late order could be reordered into a calm stretch of the queue and lose the fact that it is late — which is exactly the failure this layout exists to prevent. So the marker RIDES ALONG on the card and never moves it. The «Срочные» section is where late orders live, and that is a statement about where they are — not a promotion rule applied to the other two sections.</summary>
+    /// <summary>── Promise, lateness and contact ───────────────────────────────────────────────────────────── THE SORT KEY AND THE LATE MARKER ARE TWO SEPARATE MEASUREMENTS, A...</summary>
+    /// <remarks>Почему так - `docs/decisions/orders-board.md`</remarks>
 
 
     /// <summary>Whether the customer asked for a time that has not arrived yet — the order is a preview ticket, not work.</summary>
@@ -142,7 +144,8 @@ public partial class OrderRowViewModel : ObservableObject
 
     public Color OverdueColor => PaletteAccess.Resolve("Danger", "DangerDark");
 
-    /// <summary>When this order is due. The EXACT promised time, which a staff-facing screen may show: the range quoted to the customer on the cart is an estimate for a time the till picks, and this is the figure the order was actually promised and is judged against.</summary>
+    /// <summary>When this order is due.</summary>
+    /// <remarks>Почему так - `docs/decisions/orders-board.md`</remarks>
 
     public string PromisedAtText => Model.PromisedAt.ToLocalTime().ToString("HH:mm");
 
@@ -178,7 +181,8 @@ public partial class OrderRowViewModel : ObservableObject
         _ => PaletteAccess.Resolve("Info", "InfoDark")
     };
 
-    /// <summary>── Payment state ────────────────────────────────────────────────────────────────────────── Derived from the model the same way StatusColor is: a computed property on the row, not a converter. The pictogram binds PaymentGlyph (the mark) and PaymentColor (its fill); the visible line and the accessible description carry the wording, so the state is never told by colour alone.</summary>
+    /// <summary>── Payment state ────────────────────────────────────────────────────────────────────────── Derived from the model the same way StatusColor is: a computed prope...</summary>
+    /// <remarks>Почему так - `docs/decisions/orders-board.md`</remarks>
 
 
     public PaymentState PaymentState => Model.PaymentState;
@@ -229,7 +233,8 @@ public partial class OrderRowViewModel : ObservableObject
     public string NextActionText => Model.Status == OrderStatus.InProgress ? "Готов" : "Закрыть";
     public bool CanAdvance => Model.Status is OrderStatus.InProgress or OrderStatus.Ready;
 
-    /// <summary>What the cancel button says on this card. A paid order is not just being closed off — money is going back to the customer, and the label is the only place that can say so before the operator taps.</summary>
+    /// <summary>What the cancel button says on this card.</summary>
+    /// <remarks>Почему так - `docs/decisions/orders-board.md`</remarks>
     /// <remarks>Почему так — `docs/decisions/orders-board.md`</remarks>
 
     public string CancelText => Model.PaidKopecks > 0
@@ -315,7 +320,8 @@ public partial class OrdersViewModel : ObservableObject
         this.timeProvider = timeProvider;
         this.logger = logger;
 
-        /// <summary>AllowConcurrentExecutions: RefreshView.IsRefreshing is bound to IsBusy, so setting IsBusy = true re-triggers LoadCommand. Without AllowConcurrentExecutions the command would reject the re-entrant Execute call and the RefreshView spinner could get stuck. LoadAsync also has an `if (IsBusy) return;` guard to prevent the feedback loop from re-executing the Orders query on every cycle (infinite loading).</summary>
+        /// <summary>AllowConcurrentExecutions: RefreshView.IsRefreshing is bound to IsBusy, so setting IsBusy = true re-triggers LoadCommand.</summary>
+        /// <remarks>Почему так - `docs/decisions/orders-board.md`</remarks>
 
         LoadCommand = new AsyncRelayCommand(LoadAsync, options: AsyncRelayCommandOptions.AllowConcurrentExecutions);
         AdvanceStatusCommand = new AsyncRelayCommand<OrderRowViewModel>(AdvanceStatusAsync);
@@ -338,7 +344,8 @@ public partial class OrdersViewModel : ObservableObject
     /// <summary>Pre-orders with a time still in the future, soonest promise first.</summary>
     public ObservableCollection<OrderRowViewModel> ScheduledOrders { get; } = [];
 
-    /// <summary>Tab captions with their counts. The count is on the tab rather than inside it because the reason to look is arithmetic — is anything waiting — and reading that off a tab bar costs nothing, while discovering it by opening the tab costs the operator their place in the queue.</summary>
+    /// <summary>Tab captions with their counts.</summary>
+    /// <remarks>Почему так - `docs/decisions/orders-board.md`</remarks>
 
     public string PreparingTabText => $"Готовятся · {PreparingOrders.Count}";
     public string ReadyTabText => $"Ждут выдачи · {ReadyOrders.Count}";
@@ -365,7 +372,8 @@ public partial class OrdersViewModel : ObservableObject
     public string ReadyEmptyText => "Ничего не ждёт выдачи.";
     public string ScheduledEmptyText => "Предзаказов на будущее нет.";
 
-    /// <summary>Which tab is showing. is the default, and that is the owner's instruction: for a single operator the queue is worked from what is being made, and the count on «Ждут выдачи» says whether anything has finished without anyone having to look into the tab.</summary>
+    /// <summary>Which tab is showing.</summary>
+    /// <remarks>Почему так - `docs/decisions/orders-board.md`</remarks>
 
     private OrderTab selectedTab = OrderTab.Preparing;
     public OrderTab SelectedTab

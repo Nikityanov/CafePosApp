@@ -18,10 +18,9 @@ public sealed class DraftOrderService(
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         var draft = await db.DraftOrders.AsNoTracking()
             .Include(order => order.Items)
-            // A bundle's slots, or the restored line prints with nothing under it AND loses its merge
-            // signature: the cart merges on OrderLineKey, which carries the composition. A restored
-            // bundle would then split from the identical bundle the cashier adds next, and the cart
-            // would show the same bundle twice at the same price. See MenuViewModel.RestoreDraftAsync.
+            /// <summary>A bundle's slots, or the restored line prints with nothing under it AND loses its merge signature: the cart merges on OrderLineKey, which carries the…</summary>
+            /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
             .ThenInclude(item => item.Components)
             .FirstOrDefaultAsync(order => order.IsActiveCart, cancellationToken);
 
@@ -60,20 +59,9 @@ public sealed class DraftOrderService(
 
         draft.UpdatedAt = now;
 
-        // The old lines go away and a fresh set comes back. Both halves have to be stated
-        // explicitly, and the reason is EF Core's change detection rather than this code:
-        //
-        // DraftOrderItem.Id is client-assigned (Guid.NewGuid in ToItem), so EF cannot tell a
-        // brand-new item from an existing one by its key alone. When new items were only
-        // *assigned* to draft.Items, change detection tracked them as Modified against the
-        // Unchanged draft — never Added. The batch then ran
-        //     DELETE FROM "DraftOrderItems"   (the old lines)
-        //     UPDATE "DraftOrderItems" SET .. (the new lines, by the deleted keys)
-        // and the UPDATE matched 0 rows, so every cart autosave after the first ended in
-        // DbUpdateConcurrencyException and the draft was never written. The first save worked
-        // only because the draft itself was Added, which cascades Added to its dependents.
-        //
-        // AddRange states the intent outright, so the batch is DELETE-then-INSERT.
+        /// <summary>The old lines go away and a fresh set comes back.</summary>
+        /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
         var replacement = lines.Select(line => ToItem(line, draft.Id)).ToList();
         db.DraftOrderItems.RemoveRange(draft.Items);
         draft.Items = replacement;
@@ -148,11 +136,9 @@ public sealed class DraftOrderService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// A parked line as the cart reads it. The slots come last and in <c>SortOrder</c>, because the
-    /// merge key is order-sensitive: two bundles whose slots arrived in a different sequence are
-    /// different compositions as far as <c>OrderLineKey</c> is concerned.
-    /// </summary>
+    /// <summary>A parked line as the cart reads it.</summary>
+    /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
     private static CheckoutLine ToLine(DraftOrderItem item) => new(
         item.ProductId,
         item.ProductName,
@@ -183,10 +169,9 @@ public sealed class DraftOrderService(
             SelectedVariantName = line.VariantName
         };
 
-        // The slots are what make a bundle restorable AS a bundle. Left out, a parked bundle came back
-        // as a bare line: nothing printed under it, and its merge key no longer matched the identical
-        // bundle the cashier added next, so the cart grew a second copy instead of a quantity of 2.
-        // SortOrder is the slot's index on the cart, which is what CheckoutComponent does not carry.
+        /// <summary>The slots are what make a bundle restorable AS a bundle.</summary>
+        /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
         var order = 0;
         foreach (var component in line.Components ?? [])
         {

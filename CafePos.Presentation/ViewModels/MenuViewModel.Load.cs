@@ -30,11 +30,13 @@ public partial class MenuViewModel
             await menu.LoadAsync();
             await autosave.RestoreAsync();
 
-            /// <summary>The formatted amounts depend on Currencies.Default, which the operator can change on the Settings tab while this page's ViewModel instance is still alive — Shell keeps one page per tab, so coming back here re-runs LoadAsync on the SAME instance rather than building a new one. This refresh cannot be left to Recalculate. An empty cart totals 0 before and after a load, so SetProperty sees no change, raises nothing, and «Итого» would keep printing the old sign — measured on the emulator: tiles in ₿, cart total still in ₽. Hence the explicit re-raise of both the total and every cart row.</summary>
+            /// <summary>The formatted amounts depend on Currencies.Default, which the operator can change on the Settings tab while this page's ViewModel instance is still alive — Shel...</summary>
+            /// <remarks>Почему так - `docs/decisions/menu.md`</remarks>
 
             RefreshMoneyText();
 
-            /// <summary>…and the same argument applies to the fulfilment row's clock time. It is a computed reading of the wall clock (IsRequestedTimeLate), not a stored flag, so it goes stale on its own: an order promised for 14:20 stops being "time left" at 14:20 without anything happening. LoadAsync is the only thing that runs on every return to the tab, so it is where the marker is re-read. Nothing else on this page reads the time.</summary>
+            /// <summary>…and the same argument applies to the fulfilment row's clock time.</summary>
+            /// <remarks>Почему так - `docs/decisions/menu.md`</remarks>
 
             OnPropertyChanged(nameof(RequestedTimeText));
             OnPropertyChanged(nameof(IsRequestedTimeLate));
@@ -91,7 +93,8 @@ public partial class MenuViewModel
             // A selected variant carries its own price and replaces the product price entirely.
             var effectivePrice = flow.ResolvePrice(variant);
 
-            /// <summary>The merge is the CART's: it folds this line into an identical one already there, on the same OrderLineKey the cart rows, the order editor and OrderService all compute. An inline comparison is what this used to do, and it left the composition out of the identity — which merged two DIFFERENT builds of one bundle into one line and put one bundle in as two. Both cost money.</summary>
+            /// <summary>The merge is the CART's: it folds this line into an identical one already there, on the same OrderLineKey the cart rows, the order editor and OrderService all c...</summary>
+            /// <remarks>Почему так - `docs/decisions/menu.md`</remarks>
 
             cart.Add(new CartItemViewModel
             {
@@ -117,10 +120,12 @@ public partial class MenuViewModel
         }
     }
 
-    /// <summary>─ Bundles ──────────────────────────────────────────────────────────────────────────────── Nothing is here any more. The whole section - AddComboAsync, EditLineCompositionAsync, ResolveCompositionAsync, ReportBundleFailure, AddBundleLine - moved to CompositionResolver, because a bundle has exactly one way in: read it, refuse it if the shelf cannot fill it, compose it, and let the catalogue price it. AddProductAsync is deliberately NOT there - it is a different sheet, variants then modifiers - and neither is EditLinePriceAsync, which is a price override rather than a composition. ── Price override ────────────────────────────────────────────────────────────────────────────</summary>
+    /// <summary>─ Bundles ──────────────────────────────────────────────────────────────────────────────── Nothing is here any more.</summary>
+    /// <remarks>Почему так - `docs/decisions/menu.md`</remarks>
 
 
-    /// <summary>Re-prices one line by hand. The allowed price is left alone, so the row shows the allowed price struck through beside the changed one and the shift report's discount section finds the difference afterwards.</summary>
+    /// <summary>Re-prices one line by hand.</summary>
+    /// <remarks>Почему так - `docs/decisions/menu.md`</remarks>
     /// <remarks>Почему так — `docs/decisions/menu.md`</remarks>
 
     private async Task EditLinePriceAsync(CartItemViewModel? line)
@@ -157,12 +162,14 @@ public partial class MenuViewModel
 
     private void SelectOrderType(OrderType value)
     {
-        /// <summary>The DECISION is FulfilmentEditor's, down to the phone it reads before dropping and the silence it returns for a no-op. See FulfilmentSwitch for why those three are one thing and why silence means not touching Message at all. All this method has left is the two things the editor cannot do for itself: speak, and buzz.</summary>
+        /// <summary>The DECISION is FulfilmentEditor's, down to the phone it reads before dropping and the silence it returns for a no-op.</summary>
+        /// <remarks>Почему так - `docs/decisions/menu.md`</remarks>
 
         var change = fulfilment.Select(value);
         if (!change.Changed) return;
 
-        /// <summary>Assigned ONLY on the loss. Setting Message to an empty string would still retire a pending undo (its setter calls ClearPendingUndo), so a silent switch must not touch the property at all rather than clearing it — «Отменить» armed by a removal has to survive a tap on the fulfilment button. Hence `is not null` and not `!= string.Empty`.</summary>
+        /// <summary>Assigned ONLY on the loss.</summary>
+        /// <remarks>Почему так - `docs/decisions/menu.md`</remarks>
 
         if (change.Announce is not null) Message = change.Announce;
         haptics.Click();
@@ -263,7 +270,8 @@ public partial class MenuViewModel
         var promised = OrderPromise.At(choice.TimeOfDay, timeProvider.GetLocalNow(), timeProvider.LocalTimeZone);
         fulfilment.SetPromise(promised);
 
-        /// <summary>Overdue is stated, because it is not obvious from the figure. «Заказ к 14:20» at 15:05 is a different order from «Заказ к 14:20» at 13:00 and the sentence has to say which one this is — otherwise the operator reads their own confirmation as a mistake. Describing the LOCAL `promised` rather than re-reading the property: the sheet was opened on the order's current state, so a dismissal is a null and this is the only write. Reading it back would be a second source of truth for a value that is already in hand.</summary>
+        /// <summary>Overdue is stated, because it is not obvious from the figure.</summary>
+        /// <remarks>Почему так - `docs/decisions/menu.md`</remarks>
 
         Message = OrderPromise.Describe(promised, timeProvider.GetLocalNow(), timeProvider.LocalTimeZone);
         haptics.Click();

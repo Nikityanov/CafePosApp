@@ -3,10 +3,8 @@ using CafePos.Core.Common;
 
 namespace CafePos.Core.Models;
 
-/// <summary>
-/// Time-based pricing rule for a product.
-/// Applied when the rule's time window is active.
-/// </summary>
+/// <summary>Time-based pricing rule for a product. Applied when the rule's time window is active.</summary>
+
 public class PriceRule
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -48,10 +46,8 @@ public class PriceRule
         set => PriceAdjustmentKopecks = Money.ToKopecks(value);
     }
 
-    /// <summary>
-    /// Percentage markup/discount (e.g., 10 = +10%, -15 = -15%).
-    /// Applied if PriceOverride and PriceAdjustment are both 0.
-    /// </summary>
+    /// <summary>Percentage markup/discount (e.g., 10 = +10%, -15 = -15%). Applied if PriceOverride and PriceAdjustment are both 0.</summary>
+
     public decimal PercentAdjustment { get; set; }
 
     public bool IsActive { get; set; } = true;

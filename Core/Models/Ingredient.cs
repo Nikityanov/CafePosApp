@@ -26,10 +26,8 @@ public class Ingredient
         set => CostPerUnitKopecks = Money.ToKopecks(value);
     }
 
-    /// <summary>
-    /// Fractional stock quantity. Kept as a decimal on SQLite (TEXT), therefore all
-    /// comparisons/orderings on it are performed in memory — see InventoryService.
-    /// </summary>
+    /// <summary>Fractional stock quantity. Kept as a decimal on SQLite (TEXT), therefore all comparisons/orderings on it are performed in memory — see InventoryService.</summary>
+
     public decimal StockQuantity { get; set; }
 
     /// <summary>Low-stock threshold in the same units as <see cref="StockQuantity"/>.</summary>
@@ -43,7 +41,7 @@ public class Ingredient
     // Navigation
     public List<RecipeItem> RecipeItems { get; set; } = new();
 
-    /// <summary>True when the stock is at or below the configured minimum.</summary>
+    // True when the stock is at or below the configured minimum.
     [NotMapped]
     public bool IsLowStock => IsAvailable && StockQuantity <= MinStockLevel;
 
@@ -51,20 +49,16 @@ public class Ingredient
     // Composed on the model so the list binds a plain string instead of a MultiBinding over
     // two paths, which is markedly cheaper inside a CollectionView item template.
 
-    /// <summary>Stock with its unit, e.g. "250 г".</summary>
+    // Stock with its unit, e.g. "250 г".
     [NotMapped]
     public string StockText => TextFormat.Quantity(StockQuantity, Unit);
 
-    /// <summary>Unit cost with its unit, e.g. "12 ₽/г" or "12,50 ₿/г".</summary>
-    /// <remarks>
-    /// Goes through <see cref="TextFormat.CostPerUnit(decimal, string?)"/>, which resolves
-    /// <see cref="Currencies.Default"/>, so the symbol follows the operator's setting with no
-    /// parameter to thread through a model that is bound straight from XAML.
-    /// </remarks>
+    // `docs/decisions/schema.md`
+
     [NotMapped]
     public string CostPerUnitText => TextFormat.CostPerUnit(CostPerUnit, Unit);
 
-    /// <summary>Low-stock threshold with its unit, e.g. "мин: 200 г".</summary>
+    // Low-stock threshold with its unit, e.g. "мин: 200 г".
     [NotMapped]
     public string MinStockText => $"мин: {TextFormat.Quantity(MinStockLevel, Unit)}";
 }

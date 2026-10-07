@@ -80,11 +80,9 @@ public sealed class ReportExportService(IDbContextFactory<AppDbContext> factory)
         var completed = orders.Where(order => order.Status == OrderStatus.Completed).ToList();
         var revenue = completed.Sum(order => order.TotalPrice);
 
-        // "Принято оплат" — what the till recorded, next to the revenue figure above. Exported on
-        // purpose: the shift report is what a manager takes to the cash count, and without these
-        // lines the drawer total cannot be reconciled against the day on paper. The wording and the
-        // GROSS meaning are deliberately untouched: every existing reading of "Принято …" keeps
-        // meaning "what came in".
+        /// <summary>"Принято оплат" — what the till recorded, next to the revenue figure above.</summary>
+        /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
         var ledger = await CashLedger.ReadAsync(db, shiftId, cancellationToken);
         var payments = ledger.Payments;
 
@@ -97,28 +95,26 @@ public sealed class ReportExportService(IDbContextFactory<AppDbContext> factory)
         builder.AppendLine(Csv.Join("Принято картой", Money.FromKopecks(payments.CardKopecks).ToString("F2")));
         builder.AppendLine(Csv.Join("Принято всего", Money.FromKopecks(payments.TotalKopecks).ToString("F2")));
 
-        // What went back out, by the method it left in. Reported separately from "Принято" rather
-        // than subtracted into it: the gross figure is what the till took, and quietly lowering it
-        // would make a day with refunds look like a day that took less.
+        /// <summary>What went back out, by the method it left in.</summary>
+        /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
         builder.AppendLine(Csv.Join("Возвращено наличными", Money.FromKopecks(payments.RefundsCashKopecks).ToString("F2")));
         builder.AppendLine(Csv.Join("Возвращено картой", Money.FromKopecks(payments.RefundsCardKopecks).ToString("F2")));
         builder.AppendLine(Csv.Join("Возвращено всего", Money.FromKopecks(payments.RefundedKopecks).ToString("F2")));
 
-        // The two figures that are not orders. Printed as their own lines, ABOVE the total, because a
-        // "Итого наличными в кассе" that does not balance against the line above it is the exact
-        // situation an export is taken to the till to resolve — and a drawer with change in it has
-        // never been explainable from "Принято наличными" alone.
+        /// <summary>The two figures that are not orders.</summary>
+        /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
         builder.AppendLine(Csv.Join("Внесено размена", Money.FromKopecks(ledger.FloatKopecks).ToString("F2")));
         builder.AppendLine(Csv.Join("Изъято на инкассацию", Money.FromKopecks(ledger.PayoutKopecks).ToString("F2")));
 
-        // The one line a manager counts against the drawer, so it is the last word in the export and
-        // the only one that nets out. Anything ambiguous about it defeats the whole point of taking
-        // the report to the till.
+        /// <summary>The one line a manager counts against the drawer, so it is the last word in the export and the only one that nets out. Anything ambiguous about it defeats the whole point of taking the report to the till.</summary>
+
         builder.AppendLine(Csv.Join("Итого наличными в кассе", Money.FromKopecks(ledger.InDrawerKopecks).ToString("F2")));
 
-        // The count itself, printed last because it is the manager's own answer to the drawer line
-        // above. The shift row is loaded here for the first time: the export used to read orders
-        // only, so it had nothing to say about the money after it left the drawer.
+        /// <summary>The count itself, printed last because it is the manager's own answer to the drawer line above.</summary>
+        /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
         var shift = await db.Shifts.AsNoTracking()
             .FirstOrDefaultAsync(current => current.Id == shiftId, cancellationToken);
         AppendReconciliation(builder, ShiftReconciliation.Read(shift), ledger.InDrawerKopecks);
@@ -126,17 +122,9 @@ public sealed class ReportExportService(IDbContextFactory<AppDbContext> factory)
         return builder.ToString();
     }
 
-    /// <summary>
-    /// The cash count block. Two rules, both of them about not lying:
-    /// <list type="bullet">
-    /// <item>Every "expected" figure carries the MOMENT it was taken at. A bare "Ожидалось" line is
-    /// the ambiguity the feature exists to remove — read a week later it is a claim about some
-    /// unspecified drawer, and an auditor cannot use it.</item>
-    /// <item>A shift that was never counted says exactly that, in one line, and prints no numbers at
-    /// all. A historical export must never be readable as "the drawer came out at 0" — that is a
-    /// fabricated count on precisely the rows somebody checks first.</item>
-    /// </list>
-    /// </summary>
+    /// <summary>The cash count block.</summary>
+    /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
     private static void AppendReconciliation(
         System.Text.StringBuilder builder,
         CashReconciliation? reconciliation,
@@ -152,9 +140,8 @@ public sealed class ReportExportService(IDbContextFactory<AppDbContext> factory)
         builder.AppendLine(Csv.Join("Ожидалось на момент закрытия", Money.FromKopecks(reconciliation.ExpectedKopecks).ToString("F2")));
         builder.AppendLine(Csv.Join("Пересчитано в кассе", Money.FromKopecks(reconciliation.CountedKopecks).ToString("F2")));
 
-        // One line for the difference, worded as the drawer is actually wrong. A matching count
-        // prints nothing here: the two lines above already say "same", and "Совпадает" would be a
-        // fourth thing to keep in step.
+        /// <summary>One line for the difference, worded as the drawer is actually wrong. A matching count prints nothing here: the two lines above already say "same", and "Совпадает" would be a fourth thing to keep in step.</summary>
+
         if (reconciliation.Difference == CashDifference.Shortage)
             builder.AppendLine(Csv.Join("Не хватает", Money.FromKopecks(-reconciliation.DiscrepancyKopecks).ToString("F2")));
         else if (reconciliation.Difference == CashDifference.Overage)
@@ -163,11 +150,9 @@ public sealed class ReportExportService(IDbContextFactory<AppDbContext> factory)
         if (!string.IsNullOrWhiteSpace(reconciliation.Reason))
             builder.AppendLine(Csv.Join("Причина", reconciliation.Reason));
 
-        // Money that left the drawer AFTER the count was recorded — a refund against a closed shift,
-        // which is allowed precisely because the cash physically belonged to that drawer. Printed
-        // only when there is any: at zero the pair would repeat the drawer line above in other
-        // words. The value can only be non-negative for a counted shift, since the only thing that
-        // can lower a closed shift's live cash figure is a refund.
+        /// <summary>Money that left the drawer AFTER the count was recorded — a refund against a closed shift, which is allowed precisely because the cash physically belo…</summary>
+        /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
         var drift = reconciliation.ExpectedKopecks - expectedNowKopecks;
         if (drift != 0)
         {

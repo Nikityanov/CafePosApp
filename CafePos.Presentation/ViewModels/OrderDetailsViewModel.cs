@@ -71,7 +71,8 @@ public partial class OrderDetailsViewModel : ObservableObject
         IncreaseItemCommand = new RelayCommand<OrderEditItemViewModel>(IncreaseItem);
         DecreaseItemCommand = new RelayCommand<OrderEditItemViewModel>(DecreaseItem);
         RemoveItemCommand = new RelayCommand<OrderEditItemViewModel>(RemoveItem);
-        /// <summary>CanExecute = CanEdit on the two COMMANDS the gesture recognizers use. It is what the Buttons bind IsEnabled to, and it is also what stands in for the IsEnabled that used to sit on the price's TapGestureRecognizer and crashed this template at inflation: TapGestureRecognizer derives from GestureRecognizer : Element, so it is NOT a VisualElement and has no IsEnabled at all. The assembly was read rather than recalled — its only public members are Command, CommandParameter, NumberOfTapsRequired and Buttons — and SendTapped's IL calls Command.CanExecute before Command.Execute, so a CanExecute of false is a genuinely inert tap target rather than a tap that silently does nothing. NotifyOrderState raises CanExecuteChanged whenever CanEdit moves, which is the half that is easy to forget.</summary>
+        /// <summary>CanExecute = CanEdit on the two COMMANDS the gesture recognizers use.</summary>
+        /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
         EditItemPriceCommand = new AsyncRelayCommand<OrderEditItemViewModel>(EditItemPriceAsync, canExecute: _ => CanEdit);
         EditItemCompositionCommand = new AsyncRelayCommand<OrderEditItemViewModel>(EditItemCompositionAsync, canExecute: _ => CanEdit);
@@ -104,13 +105,15 @@ public partial class OrderDetailsViewModel : ObservableObject
     public bool CanEdit => order?.Status == OrderStatus.InProgress;
     public decimal Total => Items.Sum(item => item.LineTotal);
 
-    /// <summary>── Fulfilment, contact and promise ────────────────────────────────────────────────────────── READ-ONLY HERE, AND THAT IS A KNOWN LIMITATION RATHER THAN A CHOICE. The till collects these three on the cart (MenuViewModel) and CheckoutService writes them onto the order; the order editor has no write path back, because IOrderService.UpdateOrderAsync takes only the item list. Until Core grows an overload taking an OrderDetailsIntent, offering a control here would be a control that looks editable and is not — so the page states the facts and edits nothing. What is shown is the EXACT promised time and the FULL number, both of which are staff-facing facts on this screen and are the two things the customer-facing cart deliberately does not show.</summary>
+    /// <summary>── Fulfilment, contact and promise ────────────────────────────────────────────────────────── READ-ONLY HERE, AND THAT IS A KNOWN LIMITATION RATHER THAN A CHOIC...</summary>
+    /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
 
     /// <summary>Whether the fulfilment/contact/promise card is worth showing at all.</summary>
     public bool HasOrderDetails => order is not null;
 
-    /// <summary>── The same disclosure the cart uses, for the same reason ─────────────────────────────────── MenuPage collapsed its fulfilment block after it measured 153dp of a 344dp cart, and leaving THIS card permanently expanded would be one screen reading two ways: dense on the till, loose on the order. The grounding — NN/g's hotel reservation, the two-level ceiling, Chimera et al. 1994 — is written out at length on MenuViewModel.IsFulfilmentExpanded and is not repeated. THE TRADE THIS SCREEN ADDS, STATED PLAINLY. The phone here is the FULL number and this is the screen a cashier dials from, so collapsing puts one tap between the operator and the number. That is the cost and it is accepted rather than discovered: what the collapse saves is two short lines, and the collapsed row still states the fulfilment and the time, which is what the operator scans. Nothing is removed, only moved one tap down.</summary>
+    /// <summary>── The same disclosure the cart uses, for the same reason ─────────────────────────────────── MenuPage collapsed its fulfilment block after it measured 153dp of...</summary>
+    /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
 
     private bool isFulfilmentExpanded;
@@ -138,7 +141,8 @@ public partial class OrderDetailsViewModel : ObservableObject
             ? FulfilmentRowTitle
             : $"{OrderTypeText} · готово к {WhenText}";
 
-    /// <summary>The neutral heading the row falls back to while the block is open. A constant because states it too and two copies of a caption are two things to reword. Named for the page's own content, which is the order as it was placed — not the cart's «Параметры выдачи».</summary>
+    /// <summary>The neutral heading the row falls back to while the block is open.</summary>
+    /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
     public const string FulfilmentRowTitle = "Параметры заказа";
 
@@ -203,7 +207,8 @@ public partial class OrderDetailsViewModel : ObservableObject
 
     public string TotalText => TextFormat.Money(Total);
 
-    /// <summary>── Payment state ────────────────────────────────────────────────────────────────────────── The order's own payment figures (PaidKopecks / BalanceKopecks / PaymentState) are the source; these only render them. CanCollectPayment is false on a closed or cancelled order even if the balance were non-zero, because the domain does not take payment on a closed one.</summary>
+    /// <summary>── Payment state ────────────────────────────────────────────────────────────────────────── The order's own payment figures (PaidKopecks / BalanceKopecks / Paym...</summary>
+    /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
 
     /// <remarks>`docs/decisions/order-details.md`</remarks>
@@ -270,7 +275,8 @@ public partial class OrderDetailsViewModel : ObservableObject
             : $"Оплачено {TextFormat.Money(Money.FromKopecks(order.PaidKopecks))}";
     }
 
-    /// <summary>The open states — the only ones where money can still arrive. Wording unchanged from before the refund feature, on purpose: an order in progress that is short of its total is still an order that must be paid.</summary>
+    /// <summary>The open states — the only ones where money can still arrive.</summary>
+    /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
     private string DescribeOpenOrder() => order!.PaymentState switch
     {
@@ -293,7 +299,8 @@ public partial class OrderDetailsViewModel : ObservableObject
         _ => PaletteAccess.Resolve("Danger", "DangerDark")
     };
 
-    /// <summary>── Refunds ──────────────────────────────────────────────────────────────────────────────── Summed from the ledger rows, not read off PaidKopecks. PaidKopecks is NET (collected minus refunded), so the gross collected figure the summary needs is not recoverable from it: an order refunded all the way down to zero reads identically to one that was never paid.</summary>
+    /// <summary>── Refunds ──────────────────────────────────────────────────────────────────────────────── Summed from the ledger rows, not read off PaidKopecks.</summary>
+    /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
 
     private decimal refundedTotal;

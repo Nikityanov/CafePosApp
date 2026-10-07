@@ -6,11 +6,8 @@ using Microsoft.Extensions.Logging;
 
 namespace CafePos.Core.Services;
 
-/// <summary>
-/// Taking payments after the fact: the payment sheet of an open order, and the ledger readout.
-/// Both delegate to <see cref="PaymentRecorder"/>, the single place where a payment row and
-/// Orders.PaidKopecks are written together.
-/// </summary>
+/// <summary>Taking payments after the fact: the payment sheet of an open order, and the ledger readout. Both delegate to , the single place where a payment row and Orders.PaidKopecks are written together.</summary>
+
 public sealed partial class OrderService
 {
     public async Task<Order> AddPaymentAsync(Guid orderId, decimal amount, PaymentMethod method, CancellationToken cancellationToken = default)

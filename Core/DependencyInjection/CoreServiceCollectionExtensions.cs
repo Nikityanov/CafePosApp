@@ -8,10 +8,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CafePos.Core.DependencyInjection;
 
-/// <summary>
-/// Registers everything that does not depend on a UI framework. The MAUI project only adds
-/// platform services (navigation, dialogs, files) and the ViewModels on top of this.
-/// </summary>
+/// <summary>Registers everything that does not depend on a UI framework. The MAUI project only adds platform services (navigation, dialogs, files) and the ViewModels on top of this.</summary>
+
 public static class CoreServiceCollectionExtensions
 {
     public static IServiceCollection AddCafePosCore(this IServiceCollection services, DatabaseOptions options)
@@ -22,9 +20,8 @@ public static class CoreServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
 
         // One assignment, once, at startup: the promise an order without a requested time is given.
-        // It is ambient (see Order.LeadTimeMinutes) rather than injected because PromisedAt is read
-        // straight from markup with nowhere to receive a parameter, and it is read at startup so that
-        // a promise computed later cannot disagree with the menu that quoted it.
+        // Почему так — `docs/decisions/schema.md`
+
         Order.LeadTimeMinutes = options.LeadTimeMinutes;
 
         services.AddDbContextFactory<AppDbContext>(builder => builder
@@ -36,11 +33,9 @@ public static class CoreServiceCollectionExtensions
 
         services.AddSingleton<ICatalogService, CatalogService>();
         services.AddSingleton<IComboService, ComboService>();
-        // One OrderService registered as the concrete singleton and re-published under each port it
-// satisfies, rather than seven separate registrations that would each try to construct their own.
-// OrderService is a primary-constructor class over one DbContext: sharing the instance is the
-// point, and a scoped DbContext behind seven transient wrappers would be a worse bug than the flat
-// interface was.
+        /// <summary>One OrderService registered as the concrete singleton and re-published under each port it satisfies, rather than seven separate registrations that wou…</summary>
+        /// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
+
 services.AddSingleton<OrderService>();
 services.AddSingleton<IOrderService>(sp => sp.GetRequiredService<OrderService>());
 services.AddSingleton<IOrderOperations>(sp => sp.GetRequiredService<OrderService>());

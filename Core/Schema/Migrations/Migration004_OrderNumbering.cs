@@ -2,10 +2,8 @@ using CafePos.Core.Data;
 
 namespace CafePos.Core.Schema.Migrations;
 
-/// <summary>
-/// Version 4 — order numbers move from "MAX(OrderNumber) + 1" (race prone) to a per-shift
-/// counter that is incremented atomically in SQL, plus the unique index that guards it.
-/// </summary>
+/// <summary>Version 4 — order numbers move from "MAX(OrderNumber) + 1" (race prone) to a per-shift counter that is incremented atomically in SQL, plus the unique index that guards it.</summary>
+
 internal sealed class Migration004_OrderNumbering : ISchemaMigration
 {
     public int Version => 4;

@@ -24,7 +24,8 @@ public partial class OrderDetailsViewModel
                 return;
             }
 
-            /// <summary>Rows built with their composition attached, and merged by OrderLineKey rather than by the inline product+modifier comparison this used to do. The inline comparison left the VARIANT out of the key entirely, so adding a large and a small of the same dish merged them into one line — and it could not tell two builds of one bundle apart, so two different bundles merged into one line at whichever price was added first. One key every caller computes the same way cannot drift that way again, and a mismatch is a line that visibly disagrees with the cart rather than a receipt that quietly loses one.</summary>
+            /// <summary>Rows built with their composition attached, and merged by OrderLineKey rather than by the inline product+modifier comparison this used to do.</summary>
+            /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
             var rows = order.Items
                 .Select(item =>
@@ -58,7 +59,8 @@ public partial class OrderDetailsViewModel
                 payments.Select(payment => BuildPaymentLine(payment)),
                 line => line.Text);
 
-            /// <summary>Gross in and gross out, summed from the ledger rather than read off PaidKopecks, which is NET. An order refunded all the way down to zero is arithmetically identical to one that was never paid, and the summary line has to tell those two apart: only one of them ever held money, and only one of them needs a refund button.</summary>
+            /// <summary>Gross in and gross out, summed from the ledger rather than read off PaidKopecks, which is NET.</summary>
+            /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
             collectedTotal = payments.Where(payment => !payment.IsRefund).Sum(payment => payment.Amount);
             refundedTotal = payments.Where(payment => payment.IsRefund).Sum(payment => payment.Amount);
@@ -70,7 +72,8 @@ public partial class OrderDetailsViewModel
 
             NotifyOrderState();
 
-            /// <summary>The formatted amounts follow the operator's currency setting, which can be changed while this page is still alive. Re-raised here rather than left to the setters above: an unchanged total raises nothing, so a page opened on «0,00 ₽» and left open across a switch to ₿ would keep printing the old sign. See MenuViewModel.RefreshMoneyText for the same argument on the cart.</summary>
+            /// <summary>The formatted amounts follow the operator's currency setting, which can be changed while this page is still alive.</summary>
+            /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
             NotifyTotal();
             foreach (var item in Items) item.RefreshMoneyText();
@@ -101,7 +104,8 @@ public partial class OrderDetailsViewModel
                 return;
             }
 
-            /// <summary>Merge through OrderLineKey, so this agrees with the cart, the add command and OrderService line for line. The inline comparison this replaced compared the product and the modifier only — the variant was not in the key at all, so a large and a small of the same dish joined one line and the quantity added up to two of something sold once.</summary>
+            /// <summary>Merge through OrderLineKey, so this agrees with the cart, the add command and OrderService line for line.</summary>
+            /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
             var existing = Items.FirstOrDefault(item => item.MergeKey == OrderLineKey.For(product.Id, modifier, null));
 
@@ -234,7 +238,8 @@ public partial class OrderDetailsViewModel
         OnPropertyChanged(nameof(CanCollectPayment));
         OnPropertyChanged(nameof(CanRefundPayment));
 
-        /// <summary>«Дописать» is announced here for the same reason as the two above, and it was MISSING at first: the button bound its IsVisible to this, the page inflated before LoadAsync filled `order`, and without this line the binding stayed on the inflate-time value of false — so the button was absent from a paid order and present on nothing. A Can* property nobody announces is invisible, which is a different failure from being disabled and much harder to notice in a screenshot review, because an absent button looks like a deliberate decision.</summary>
+        /// <summary>«Дописать» is announced here for the same reason as the two above, and it was MISSING at first: the button bound its IsVisible to this, the page inflated before...</summary>
+        /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
         OnPropertyChanged(nameof(CanAddContactDetails));
         OnPropertyChanged(nameof(CanCancel));
@@ -243,7 +248,8 @@ public partial class OrderDetailsViewModel
         OnPropertyChanged(nameof(RefundedTotal));
         OnPropertyChanged(nameof(CollectedTotal));
 
-        /// <summary>Fulfilment, contact and promise. IsOverdue is measured against a clock rather than against anything on the entity, so it is NOT re-evaluated by a reload — a page left open on a borderline order would keep claiming a lateness that has since stopped being true. The wording and the colour follow the flag and are re-raised with it.</summary>
+        /// <summary>Fulfilment, contact and promise.</summary>
+        /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
         OnPropertyChanged(nameof(HasOrderDetails));
         OnPropertyChanged(nameof(OrderTypeText));
@@ -260,7 +266,8 @@ public partial class OrderDetailsViewModel
         OnPropertyChanged(nameof(OverdueText));
         OnPropertyChanged(nameof(OverdueColor));
 
-        /// <summary>The half that is easy to forget: the price and composition taps are recognizers, not Buttons, so they have no IsEnabled to bind — their liveness comes from Command.CanExecute, and nothing recomputes that unless it is told. Without this two lines the price stays tappable on a closed order and the tap opens the re-pricing sheet on a sale that is done.</summary>
+        /// <summary>The half that is easy to forget: the price and composition taps are recognizers, not Buttons, so they have no IsEnabled to bind — their liveness comes from Comm...</summary>
+        /// <remarks>Почему так - `docs/decisions/order-details.md`</remarks>
 
         EditItemPriceCommand.NotifyCanExecuteChanged();
         EditItemCompositionCommand.NotifyCanExecuteChanged();

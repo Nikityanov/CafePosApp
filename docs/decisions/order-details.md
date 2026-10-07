@@ -375,3 +375,136 @@ private void NotifyTotal()
 formatted amount in the operator's currency. Both are raised together: the decimal one for
 anything still reading the raw figure, the text one because a bound Label is never told about
 a dependency's change on its own.
+
+## rows
+
+```csharp
+var rows = order.Items
+```
+
+Rows built with their composition attached, and merged by OrderLineKey rather than by the inline product+modifier comparison this used to do. The inline comparison left the VARIANT out of the key entirely, so adding a large and a small of the same dish merged them into one line — and it could not tell two builds of one bundle apart, so two different bundles merged into one line at whichever price was added first. One key every caller computes the same way cannot drift that way again, and a mismatch is a line that visibly disagrees with the cart rather than a receipt that quietly loses one.
+
+## collectedTotal
+
+```csharp
+collectedTotal = payments.Where(payment => !payment.IsRefund).Sum(payment => payment.Amount);
+```
+
+Gross in and gross out, summed from the ledger rather than read off PaidKopecks, which is NET. An order refunded all the way down to zero is arithmetically identical to one that was never paid, and the summary line has to tell those two apart: only one of them ever held money, and only one of them needs a refund button.
+
+## NotifyTotal
+
+```csharp
+NotifyTotal();
+```
+
+The formatted amounts follow the operator's currency setting, which can be changed while this page is still alive. Re-raised here rather than left to the setters above: an unchanged total raises nothing, so a page opened on «0,00 ₽» and left open across a switch to ₿ would keep printing the old sign. See MenuViewModel.RefreshMoneyText for the same argument on the cart.
+
+## existing
+
+```csharp
+var existing = Items.FirstOrDefault(item => item.MergeKey == OrderLineKey.For(product.Id, modifier, null));
+```
+
+Merge through OrderLineKey, so this agrees with the cart, the add command and OrderService line for line. The inline comparison this replaced compared the product and the modifier only — the variant was not in the key at all, so a large and a small of the same dish joined one line and the quantity added up to two of something sold once.
+
+## OnPropertyChanged
+
+```csharp
+OnPropertyChanged(nameof(CanAddContactDetails));
+```
+
+«Дописать» is announced here for the same reason as the two above, and it was MISSING at first: the button bound its IsVisible to this, the page inflated before LoadAsync filled `order`, and without this line the binding stayed on the inflate-time value of false — so the button was absent from a paid order and present on nothing. A Can* property nobody announces is invisible, which is a different failure from being disabled and much harder to notice in a screenshot review, because an absent button looks like a deliberate decision.
+
+## OnPropertyChanged
+
+```csharp
+OnPropertyChanged(nameof(HasOrderDetails));
+```
+
+Fulfilment, contact and promise. IsOverdue is measured against a clock rather than against anything on the entity, so it is NOT re-evaluated by a reload — a page left open on a borderline order would keep claiming a lateness that has since stopped being true. The wording and the colour follow the flag and are re-raised with it.
+
+## NotifyCanExecuteChanged
+
+```csharp
+EditItemPriceCommand.NotifyCanExecuteChanged();
+```
+
+The half that is easy to forget: the price and composition taps are recognizers, not Buttons, so they have no IsEnabled to bind — their liveness comes from Command.CanExecute, and nothing recomputes that unless it is told. Without this two lines the price stays tappable on a closed order and the tap opens the re-pricing sheet on a sale that is done.
+
+## EditItemPriceCommand
+
+```csharp
+EditItemPriceCommand = new AsyncRelayCommand<OrderEditItemViewModel>(EditItemPriceAsync, canExecute: _ => CanEdit);
+```
+
+CanExecute = CanEdit on the two COMMANDS the gesture recognizers use. It is what the Buttons bind IsEnabled to, and it is also what stands in for the IsEnabled that used to sit on the price's TapGestureRecognizer and crashed this template at inflation: TapGestureRecognizer derives from GestureRecognizer : Element, so it is NOT a VisualElement and has no IsEnabled at all. The assembly was read rather than recalled — its only public members are Command, CommandParameter, NumberOfTapsRequired and Buttons — and SendTapped's IL calls Command.CanExecute before Command.Execute, so a CanExecute of false is a genuinely inert tap target rather than a tap that silently does nothing. NotifyOrderState raises CanExecuteChanged whenever CanEdit moves, which is the half that is easy to forget.
+
+## summary
+
+```csharp
+/// <summary>Whether the fulfilment/contact/promise card is worth showing at all.</summary>
+```
+
+── Fulfilment, contact and promise ────────────────────────────────────────────────────────── READ-ONLY HERE, AND THAT IS A KNOWN LIMITATION RATHER THAN A CHOICE. The till collects these three on the cart (MenuViewModel) and CheckoutService writes them onto the order; the order editor has no write path back, because IOrderService.UpdateOrderAsync takes only the item list. Until Core grows an overload taking an OrderDetailsIntent, offering a control here would be a control that looks editable and is not — so the page states the facts and edits nothing. What is shown is the EXACT promised time and the FULL number, both of which are staff-facing facts on this screen and are the two things the customer-facing cart deliberately does not show.
+
+## isFulfilmentExpanded
+
+```csharp
+private bool isFulfilmentExpanded;
+```
+
+── The same disclosure the cart uses, for the same reason ─────────────────────────────────── MenuPage collapsed its fulfilment block after it measured 153dp of a 344dp cart, and leaving THIS card permanently expanded would be one screen reading two ways: dense on the till, loose on the order. The grounding — NN/g's hotel reservation, the two-level ceiling, Chimera et al. 1994 — is written out at length on MenuViewModel.IsFulfilmentExpanded and is not repeated. THE TRADE THIS SCREEN ADDS, STATED PLAINLY. The phone here is the FULL number and this is the screen a cashier dials from, so collapsing puts one tap between the operator and the number. That is the cost and it is accepted rather than discovered: what the collapse saves is two short lines, and the collapsed row still states the fulfilment and the time, which is what the operator scans. Nothing is removed, only moved one tap down.
+
+## FulfilmentRowTitle
+
+```csharp
+public const string FulfilmentRowTitle = "Параметры заказа";
+```
+
+The neutral heading the row falls back to while the block is open. A constant because
+`FulfilmentToggleHint` states it too and two copies of a caption are two things to
+reword. Named for the page's own content, which is the order as it was placed — not the cart's
+«Параметры выдачи».
+
+## remarks
+
+```csharp
+/// <remarks>`docs/decisions/order-details.md`</remarks>
+```
+
+── Payment state ────────────────────────────────────────────────────────────────────────── The order's own payment figures (PaidKopecks / BalanceKopecks / PaymentState) are the source; these only render them. CanCollectPayment is false on a closed or cancelled order even if the balance were non-zero, because the domain does not take payment on a closed one.
+
+## DescribeOpenOrder
+
+```csharp
+private string DescribeOpenOrder() => order!.PaymentState switch
+```
+
+The open states — the only ones where money can still arrive. Wording unchanged from before
+the refund feature, on purpose: an order in progress that is short of its total is still an
+order that must be paid.
+
+## refundedTotal
+
+```csharp
+private decimal refundedTotal;
+```
+
+── Refunds ──────────────────────────────────────────────────────────────────────────────── Summed from the ledger rows, not read off PaidKopecks. PaidKopecks is NET (collected minus refunded), so the gross collected figure the summary needs is not recoverable from it: an order refunded all the way down to zero reads identically to one that was never paid.
+
+## Add
+
+```csharp
+options.Add(new ComboSlotOption(
+```
+
+The dish's price, not the slot's stored override — see the same change in ComboFormViewModel.UnitKopecks. The override has had no control in the form since it was cut, so feeding it here would show the operator a component price in the composition editor that the form cannot produce and the form's own total does not use. The 4th argument is the dish's real price and is now the same figure twice rather than two different ones, which is the honest thing to hand the editor.
+
+## remarks
+
+```csharp
+/// <remarks>Почему так — `docs/decisions/order-details.md`</remarks>
+```
+
+Opens the payment sheet for this order and books what the operator declares. A dismissed sheet leaves the order untouched. Returns money on a finished order: the amount off the keypad, the reason from a prompt.
