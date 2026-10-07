@@ -30,8 +30,12 @@ ehthumbs.db
 .codegraph/
 .omo/
 .ruff_cache/
-.opencode-rules.md
-.github/copilot-instructions.md
+
+# The agent rules were ignored until 2026-10-07, on the grounds that they were
+# machine-specific. That was wrong: a rule nobody can review, diff or roll back is
+# indistinguishable from no rule at all, and §17's write-back obligation has nowhere to
+# land. They are now tracked. `.github/copilot-instructions.md` is tracked too, and points
+# here rather than duplicating anything.
 
 # User-specific files
 CafePosApp.csproj.user
