@@ -17,8 +17,6 @@ namespace CafePos.Presentation.ViewModels;
 /// </summary>
 public partial class MenuViewModel : ObservableObject
 {
-    private static readonly TimeSpan AutoSaveDelay = TimeSpan.FromMilliseconds(400);
-
     private readonly ICatalogService catalog;
     private readonly IComboService combos;
     private readonly ICheckoutService checkout;
@@ -38,12 +36,10 @@ public partial class MenuViewModel : ObservableObject
     private readonly ILogger<MenuViewModel> logger;
 
     private readonly SemaphoreSlim loadGate = new(1, 1);
-    // Serialises the cart autosave. Two autosaves must never write the active-cart row
-    // concurrently: they run on separate DbContexts, and the loser got
-    // DbUpdateConcurrencyException ("expected 1 row, affected 0"), which meant the draft was
-    // silently not persisted at all and a killed app lost the customer's cart.
-    private readonly SemaphoreSlim autoSaveGate = new(1, 1);
-    private CancellationTokenSource? autoSaveCancellation;
+    // The autosave gate and the pending cancellation moved to DraftAutosave, with the reason for the
+    // gate: two autosaves must never write the active-cart row concurrently. They run on separate
+    // DbContexts, and the loser got DbUpdateConcurrencyException ("expected 1 row, affected 0"),
+    // which meant the draft was silently not persisted at all and a killed app lost the cart.
 
     public MenuViewModel(
         ICatalogService catalog,
@@ -93,6 +89,7 @@ public partial class MenuViewModel : ObservableObject
         menu = new MenuCatalogue(catalog, combos, timeProvider);
         fulfilment = new FulfilmentEditor(timeProvider);
         cart = new CartBuilder();
+        autosave = new DraftAutosave(drafts, cart, logger);
 
         // The resolver speaks through the shell's two channels rather than owning them: `announce` is
         // `Message`, whose setter retires a pending undo, and `sayError` is SetError. Both are written
@@ -111,16 +108,23 @@ public partial class MenuViewModel : ObservableObject
                 IsErrorMessage = true;
             });
 
-        Cart.CollectionChanged += (_, _) =>
+        // cart.Changed, NOT Cart.CollectionChanged. The collection fires when a line ARRIVES or LEAVES and
+        // stays silent when the operator presses «+» on one that is already there - StepUp writes the
+        // quantity and nothing else. Listening to the collection therefore missed the common case
+        // entirely: a quantity change was never autosaved, and a till killed after one came back with
+        // a draft behind what had been built. Found by testing this extraction on the device, and it
+        // predates the extraction - the wiring at HEAD was identical.
+        cart.Changed += () =>
         {
             OnPropertyChanged(nameof(CanCreateOrder));
-            ScheduleAutoSave();
+            autosave.Schedule();
         };
 
         // The editor owns the state; the shell owns the bindings. Re-announcing on every change is
         // what keeps a bound row reading the editor's value rather than a stale copy, and it is the
         // reason every proxy below is a plain read instead of a mirrored field.
         fulfilment.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
+        autosave.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
         menu.PropertyChanged += (_, e) =>
         {
             // The chips' own selection state is announced by MenuCatalogue; what the shell owns is the
@@ -206,6 +210,12 @@ public partial class MenuViewModel : ObservableObject
     /// over it — the same ordering rule as the other three, and see the note above for why.
     /// </remarks>
     private readonly CompositionResolver composition;
+
+    /// <summary>
+    /// The draft: the header notice, the debounced write of the cart, and the restore of a saved one.
+    /// The fifth Collaborator.
+    /// </summary>
+    private readonly DraftAutosave autosave;
 
     /// <summary>The cart's lines, in the order the operator read them.</summary>
     public ObservableCollection<CartItemViewModel> Cart => cart.Cart;
@@ -356,26 +366,16 @@ public partial class MenuViewModel : ObservableObject
     }
     public bool HasMessage => !string.IsNullOrWhiteSpace(Message);
 
-    // ── The restored draft, said in the «Корзина» header ───────────────────────────────────────
-    // NOT part of Message, and the reason is cost: the message strip sits above the checkout
-    // button, so a restored-draft note there costs a whole row of the operator's most valuable
-    // space to say something that is not an outcome of anything they just did. In the header it
-    // becomes a continuation of «Корзина» and costs nothing.
-    //
-    // It is also not transient in the way a message is. Message is retired by the next action
-    // (its setter clears the error flag and the pending undo); this note describes a standing fact
-    // about the cart — the lines below came from an unsaved order — and stays until the cart is
-    // cleared or replaced. Fading it away would make the operator stop trusting it.
-    private string draftNotice = string.Empty;
-    public string DraftNotice
-    {
-        get => draftNotice;
-        private set
-        {
-            if (SetProperty(ref draftNotice, value)) OnPropertyChanged(nameof(HasDraftNotice));
-        }
-    }
-    public bool HasDraftNotice => !string.IsNullOrWhiteSpace(DraftNotice);
+    /// <summary>The header continuation that says the cart came from a saved draft.</summary>
+    /// <remarks>
+    /// The state is DraftAutosave's; this is a read, because MenuPage.xaml binds the pair by name
+    /// and the header alternates between this and the word «Корзина» depending on it. The long
+    /// reasoning about why it is not a message moved with it.
+    /// </remarks>
+    public string DraftNotice => autosave.DraftNotice;
+
+    /// <summary>Whether the header shows the notice instead of the word «Корзина».</summary>
+    public bool HasDraftNotice => autosave.HasDraftNotice;
 
     // ── Undo of a removal ───────────────────────────────────────────────────────────────────────
     // Baymard's five requirements for a cart include "provide an undo option if a cart item is

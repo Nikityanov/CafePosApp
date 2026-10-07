@@ -190,7 +190,7 @@ public partial class MenuViewModel
         fulfilment.Reset();
         // The cart is no longer the restored draft; it is a new, unstarted one. Left in place it
         // would head an empty «Корзина» with a note about an order that has now been paid for.
-        DraftNotice = string.Empty;
+        autosave.ClearNotice();
         await drafts.ClearActiveCartAsync();
         Message = $"Заказ #{order.OrderNumber} создан на {TextFormat.Money(order.TotalPrice)}, {paymentText}.";
     }
@@ -214,7 +214,7 @@ public partial class MenuViewModel
             Recalculate();
             // The lines now belong to a parked receipt with its own name, so the header has no
             // unsaved-draft fact left to state.
-            DraftNotice = string.Empty;
+            autosave.ClearNotice();
 
             // The order-level facts are dropped with the cart, and this is a KNOWN GAP rather than a
             // decision: DraftOrder has OrderType / CustomerPhone / RequestedAt columns and
@@ -260,7 +260,7 @@ public partial class MenuViewModel
             Recalculate();
             // A parked receipt is not an unsaved one: the header note is specifically about lines
             // recovered from a draft after the app went away, and would be a false statement here.
-            DraftNotice = string.Empty;
+            autosave.ClearNotice();
             Message = "Отложенный чек загружен.";
             haptics.Click();
         }
@@ -270,59 +270,6 @@ public partial class MenuViewModel
             SetError(exception, "Не удалось открыть отложенный чек");
         }
     }
-
-    /// <summary>
-    /// Debounced autosave. The lines are snapshotted on the calling (UI) thread, the write itself
-    /// happens after a short delay so typing/stepping does not hit the database on every tap.
-    /// </summary>
-    private void ScheduleAutoSave()
-    {
-        // Cancel but do NOT dispose. The superseded AutoSaveAsync still holds this token and
-        // may be inside drafts.SaveActiveCartAsync right now; disposing a CancellationTokenSource
-        // whose token is in use is a race of its own. The superseded run disposes its own source
-        // when it finishes.
-        autoSaveCancellation?.Cancel();
-        var cancellation = new CancellationTokenSource();
-        autoSaveCancellation = cancellation;
-
-        var lines = cart.ToCheckoutLines();
-        _ = AutoSaveAsync(lines, cancellation);
-    }
-
-    private async Task AutoSaveAsync(IReadOnlyList<CheckoutLine> lines, CancellationTokenSource cancellation)
-    {
-        try
-        {
-            await Task.Delay(AutoSaveDelay, cancellation.Token);
-
-            // The gate is taken AFTER the debounce and released in finally, so an overlapping
-            // snapshot waits for the in-flight write instead of racing it. The superseded
-            // snapshot is already cancelled by then and its SaveChanges is skipped, so the
-            // waiter writes the newer lines and the last write still wins.
-            await autoSaveGate.WaitAsync(cancellation.Token);
-            try
-            {
-                cancellation.Token.ThrowIfCancellationRequested();
-                await drafts.SaveActiveCartAsync(lines, cancellation.Token);
-            }
-            finally
-            {
-                autoSaveGate.Release();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // A newer change superseded this snapshot.
-        }
-        catch (Exception exception)
-        {
-            logger.LogWarning(exception, "Cart autosave failed");
-        }
-        finally
-        {
-            // Only the source this run owns, and only if it has not already been replaced.
-            if (ReferenceEquals(autoSaveCancellation, cancellation)) autoSaveCancellation = null;
-            cancellation.Dispose();
-        }
-    }
+    // The debounced draft write and the restore went to DraftAutosave. What is left here is the
+    // checkout itself: prepare, pay, create, finish, park, reopen.
 }

@@ -161,4 +161,65 @@ public class CartLineMergeTests
         Assert.Equal(2, restored.Quantity);
         Assert.True(restored.IsCombo);
     }
+
+    // ── A quantity step has to announce the cart, and it used not to ────────────────────────────────
+    // Found by testing the DraftAutosave extraction on the device: three taps on «+» on a line that
+    // was already there, then a kill, and the draft came back a step behind. The autosave hung off
+    // Cart.CollectionChanged, which fires when a line ARRIVES OR LEAVES and says nothing about the
+    // quantity of one that is already there - CartBuilder.StepUp writes item.Quantity and nothing
+    // else. It predates the extraction; the wiring at HEAD was identical.
+    //
+    // These two are the whole regression: the second is the bug, and the first is the control that
+    // says the fix did not break the case that already worked.
+
+    [Fact]
+    public void Stepping_the_quantity_of_a_line_that_is_already_there_announces_the_cart()
+    {
+        var cart = new CartBuilder();
+        cart.Add(Plain(Latte));
+
+        var announced = 0;
+        cart.Changed += () => announced++;
+
+        cart.StepUp(Assert.Single(cart.Cart));
+
+        Assert.Equal(1, announced);
+        Assert.Equal(2, Assert.Single(cart.Cart).Quantity);
+    }
+
+    [Fact]
+    public void Adding_a_line_announces_the_cart_too_so_the_fix_kept_the_working_case()
+    {
+        var cart = new CartBuilder();
+
+        var announced = 0;
+        cart.Changed += () => announced++;
+
+        cart.Add(Plain(Latte));
+        cart.Add(Plain(Cake));
+
+        Assert.Equal(2, announced);
+        Assert.Equal(2, cart.Cart.Count);
+    }
+
+    [Fact]
+    public void An_announcement_does_not_depend_on_the_total_having_moved()
+    {
+        // The control case for the fix as written. Recalculate raises Changed unconditionally, so a
+        // mutation that happened to leave the sum alone is still announced - a draft that skips it is
+        // still a draft that is behind. Two lines whose totals are equal guard against somebody
+        // "optimising" the raise into a SetProperty check.
+        var cart = new CartBuilder();
+        cart.Add(Plain(Latte));
+        cart.Add(Plain(Cake));
+
+        var announced = 0;
+        cart.Changed += () => announced++;
+
+        // Removing one line changes the count and therefore the total; the point of this test is the
+        // raise is not gated, so it fires even when Recalculate finds the same number it already had.
+        cart.Recalculate();
+
+        Assert.Equal(1, announced);
+    }
 }

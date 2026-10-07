@@ -162,7 +162,31 @@ public sealed partial class CartBuilder : ObservableObject
     }
 
     /// <summary>Recomputes the total from the lines. Cheap, and called after every mutation.</summary>
-    public void Recalculate() => Total = Cart.Sum(item => item.LineTotal);
+    public void Recalculate()
+    {
+        Total = Cart.Sum(item => item.LineTotal);
+
+        // Raised HERE, from the one method every mutator already calls, and that placement is the fix
+        // for a real bug rather than a convenience. This used to hang off Cart.CollectionChanged, which
+        // fires when a LINE is added or removed and does NOT fire when a line's quantity changes -
+        // StepUp writes item.Quantity and nothing else. So stepping a quantity on a line that was
+        // already there never scheduled an autosave, and a till killed with a quantity change on it
+        // came back with a draft one step - or several - behind what the operator had built.
+        //
+        // Nothing here is conditional on the total having moved: a mutation that happened to leave the
+        // sum alone is still a mutation, and a draft that skips it is still a draft that is behind.
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Raised after any change to the cart, including one that only moves a quantity.
+    /// </summary>
+    /// <remarks>
+    /// This, not <see cref="Cart"/>'s <c>CollectionChanged</c>, is what the shell listens to. The
+    /// collection reports lines arriving and leaving; it says nothing about the operator pressing «+»
+    /// on a line that is already there, which is the common case for the thing being watched.
+    /// </remarks>
+    public event Action? Changed;
 
     /// <summary>
     /// Re-raises each row's formatted amount, after the selected currency may have changed.

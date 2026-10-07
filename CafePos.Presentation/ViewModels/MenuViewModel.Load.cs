@@ -28,7 +28,7 @@ public partial class MenuViewModel
 
             // The catalogue's half of the load: the four queries, the two repairs, and the filter.
             await menu.LoadAsync();
-            await RestoreDraftAsync();
+            await autosave.RestoreAsync();
 
             // The formatted amounts depend on Currencies.Default, which the operator can change on
             // the Settings tab while this page's ViewModel instance is still alive — Shell keeps one
@@ -60,28 +60,6 @@ public partial class MenuViewModel
             IsBusy = false;
             loadGate.Release();
         }
-    }
-
-    /// <summary>
-    private async Task RestoreDraftAsync()
-    {
-        if (Cart.Count > 0) return;
-
-        var snapshot = await drafts.LoadActiveCartAsync();
-        if (snapshot.IsEmpty) return;
-
-        // Through WithComponents so a restored bundle keeps its slots. A combo that arrives without
-        // them prints as one line with nothing under it AND loses its merge signature, so it would
-        // merge with an identical bundle and split from itself.
-        cart.RestoreLines([.. snapshot.Lines.Select(line => CartItemViewModel.FromLine(line).WithComponents(line.Components))]);
-        Recalculate();
-        // The header continuation, not the message strip — see DraftNotice. The word
-        // «Восстановлен» was dropped on the owner's instruction: the header already says
-        // «Корзина», so the note reads as a property of the cart rather than as a report
-        // of an action nobody performed in this session.
-        DraftNotice = snapshot.SavedAt is { } savedAt
-            ? $"несохранённый чек от {savedAt.ToLocalTime():HH:mm}"
-            : "несохранённый чек";
     }
 
     private async Task AddProductAsync(Product? product)
