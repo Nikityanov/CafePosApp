@@ -131,7 +131,7 @@ public partial class OrderRowViewModel : ObservableObject
     /// <summary>Whole minutes past the promise, and never zero on a row that is actually late.</summary>
     public int OverdueMinutes => Math.Max(1, (int)Math.Round((now - Model.PromisedAt).TotalMinutes));
 
-    /// <summary>The badge. One word, so it fits the tag — the figure is in , which is what a screen reader is handed.</summary>
+    /// <summary>The badge. One word, so it fits the tag — the figure is in `OverdueHint`, which is what a screen reader is handed.</summary>
 
     public string OverdueText => "Просрочен";
 

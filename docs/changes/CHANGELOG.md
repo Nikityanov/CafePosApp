@@ -28,6 +28,7 @@ the question you ask when a revert is being considered.
 
 | Date | Kind | Change | Detail | Branch | Merged |
 |---|---|---|---|---|---|
+| 2026-10-08 09:40 | fix | Seven dropped `<see cref>` references, and four skills that never existed | [record](2026-10-08-0940-fix-dropped-see-crefs-and-stale-skills.md) | `fix/dropped-see-crefs-and-stale-skills` | — |
 | 2026-10-07 14:05 | chore | Delete fix/analytics-scrolling, superseded | [record](2026-10-07-1405-chore-drop-superseded-analytics-branch.md) | `chore/drop-superseded-analytics-branch` | [`a377144`](https://github.com/Nikityanov/CafePosApp/commit/a377144) |
 | 2026-10-07 13:40 | docs | One changelog index over the change records | [record](2026-10-07-1340-docs-changelog-index.md) | `docs/changelog-index` | [`95a49e3`](https://github.com/Nikityanov/CafePosApp/commit/95a49e3) |
 | 2026-10-07 13:05 | chore | Merge, then delete the branch | [record](2026-10-07-1305-chore-delete-branch-after-merge.md) | `chore/delete-branch-after-merge` | [`59a3905`](https://github.com/Nikityanov/CafePosApp/commit/59a3905) |

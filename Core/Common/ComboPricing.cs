@@ -28,7 +28,7 @@ public enum ComboPriceRelation
     Dearer
 }
 
-/// <summary>What a bundle costs — which is , not a sum — and the à la carte reference it is measured against.</summary>
+/// <summary>What a bundle costs — which is `Combo.PriceKopecks`, not a sum — and the à la carte reference it is measured against.</summary>
 /// <remarks>Почему так — `docs/decisions/combos.md`</remarks>
 
 public static class ComboPricing

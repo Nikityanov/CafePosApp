@@ -22,7 +22,7 @@ public static class ClockTime
     public static string Format(DateTimeOffset moment, TimeZoneInfo? zone) =>
         Format(TimeZoneInfo.ConvertTime(moment, zone ?? TimeZoneInfo.Local).TimeOfDay);
 
-    /// <summary>The next moment on the grid at or after , wrapping at midnight.</summary>
+    /// <summary>The next moment on the `gridMinutes` grid at or after `timeOfDay`, wrapping at midnight.</summary>
 
     public static TimeSpan SnapUp(TimeSpan timeOfDay, int gridMinutes)
     {

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CafePos.Core.Services;
 
-/// <summary>Taking payments after the fact: the payment sheet of an open order, and the ledger readout. Both delegate to , the single place where a payment row and Orders.PaidKopecks are written together.</summary>
+/// <summary>Taking payments after the fact: the payment sheet of an open order, and the ledger readout. Both delegate to `PaymentRecorder`, the single place where a payment row and Orders.PaidKopecks are written together.</summary>
 
 public sealed partial class OrderService
 {

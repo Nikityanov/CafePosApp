@@ -131,7 +131,7 @@ public sealed class CashLedgerService(
         return movements.OrderBy(movement => movement.CreatedAt).ToList();
     }
 
-    /// <summary>Builds a movement against , stamped from the app's clock so every row in this table carries the same the rest of the codebase uses and a test can move it.</summary>
+    /// <summary>Builds a movement against `shift`, stamped from the app's clock so every row in this table carries the same `TimeProvider` the rest of the codebase uses and a test can move it.</summary>
 
     private CashMovement NewMovement(Shift shift, CashMovementKind kind, long amountKopecks, string? reason) => new()
     {

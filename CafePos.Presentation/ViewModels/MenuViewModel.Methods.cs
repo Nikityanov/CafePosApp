@@ -428,7 +428,7 @@ public partial class MenuViewModel : ObservableObject
     /// <summary>What the button says it will do, including what switching will cost.</summary>
     public string ToggleOrderTypeHint => fulfilment.ToggleOrderTypeHint;
 
-    /// <summary>The number kept for a takeaway order. Held only while the order is on the cart and written by , which is the only place that decides to keep one at all.</summary>
+    /// <summary>The number kept for a takeaway order. Held only while the order is on the cart and written by `ICheckoutService`, which is the only place that decides to keep one at all.</summary>
 
     public string? CustomerPhone => fulfilment.CustomerPhone;
 

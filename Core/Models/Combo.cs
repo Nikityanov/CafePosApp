@@ -1,8 +1,7 @@
 namespace CafePos.Core.Models;
 
-/// <summary>A bundle in the catalogue: a template with a price of its own, , and a set of it is sold as.</summary>
-/// <remarks>Почему так — `docs/decisions/schema.md`</remarks>
-
+/// <summary>A bundle in the catalogue: a template with a price of its own, `PriceKopecks`, and a set of `Components` it is sold as.</summary>
+/// <remarks>Why so — `docs/decisions/schema.md`</remarks>
 public class Combo
 {
     public Guid Id { get; set; }
